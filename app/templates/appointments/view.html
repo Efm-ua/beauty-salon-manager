@@ -6,6 +6,10 @@
         <a href="{{ url_for('appointments.index') }}" class="btn btn-secondary">
             <i class="fas fa-arrow-left me-2"></i>Назад до списку
         </a>
+        <!-- Нова кнопка для повернення до розкладу -->
+        <a href="{{ url_for('main.schedule') }}" class="btn btn-info ms-2">
+            <i class="fas fa-calendar-week me-2"></i>Назад до розкладу майстрів
+        </a>
     </div>
     <div class="col text-end">
         <a href="{{ url_for('appointments.edit', id=appointment.id) }}" class="btn btn-warning">

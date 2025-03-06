@@ -1,8 +1,8 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
-from app.models import Appointment, AppointmentService, User
+from app.models import db, Appointment, AppointmentService, User, Service
 from sqlalchemy import func
 
 # Створення Blueprint
@@ -107,4 +107,61 @@ def stats():
     )
 
 
-from app.models import db  # Додайте цей імпорт на початку файлу
+# Сторінка розкладу (для адміністратора)
+@bp.route("/schedule")
+@login_required
+def schedule():
+    # Перевірка, чи є користувач адміністратором
+    if not current_user.is_admin:
+        flash("Тільки адміністратори мають доступ до цієї сторінки", "danger")
+        return redirect(url_for("main.index"))
+
+    # Отримання дати з параметрів запиту або використання поточної дати
+    date_str = request.args.get("date")
+    if date_str:
+        try:
+            selected_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = datetime.now().date()
+    else:
+        selected_date = datetime.now().date()
+
+    # Отримання всіх майстрів
+    masters = User.query.order_by(User.full_name).all()
+
+    # Отримання записів на вибрану дату
+    appointments = Appointment.query.filter(
+        Appointment.date == selected_date, Appointment.status != "cancelled"
+    ).all()
+
+    # Підготовка погодинного розкладу від 8:00 до 20:00
+    hours = []
+    for hour in range(8, 21):
+        for minute in [0, 15, 30, 45]:
+            hours.append(time(hour, minute))
+
+    # Створення структури даних для розкладу
+    schedule_data = {master.id: {h: None for h in hours} for master in masters}
+
+    # Заповнення розкладу записами
+    for appointment in appointments:
+        start_time = appointment.start_time
+
+        # Знаходження найближчого часу в розкладі
+        for h in hours:
+            if (
+                h.hour == start_time.hour
+                and h.minute <= start_time.minute < h.minute + 15
+            ):
+                if appointment.master_id in schedule_data:
+                    schedule_data[appointment.master_id][h] = appointment
+                break
+
+    return render_template(
+        "main/schedule.html",
+        title="Розклад майстрів",
+        masters=masters,
+        hours=hours,
+        schedule_data=schedule_data,
+        selected_date=selected_date,
+    )

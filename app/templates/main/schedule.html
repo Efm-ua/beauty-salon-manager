@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block head %}
+<!-- Підключення датапікера -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/uk.js"></script>
+
+<style>
+    /* Стилі для розкладу */
+    .schedule-table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    .schedule-table th, .schedule-table td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        text-align: center;
+        vertical-align: middle;
+    }
+    .schedule-table th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 1;
+    }
+    .schedule-table .time-column {
+        position: sticky;
+        left: 0;
+        background-color: #f8f9fa;
+        z-index: 1;
+        text-align: right;
+        font-weight: bold;
+    }
+    .schedule-appointment {
+        background-color: #e2f0d9;
+        border-radius: 4px;
+        padding: 4px;
+        margin: -4px;
+        cursor: pointer;
+    }
+    .schedule-appointment:hover {
+        background-color: #c5e0b4;
+    }
+    .schedule-container {
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <a href="{{ url_for('main.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Назад на головну
+        </a>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="{{ url_for('appointments.create') }}" class="btn btn-success">
+            <i class="fas fa-plus me-2"></i>Новий запис
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-calendar-day me-2"></i>Розклад майстрів на {{ selected_date.strftime('%d.%m.%Y') }}</h5>
+        <div>
+            <form id="dateForm" class="d-inline">
+                <input type="text" id="datepicker" name="date" class="form-control d-inline" style="width: 150px;" value="{{ selected_date.strftime('%Y-%m-%d') }}">
+            </form>
+        </div>
+    </div>
+    <div class="card-body p-2">
+        <div class="schedule-container">
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th class="time-column">Час</th>
+                        {% for master in masters %}
+                            <th>{{ master.full_name }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for hour in hours %}
+                        <tr>
+                            <td class="time-column">{{ hour.strftime('%H:%M') }}</td>
+                            {% for master in masters %}
+                                <!-- ... початок шаблону залишається без змін ... -->
+                                <td>
+                                    {% if schedule_data[master.id][hour] %}
+                                        {% set appointment = schedule_data[master.id][hour] %}
+                                        <div class="schedule-appointment" 
+                                             onclick="window.location.href='{{ url_for('appointments.view', id=appointment.id) }}'">
+                                            <strong>{{ appointment.client.name }}</strong><br>
+                                            <small>{{ appointment.start_time.strftime('%H:%M') }} - {{ appointment.end_time.strftime('%H:%M') }}</small>
+                                            {% if appointment.services %}
+                                                <br>
+                                                <small>
+                                                    {% for service in appointment.services[:1] %}
+                                                        {{ service.service.name }}
+                                                        {% if loop.index < appointment.services|length %}
+                                                            ...
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </small>
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <a href="{{ url_for('appointments.create') }}?date={{ selected_date.strftime('%Y-%m-%d') }}&time={{ hour.strftime('%H:%M') }}&master_id={{ master.id }}&from_schedule=1" 
+                                           class="btn btn-sm btn-outline-primary">+</a>
+                                    {% endif %}
+                                </td>
+                                <!-- ... кінець шаблону залишається без змін ... -->
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Ініціалізація датапікера
+        flatpickr("#datepicker", {
+            dateFormat: "Y-m-d",
+            locale: "uk",
+            onChange: function(selectedDates, dateStr, instance) {
+                // Автоматичне відправлення форми при зміні дати
+                document.getElementById('dateForm').submit();
+            }
+        });
+    });
+</script>
+{% endblock %}

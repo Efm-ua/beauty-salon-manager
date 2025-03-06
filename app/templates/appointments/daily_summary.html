@@ -35,8 +35,12 @@
             <div class="col-md-4">
                 <label for="master_id" class="form-label">Майстер</label>
                 <select id="master_id" name="master_id" class="form-select">
+                    {% if current_user.is_admin %}
+                    <option value="">Всі майстри</option>
+                    {% endif %}
                     {% for master in masters %}
-                        <option value="{{ master.id }}" {% if filter_master == master.id %}selected{% endif %}>
+                        <option value="{{ master.id }}" {% if filter_master == master.id %}selected{% endif %} 
+                            {% if not current_user.is_admin and master.id != current_user.id %}disabled{% endif %}>
                             {{ master.full_name }}
                         </option>
                     {% endfor %}
@@ -49,6 +53,49 @@
             </div>
         </form>
         
+        <!-- Статистика по майстрах (тільки для адміністратора) -->
+        {% if master_stats %}
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i>Статистика майстрів за день</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Майстер</th>
+                                <th class="text-center">Кількість записів</th>
+                                <th class="text-end">Сума</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in master_stats %}
+                                <tr>
+                                    <td>{{ stat.name }}</td>
+                                    <td class="text-center">{{ stat.appointments_count }}</td>
+                                    <td class="text-end">{{ "%.2f"|format(stat.total_sum) }} грн</td>
+                                    <td>
+                                        <a href="{{ url_for('appointments.daily_summary', date=filter_date.strftime('%Y-%m-%d'), master_id=stat.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="2">Всього:</th>
+                                <th class="text-end">{{ "%.2f"|format(total_sum) }} грн</th>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
         <!-- Загальна сума -->
         <div class="row mb-4">
             <div class="col-md-6 offset-md-3">
@@ -62,15 +109,25 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         
         <!-- Список записів -->
         {% if appointments %}
-            <h4 class="mb-3">Деталі записів:</h4>
+            <h4 class="mb-3">
+                {% if filter_master %}
+                    Деталі записів майстра:
+                {% else %}
+                    Деталі всіх записів:
+                {% endif %}
+            </h4>
             <div class="table-responsive">
                 <table class="table table-striped table-hover">
                     <thead class="table-light">
                         <tr>
                             <th>Час</th>
+                            {% if not filter_master %}
+                            <th>Майстер</th>
+                            {% endif %}
                             <th>Клієнт</th>
                             <th>Послуги</th>
                             <th class="text-end">Сума</th>
@@ -81,6 +138,9 @@
                         {% for appointment in appointments %}
                             <tr>
                                 <td>{{ appointment.start_time.strftime('%H:%M') }}</td>
+                                {% if not filter_master %}
+                                <td>{{ appointment.master.full_name }}</td>
+                                {% endif %}
                                 <td>
                                     <a href="{{ url_for('clients.view', id=appointment.client.id) }}">
                                         {{ appointment.client.name }}
@@ -108,7 +168,7 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <th colspan="3">Всього за день:</th>
+                            <th colspan="{{ 3 if filter_master else 4 }}">Всього за день:</th>
                             <th class="text-end">{{ "%.2f"|format(total_sum) }} грн</th>
                             <th></th>
                         </tr>

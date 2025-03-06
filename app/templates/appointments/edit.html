@@ -5,32 +5,23 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/uk.js"></script>
-<!-- Select2 для зручного вибору послуг -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 {% endblock %}
 
 {% block content %}
 <div class="row mb-3">
     <div class="col">
-        {% if from_schedule %}
-        <a href="{{ url_for('main.schedule') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-2"></i>Назад до розкладу майстрів
+        <a href="{{ url_for('appointments.view', id=appointment.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Назад до запису
         </a>
-        {% else %}
-        <a href="{{ url_for('appointments.index') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-2"></i>Назад до списку
-        </a>
-        {% endif %}
     </div>
 </div>
 
 <div class="card">
-    <div class="card-header bg-success text-white">
-        <h5 class="mb-0"><i class="fas fa-plus me-2"></i>Створення нового запису</h5>
+    <div class="card-header bg-warning">
+        <h5 class="mb-0"><i class="fas fa-edit me-2"></i>Редагування запису #{{ appointment.id }}</h5>
     </div>
     <div class="card-body">
-        <form method="POST" action="{{ url_for('appointments.create') }}{% if from_schedule %}?from_schedule=1{% endif %}">
+        <form method="POST" action="{{ url_for('appointments.edit', id=appointment.id) }}">
             {{ form.hidden_tag() }}
             
             <div class="row mb-3">
@@ -47,11 +38,6 @@
                         {% else %}
                             {{ form.client_id(class="form-select") }}
                         {% endif %}
-                        <div class="d-flex justify-content-end mt-1">
-                            <a href="{{ url_for('clients.create') }}" class="btn btn-sm btn-outline-primary" target="_blank">
-                                <i class="fas fa-user-plus me-1"></i>Додати нового клієнта
-                            </a>
-                        </div>
                     </div>
                 </div>
                 
@@ -122,22 +108,6 @@
                 </div>
             </div>
             
-            <!-- Додаємо нове поле для вибору послуг -->
-            <div class="mb-3">
-                {{ form.services.label(class="form-label") }}
-                {% if form.services.errors %}
-                    {{ form.services(class="form-select select2 is-invalid", multiple="multiple") }}
-                    <div class="invalid-feedback">
-                        {% for error in form.services.errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    {{ form.services(class="form-select select2", multiple="multiple") }}
-                {% endif %}
-                <small class="form-text text-muted">Можна вибрати кілька послуг. Утримуйте Ctrl (Cmd на Mac) для вибору кількох послуг.</small>
-            </div>
-            
             <div class="mb-3">
                 {{ form.notes.label(class="form-label") }}
                 {% if form.notes.errors %}
@@ -154,7 +124,7 @@
             </div>
             
             <div class="d-grid gap-2">
-                {{ form.submit(class="btn btn-success btn-lg") }}
+                {{ form.submit(class="btn btn-warning") }}
             </div>
         </form>
     </div>
@@ -179,23 +149,6 @@
             time_24hr: true,
             minuteIncrement: 15,
             allowInput: true
-        });
-        
-        // Ініціалізація Select2
-        $(document).ready(function() {
-            $('.select2').select2({
-                placeholder: "Виберіть послуги",
-                allowClear: true
-            });
-        });
-        
-        // Оновлення списку клієнтів після додавання нового
-        window.addEventListener('focus', function() {
-            // Перевірка, чи було відкрито нове вікно для додавання клієнта
-            setTimeout(function() {
-                // Потрібно реалізувати оновлення списку клієнтів через AJAX
-                // Це буде додано пізніше
-            }, 500);
         });
     });
 </script>

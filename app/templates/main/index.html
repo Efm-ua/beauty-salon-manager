@@ -31,6 +31,11 @@
                     <a href="{{ url_for('clients.create') }}" class="btn btn-primary">
                         <i class="fas fa-user-plus me-2"></i>Новий клієнт
                     </a>
+                    {% if current_user.is_admin %}
+                    <a href="{{ url_for('main.schedule') }}" class="btn btn-info">
+                        <i class="fas fa-calendar-week me-2"></i>Розклад усіх майстрів
+                    </a>
+                    {% endif %}
                 </div>
             </div>
         </div>

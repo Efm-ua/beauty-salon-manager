@@ -65,10 +65,13 @@ def create():
     form = ClientForm()
 
     if form.validate_on_submit():
+        # Якщо email пустий, встановлюємо його як None
+        email = form.email.data if form.email.data else None
+
         client = Client(
             name=form.name.data,
             phone=form.phone.data,
-            email=form.email.data,
+            email=email,  # Використовуємо None замість порожнього рядка
             notes=form.notes.data,
         )
         db.session.add(client)
@@ -111,7 +114,14 @@ def edit(id):
     form.client_id = client.id
 
     if form.validate_on_submit():
-        form.populate_obj(client)
+        # Зберігаємо всі поля, крім email
+        client.name = form.name.data
+        client.phone = form.phone.data
+        client.notes = form.notes.data
+
+        # Якщо email порожній, зберігаємо як None
+        client.email = form.email.data if form.email.data else None
+
         db.session.commit()
 
         flash("Інформацію про клієнта успішно оновлено!", "success")
