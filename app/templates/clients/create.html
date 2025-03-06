@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <a href="{{ url_for('clients.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Назад до списку
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-user-plus me-2"></i>Додавання нового клієнта</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('clients.create') }}">
+            {{ form.hidden_tag() }}
+            
+            <div class="mb-3">
+                {{ form.name.label(class="form-label") }}
+                {% if form.name.errors %}
+                    {{ form.name(class="form-control is-invalid") }}
+                    <div class="invalid-feedback">
+                        {% for error in form.name.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {{ form.name(class="form-control") }}
+                {% endif %}
+            </div>
+            
+            <div class="mb-3">
+                {{ form.phone.label(class="form-label") }}
+                {% if form.phone.errors %}
+                    {{ form.phone(class="form-control is-invalid") }}
+                    <div class="invalid-feedback">
+                        {% for error in form.phone.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {{ form.phone(class="form-control") }}
+                {% endif %}
+                <small class="form-text text-muted">Формат: +380XXXXXXXXX</small>
+            </div>
+            
+            <div class="mb-3">
+                {{ form.email.label(class="form-label") }}
+                {% if form.email.errors %}
+                    {{ form.email(class="form-control is-invalid") }}
+                    <div class="invalid-feedback">
+                        {% for error in form.email.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {{ form.email(class="form-control") }}
+                {% endif %}
+                <small class="form-text text-muted">Необов'язкове поле</small>
+            </div>
+            
+            <div class="mb-3">
+                {{ form.notes.label(class="form-label") }}
+                {% if form.notes.errors %}
+                    {{ form.notes(class="form-control is-invalid", rows=3) }}
+                    <div class="invalid-feedback">
+                        {% for error in form.notes.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {{ form.notes(class="form-control", rows=3) }}
+                {% endif %}
+                <small class="form-text text-muted">Додаткова інформація про клієнта</small>
+            </div>
+            
+            <div class="d-grid">
+                {{ form.submit(class="btn btn-primary") }}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

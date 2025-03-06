@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <!-- Загальна інформація -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-calendar-day me-2"></i>Сьогодні - {{ today.strftime('%d.%m.%Y') }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 mb-3">
+                            <h5><i class="fas fa-calendar-check me-2"></i>Записів сьогодні</h5>
+                            <h2 class="text-primary">{{ today_appointments_count }}</h2>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 mb-3">
+                            <h5><i class="fas fa-users me-2"></i>Майстрів у салоні</h5>
+                            <h2 class="text-primary">{{ masters_count }}</h2>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('appointments.create') }}" class="btn btn-success">
+                        <i class="fas fa-plus me-2"></i>Новий запис
+                    </a>
+                    <a href="{{ url_for('clients.create') }}" class="btn btn-primary">
+                        <i class="fas fa-user-plus me-2"></i>Новий клієнт
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Загальна сума за день -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i>Підсумок за день</h5>
+            </div>
+            <div class="card-body">
+                <div class="border rounded p-3 mb-3">
+                    <h5>Ваша сума</h5>
+                    <h2 class="text-success">{{ "%.2f"|format(user_total) }} грн</h2>
+                </div>
+                
+                <div class="border rounded p-3 mb-3">
+                    <h5>Загалом по салону</h5>
+                    <h2 class="text-success">{{ "%.2f"|format(total_day_sum) }} грн</h2>
+                </div>
+                
+                <div class="d-grid">
+                    <a href="{{ url_for('appointments.daily_summary') }}" class="btn btn-outline-success">
+                        <i class="fas fa-chart-bar me-2"></i>Детальний звіт
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Ваші записи на сьогодні</h5>
+    </div>
+    <div class="card-body">
+        {% if user_appointments %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Час</th>
+                            <th>Клієнт</th>
+                            <th>Послуги</th>
+                            <th>Статус</th>
+                            <th>Сума</th>
+                            <th>Дії</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for appointment in user_appointments %}
+                            <tr>
+                                <td>{{ appointment.start_time.strftime('%H:%M') }} - {{ appointment.end_time.strftime('%H:%M') }}</td>
+                                <td>
+                                    <a href="{{ url_for('clients.view', id=appointment.client.id) }}">
+                                        {{ appointment.client.name }}
+                                    </a><br>
+                                    <small class="text-muted">{{ appointment.client.phone }}</small>
+                                </td>
+                                <td>
+                                    {% if appointment.services %}
+                                        <ul class="mb-0 ps-3">
+                                            {% for service in appointment.services %}
+                                                <li>{{ service.service.name }} - {{ "%.2f"|format(service.price) }} грн</li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% else %}
+                                        <span class="text-muted">Послуги не вказані</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if appointment.status == 'scheduled' %}
+                                        <span class="badge bg-primary">Заплановано</span>
+                                    {% elif appointment.status == 'completed' %}
+                                        <span class="badge bg-success">Виконано</span>
+                                    {% elif appointment.status == 'cancelled' %}
+                                        <span class="badge bg-danger">Скасовано</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <strong>{{ "%.2f"|format(appointment.get_total_price()) }} грн</strong>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('appointments.view', id=appointment.id) }}" class="btn btn-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('appointments.edit', id=appointment.id) }}" class="btn btn-warning">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>У вас немає записів на сьогодні.
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

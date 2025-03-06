@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <a href="{{ url_for('clients.create') }}" class="btn btn-success">
+            <i class="fas fa-user-plus me-2"></i>Додати клієнта
+        </a>
+    </div>
+    <div class="col-md-6">
+        <form method="GET" action="{{ url_for('clients.index') }}" class="d-flex">
+            <input type="text" name="search" class="form-control me-2" placeholder="Пошук за ім'ям або телефоном" value="{{ search }}">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-search"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-users me-2"></i>Список клієнтів</h5>
+    </div>
+    <div class="card-body">
+        {% if clients %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Ім'я</th>
+                            <th>Телефон</th>
+                            <th>Email</th>
+                            <th>Дата реєстрації</th>
+                            <th>Дії</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for client in clients %}
+                            <tr>
+                                <td>{{ client.name }}</td>
+                                <td>{{ client.phone }}</td>
+                                <td>{{ client.email or '—' }}</td>
+                                <td>{{ client.created_at.strftime('%d.%m.%Y') }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('clients.view', id=client.id) }}" class="btn btn-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('clients.edit', id=client.id) }}" class="btn btn-warning">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>Клієнтів не знайдено. 
+                {% if search %}
+                    Спробуйте змінити параметри пошуку.
+                {% else %}
+                    Додайте першого клієнта, натиснувши кнопку "Додати клієнта".
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

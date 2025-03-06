@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <a href="{{ url_for('appointments.view', id=appointment.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Назад до запису
+        </a>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-plus me-2"></i>Додавання послуги до запису #{{ appointment.id }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6>Клієнт:</h6>
+                        <p class="lead">{{ appointment.client.name }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Дата і час:</h6>
+                        <p class="lead">{{ appointment.date.strftime('%d.%m.%Y') }}, {{ appointment.start_time.strftime('%H:%M') }}</p>
+                    </div>
+                </div>
+                
+                <form method="POST" action="{{ url_for('appointments.add_service', id=appointment.id) }}">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        {{ form.service_id.label(class="form-label") }}
+                        {% if form.service_id.errors %}
+                            {{ form.service_id(class="form-select is-invalid", id="service_id") }}
+                            <div class="invalid-feedback">
+                                {% for error in form.service_id.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.service_id(class="form-select", id="service_id") }}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.price.label(class="form-label") }}
+                        {% if form.price.errors %}
+                            {{ form.price(class="form-control is-invalid", id="price") }}
+                            <div class="invalid-feedback">
+                                {% for error in form.price.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.price(class="form-control", id="price") }}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.notes.label(class="form-label") }}
+                        {% if form.notes.errors %}
+                            {{ form.notes(class="form-control is-invalid", rows=3) }}
+                            <div class="invalid-feedback">
+                                {% for error in form.notes.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.notes(class="form-control", rows=3) }}
+                        {% endif %}
+                        <small class="form-text text-muted">Додаткова інформація про послугу (необов'язково)</small>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-success") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Отримання ціни послуги при її виборі
+        const serviceSelect = document.getElementById('service_id');
+        const priceInput = document.getElementById('price');
+        
+        serviceSelect.addEventListener('change', function() {
+            const serviceId = this.value;
+            if (!serviceId) return;
+            
+            // AJAX-запит для отримання інформації про послугу
+            fetch(`/services/api/${serviceId}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Встановлення ціни за замовчуванням
+                    // Тут ми просто встановлюємо приблизну ціну для демонстрації
+                    // Реальна логіка може бути більш складною
+                    priceInput.value = (Math.floor(Math.random() * 500) + 100);
+                })
+                .catch(error => console.error('Error fetching service data:', error));
+        });
+    });
+</script>
+{% endblock %}

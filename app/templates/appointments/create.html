@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block head %}
+<!-- Підключення датапікера і таймпікера -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/uk.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <a href="{{ url_for('appointments.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Назад до списку
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="fas fa-plus me-2"></i>Створення нового запису</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('appointments.create') }}">
+            {{ form.hidden_tag() }}
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        {{ form.client_id.label(class="form-label") }}
+                        {% if form.client_id.errors %}
+                            {{ form.client_id(class="form-select is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in form.client_id.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.client_id(class="form-select") }}
+                        {% endif %}
+                        <div class="d-flex justify-content-end mt-1">
+                            <a href="{{ url_for('clients.create') }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                <i class="fas fa-user-plus me-1"></i>Додати нового клієнта
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        {{ form.master_id.label(class="form-label") }}
+                        {% if form.master_id.errors %}
+                            {{ form.master_id(class="form-select is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in form.master_id.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.master_id(class="form-select") }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        {{ form.date.label(class="form-label") }}
+                        {% if form.date.errors %}
+                            {{ form.date(class="form-control datepicker is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in form.date.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.date(class="form-control datepicker") }}
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        {{ form.start_time.label(class="form-label") }}
+                        {% if form.start_time.errors %}
+                            {{ form.start_time(class="form-control timepicker is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in form.start_time.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.start_time(class="form-control timepicker") }}
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        {{ form.end_time.label(class="form-label") }}
+                        {% if form.end_time.errors %}
+                            {{ form.end_time(class="form-control timepicker is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in form.end_time.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.end_time(class="form-control timepicker") }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                {{ form.notes.label(class="form-label") }}
+                {% if form.notes.errors %}
+                    {{ form.notes(class="form-control is-invalid", rows=3) }}
+                    <div class="invalid-feedback">
+                        {% for error in form.notes.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {{ form.notes(class="form-control", rows=3) }}
+                {% endif %}
+                <small class="form-text text-muted">Додаткова інформація про запис</small>
+            </div>
+            
+            <div class="d-grid gap-2">
+                {{ form.submit(class="btn btn-success btn-lg") }}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Ініціалізація датапікера
+        flatpickr(".datepicker", {
+            dateFormat: "Y-m-d",
+            locale: "uk",
+            allowInput: true
+        });
+        
+        // Ініціалізація таймпікера
+        flatpickr(".timepicker", {
+            enableTime: true,
+            noCalendar: true,
+            dateFormat: "H:i",
+            time_24hr: true,
+            minuteIncrement: 15,
+            allowInput: true
+        });
+        
+        // Оновлення списку клієнтів після додавання нового
+        window.addEventListener('focus', function() {
+            // Перевірка, чи було відкрито нове вікно для додавання клієнта
+            setTimeout(function() {
+                // Потрібно реалізувати оновлення списку клієнтів через AJAX
+                // Це буде додано пізніше
+            }, 500);
+        });
+    });
+</script>
+{% endblock %}
