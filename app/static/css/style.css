@@ -79,6 +79,19 @@ body {
     color: #842029;
 }
 
+/* Колірна схема для статусів оплати */
+.status-paid {
+    background-color: #d1e7dd; /* зелений відтінок */
+    color: #0f5132;
+    border: 1px solid #a3cfbb;
+}
+
+.status-unpaid {
+    background-color: #fff3cd; /* жовтий відтінок */
+    color: #664d03;
+    border: 1px solid #ffecb5;
+}
+
 /* Анімації */
 .fade-in {
     animation: fadeIn 0.5s;
