@@ -135,13 +135,7 @@
               {{ interval.main_time.strftime('%H:%M') }}
             </td>
             {% for master in masters %}
-            <td class="main-slot-cell">
-              <a
-                href="{{ url_for('appointments.create') }}?date={{ selected_date.strftime('%Y-%m-%d') }}&time={{ interval.main_time.strftime('%H:%M') }}&master_id={{ master.id }}&from_schedule=1"
-                class="btn btn-sm btn-outline-primary"
-                >+</a
-              >
-            </td>
+            <td class="main-slot-cell"></td>
             {% endfor %}
           </tr>
 
@@ -190,11 +184,6 @@
                 {% endif %}
               </div>
               {% endif %}
-              <a
-                href="{{ url_for('appointments.create') }}?date={{ selected_date.strftime('%Y-%m-%d') }}&time={{ sub_slot.strftime('%H:%M') }}&master_id={{ master.id }}&from_schedule=1"
-                class="btn btn-sm btn-outline-primary"
-                >+</a
-              >
             </td>
             {% endfor %}
           </tr>

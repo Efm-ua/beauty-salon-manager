@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if the clicked element is inside a sub-slot cell but not on an existing appointment
         const cell = event.target.closest('td.sub-slot-cell');
         
-        if (cell && !event.target.closest('.schedule-appointment') && !event.target.closest('a.btn')) {
+        if (cell && !event.target.closest('.schedule-appointment')) {
             // Get the time from the cell's data-time attribute
             const time = cell.dataset.time;
             
