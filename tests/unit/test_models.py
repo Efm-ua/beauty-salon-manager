@@ -216,6 +216,11 @@ class TestAppointmentModel:
         assert saved_appointment.id is not None
         assert saved_appointment.created_at is not None
 
+        # Перевірка значень за замовчуванням для нових полів
+        assert saved_appointment.payment_status == "unpaid"
+        assert saved_appointment.amount_paid is None
+        assert saved_appointment.payment_method is None
+
     def test_appointment_attributes(self, test_appointment):
         """Тест перевірки атрибутів запису"""
         assert test_appointment.date == date.today()
@@ -224,6 +229,11 @@ class TestAppointmentModel:
         assert test_appointment.status == "scheduled"
         assert test_appointment.notes == "Test appointment"
         assert isinstance(test_appointment.created_at, datetime)
+
+        # Перевірка значень за замовчуванням для нових полів
+        assert test_appointment.payment_status == "unpaid"
+        assert test_appointment.amount_paid is None
+        assert test_appointment.payment_method is None
 
     def test_appointment_relationships(
         self, test_appointment, test_client, regular_user
@@ -268,6 +278,34 @@ class TestAppointmentModel:
         # 100.0 (перша послуга) + 50.0 (друга послуга) = 150.0
         total_price = test_appointment.get_total_price()
         assert total_price == 150.0
+
+    def test_appointment_payment_fields(self, session, test_client, regular_user):
+        """Тест полів оплати"""
+        appointment = Appointment(
+            client_id=test_client.id,
+            master_id=regular_user.id,
+            date=date(2023, 6, 15),
+            start_time=time(15, 0),
+            end_time=time(16, 0),
+            status="completed",
+            payment_status="paid",
+            amount_paid=500.50,
+            payment_method="Картка",
+            notes="Paid appointment",
+        )
+        session.add(appointment)
+        session.commit()
+
+        # Перевірка, що запис збережено в базі даних
+        saved_appointment = (
+            session.query(Appointment)
+            .filter_by(client_id=test_client.id, date=date(2023, 6, 15))
+            .first()
+        )
+        assert saved_appointment is not None
+        assert saved_appointment.payment_status == "paid"
+        assert float(saved_appointment.amount_paid) == 500.50
+        assert saved_appointment.payment_method == "Картка"
 
 
 class TestAppointmentServiceModel:

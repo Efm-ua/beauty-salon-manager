@@ -175,6 +175,9 @@ def test_appointment(session, test_client, regular_user, test_service):
         start_time=time(10, 0),  # 10:00
         end_time=time(11, 0),  # 11:00
         status="scheduled",
+        payment_status="unpaid",
+        amount_paid=None,
+        payment_method=None,
         notes="Test appointment",
     )
     session.add(appointment)

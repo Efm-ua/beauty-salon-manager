@@ -103,6 +103,9 @@ def appointment_test_data(app, client, session):
             start_time=time(10, 0),
             end_time=time(11, 0),
             status="scheduled",
+            payment_status="unpaid",
+            amount_paid=None,
+            payment_method=None,
             notes="Test appointment",
         )
         session.add(appointment)
@@ -225,6 +228,9 @@ def test_appointment_create_success(appointments_auth_client, appointment_test_d
     """
     tomorrow = date.today() + timedelta(days=1)
 
+    # Обираємо послугу для запису
+    service_id = appointment_test_data["service_id"]
+
     appointment_data = {
         "client_id": appointment_test_data["client"].id,
         "master_id": appointment_test_data["master"].id,
@@ -232,15 +238,15 @@ def test_appointment_create_success(appointments_auth_client, appointment_test_d
         "start_time": "14:00",
         "end_time": "15:00",
         "notes": "Test appointment created from test",
-        "status": "scheduled",
-        "submit": "Створити",
+        "services": service_id,  # Додаємо послугу до запису
+        "submit": "Зберегти",  # Кнопка відправки форми
     }
 
     response = appointments_auth_client.post(
         "/appointments/create", data=appointment_data, follow_redirects=True
     )
 
-    # Перевіряємо тільки статус відповіді - це мінімальна перевірка успішності запиту
+    # Перевіряємо лише статус відповіді як мінімальну перевірку успішності
     assert response.status_code == 200
 
 
