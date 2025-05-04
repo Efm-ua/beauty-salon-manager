@@ -67,7 +67,7 @@ class TestClientModel:
         unique_id = uuid.uuid4().hex[:8]
         client = Client(
             name=f"New Test Client {unique_id}",
-            phone=f"+380991234{unique_id[:3]}",
+            phone=f"+38099{unique_id}",
             email=f"new_client_{unique_id}@example.com",
             notes="Test notes for new client",
         )
@@ -85,7 +85,7 @@ class TestClientModel:
     def test_client_attributes(self, test_client):
         """Тест перевірки атрибутів клієнта"""
         assert "Test Client" in test_client.name
-        assert test_client.phone.startswith("+3809912345")
+        assert test_client.phone.startswith("+38099")
         assert "test_" in test_client.email
         assert "@example.com" in test_client.email
         assert test_client.notes == "Test client notes"
@@ -112,9 +112,10 @@ class TestClientModel:
     def test_email_unique_constraint(self, session, test_client):
         """Тест перевірки унікальності email клієнта"""
         # Спроба створити клієнта з таким самим email
+        unique_id = uuid.uuid4().hex[:8]
         duplicate_client = Client(
             name="Another Client",
-            phone=f"+380991234{uuid.uuid4().hex[:3]}",  # Інший телефон
+            phone=f"+38099{unique_id}",  # Інший телефон
             email=test_client.email,  # Такий самий email як у test_client
             notes="Another client notes",
         )
@@ -132,7 +133,7 @@ class TestClientModel:
         unique_id = uuid.uuid4().hex[:8]
         client = Client(
             name=f"Client Without Email {unique_id}",
-            phone=f"+380991234{unique_id[:3]}",
+            phone=f"+38099{unique_id}",
             email=None,  # Без email
             notes="Client with no email",
         )
@@ -242,7 +243,7 @@ class TestAppointmentModel:
         # Перевірка відносин з клієнтом
         assert test_appointment.client_id == test_client.id
         assert "Test Client" in test_appointment.client.name
-        assert test_appointment.client.phone.startswith("+3809912345")
+        assert test_appointment.client.phone.startswith("+38099")
 
         # Перевірка відносин з майстром
         assert test_appointment.master_id == regular_user.id

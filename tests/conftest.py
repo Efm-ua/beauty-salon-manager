@@ -134,7 +134,7 @@ def test_client(session):
 
     client = Client(
         name=f"Test Client {unique_id}",
-        phone=f"+3809912345{unique_id[:2]}",
+        phone=f"+38099{unique_id}",
         email=f"test_{unique_id}@example.com",
         notes="Test client notes",
     )
