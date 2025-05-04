@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta, time
+from collections import Counter
 
 from app.models import db, Appointment, AppointmentService, User, Service
 from sqlalchemy import func
@@ -134,6 +135,16 @@ def schedule():
         Appointment.date == selected_date, Appointment.status != "cancelled"
     ).all()
 
+    # Підрахунок записів для кожного клієнта на вибрану дату
+    client_appointments_count = Counter(
+        appointment.client_id for appointment in appointments
+    )
+
+    # Створення множини client_id, у яких більше одного запису
+    multi_booking_client_ids = {
+        client_id for client_id, count in client_appointments_count.items() if count > 1
+    }
+
     # Підготовка погодинного розкладу від 8:00 до 20:00
     hours = []
     for hour in range(8, 21):
@@ -164,4 +175,5 @@ def schedule():
         hours=hours,
         schedule_data=schedule_data,
         selected_date=selected_date,
+        multi_booking_client_ids=multi_booking_client_ids,
     )

@@ -92,6 +92,12 @@ body {
     border: 1px solid #ffecb5;
 }
 
+/* Стиль для клієнтів з кількома записами на день */
+.multi-booking {
+    border: 2px solid #0dcaf0; /* блакитна рамка */
+    box-shadow: 0 0 5px rgba(13, 202, 240, 0.5);
+}
+
 /* Анімації */
 .fade-in {
     animation: fadeIn 0.5s;

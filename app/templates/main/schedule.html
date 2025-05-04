@@ -102,9 +102,11 @@
             {% for master in masters %}
             <td>
               {% if schedule_data[master.id][hour] %} {% set appointment =
-              schedule_data[master.id][hour] %}
+              schedule_data[master.id][hour] %} {% if appointment.client_id in
+              multi_booking_client_ids %} {% set extra_class = ' multi-booking'
+              %} {% else %} {% set extra_class = '' %} {% endif %}
               <div
-                class="schedule-appointment status-{{ appointment.payment_status }}"
+                class="schedule-appointment status-{{ appointment.payment_status }}{{ extra_class }}"
                 onclick="window.location.href='{{ url_for('appointments.view', id=appointment.id) }}'"
               >
                 <strong>{{ appointment.client.name }}</strong><br />
