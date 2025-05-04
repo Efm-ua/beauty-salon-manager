@@ -23,13 +23,21 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 event.target.textContent = '▸';
             }
+            
+            // Prevent other click handlers from firing
+            event.stopPropagation();
         }
     });
     
-    // Handle clicks on empty sub-slot cells to redirect to appointment creation
+    // Handle clicks on empty cells to redirect to appointment creation
     document.querySelector('tbody').addEventListener('click', function(event) {
-        // Check if the clicked element is inside a sub-slot cell but not on an existing appointment
-        const cell = event.target.closest('td.sub-slot-cell');
+        // If the clicked element is a toggle icon, don't process further
+        if (event.target.classList.contains('toggle-icon')) {
+            return;
+        }
+        
+        // Check if the clicked element is inside a cell (either main-slot or sub-slot) but not on an existing appointment
+        const cell = event.target.closest('td.sub-slot-cell, td.main-slot-cell');
         
         if (cell && !event.target.closest('.schedule-appointment')) {
             // Get the time from the cell's data-time attribute

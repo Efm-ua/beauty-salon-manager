@@ -135,7 +135,10 @@
               {{ interval.main_time.strftime('%H:%M') }}
             </td>
             {% for master in masters %}
-            <td class="main-slot-cell"></td>
+            <td
+              class="main-slot-cell"
+              data-time="{{ interval.main_time.strftime('%H:%M') }}"
+            ></td>
             {% endfor %}
           </tr>
 
