@@ -101,6 +101,11 @@
           style="width: 150px"
           value="{{ selected_date.strftime('%Y-%m-%d') }}"
         />
+        <input
+          type="hidden"
+          id="selected-date-input"
+          value="{{ selected_date.strftime('%Y-%m-%d') }}"
+        />
       </form>
     </div>
   </div>
@@ -111,7 +116,7 @@
           <tr>
             <th class="time-column">Час</th>
             {% for master in masters %}
-            <th>{{ master.full_name }}</th>
+            <th data-master-id="{{ master.id }}">{{ master.full_name }}</th>
             {% endfor %}
           </tr>
         </thead>
@@ -151,7 +156,10 @@
               {{ sub_slot.strftime('%H:%M') }}
             </td>
             {% for master in masters %}
-            <td class="sub-slot-cell">
+            <td
+              class="sub-slot-cell"
+              data-time="{{ sub_slot.strftime('%H:%M') }}"
+            >
               {% if schedule_data[master.id][sub_slot] and
               schedule_data[master.id][sub_slot]|length > 0 %} {% set
               appointment = schedule_data[master.id][sub_slot][0] %} {% if
@@ -210,4 +218,5 @@
     });
   });
 </script>
+<script src="{{ url_for('static', filename='js/schedule.js') }}"></script>
 {% endblock %}

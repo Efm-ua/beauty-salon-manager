@@ -118,6 +118,8 @@ def create():
                 form.date.data = datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
                 form.date.data = datetime.now().date()
+        else:
+            form.date.data = datetime.now().date()
 
         # Встановлення часу
         time_str = request.args.get("time")
@@ -126,7 +128,9 @@ def create():
                 start_time = datetime.strptime(time_str, "%H:%M").time()
                 form.start_time.data = start_time
             except ValueError:
-                pass
+                form.start_time.data = time(9, 0)  # Default time if parsing fails
+        else:
+            form.start_time.data = time(9, 0)  # Default time if not provided
 
     if form.validate_on_submit():
         # Перевірка, чи має право користувач створити запис для вибраного майстра
