@@ -125,3 +125,19 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* Стилі для підслотів розкладу */
+.sub-slot-row {
+    display: none; /* Приховано за замовчуванням */
+}
+.sub-slot-row.expanded {
+    display: table-row; /* Показати, якщо розгорнуто */
+}
+.toggle-icon {
+    cursor: pointer;
+    padding-right: 5px;
+}
+.sub-slot-time {
+    font-size: 0.9em;
+    color: #6c757d;
+}

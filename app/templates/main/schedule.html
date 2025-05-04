@@ -48,6 +48,23 @@
     max-height: 80vh;
     overflow-y: auto;
   }
+  /* Стилі для суб-слотів */
+  .sub-slot-row {
+    display: none; /* Приховано за замовчуванням */
+  }
+  .sub-slot-row.expanded {
+    display: table-row; /* Показати, якщо розгорнуто */
+  }
+  /* Стиль для іконки-тригера */
+  .toggle-icon {
+    cursor: pointer;
+    padding-right: 5px;
+  }
+  /* Стиль для 15-хвилинного часового слоту */
+  .sub-slot-time {
+    font-size: 0.9em;
+    color: #6c757d;
+  }
 </style>
 {% endblock %} {% block content %}
 <div class="row mb-3">
@@ -99,15 +116,48 @@
           </tr>
         </thead>
         <tbody>
-          {% for hour in hours %}
-          <tr>
-            <td class="time-column">{{ hour.strftime('%H:%M') }}</td>
+          {% for interval in time_intervals %}
+          <!-- Основний 30-хвилинний рядок -->
+          <tr data-interval="{{ interval.main_time.strftime('%H:%M') }}">
+            <td class="time-column">
+              <span
+                class="toggle-icon"
+                data-bs-toggle="collapse"
+                data-target="sub-slots-{{ interval.main_time.strftime('%H%M') }}"
+              >
+                ▸
+              </span>
+              {{ interval.main_time.strftime('%H:%M') }}
+            </td>
             {% for master in masters %}
-            <td>
-              {% if schedule_data[master.id][hour] %} {% set appointment =
-              schedule_data[master.id][hour] %} {% if appointment.client_id in
-              multi_booking_client_ids %} {% set extra_class = ' multi-booking'
-              %} {% else %} {% set extra_class = '' %} {% endif %}
+            <td class="main-slot-cell">
+              <a
+                href="{{ url_for('appointments.create') }}?date={{ selected_date.strftime('%Y-%m-%d') }}&time={{ interval.main_time.strftime('%H:%M') }}&master_id={{ master.id }}&from_schedule=1"
+                class="btn btn-sm btn-outline-primary"
+                >+</a
+              >
+            </td>
+            {% endfor %}
+          </tr>
+
+          <!-- 15-хвилинні підслоти -->
+          {% for sub_slot in interval.sub_slots %}
+          <tr
+            class="sub-slot-row {% if interval.expanded %}expanded{% endif %}"
+            data-sub-slot="{{ sub_slot.strftime('%H:%M') }}"
+            data-parent="{{ interval.main_time.strftime('%H%M') }}"
+          >
+            <td class="time-column sub-slot-time">
+              {{ sub_slot.strftime('%H:%M') }}
+            </td>
+            {% for master in masters %}
+            <td class="sub-slot-cell">
+              {% if schedule_data[master.id][sub_slot] and
+              schedule_data[master.id][sub_slot]|length > 0 %} {% set
+              appointment = schedule_data[master.id][sub_slot][0] %} {% if
+              appointment.client_id in multi_booking_client_ids %} {% set
+              extra_class = ' multi-booking' %} {% else %} {% set extra_class =
+              '' %} {% endif %}
               <div
                 class="schedule-appointment status-{{ appointment.payment_status }}{{ extra_class }}"
                 onclick="window.location.href='{{ url_for('appointments.view', id=appointment.id) }}'"
@@ -131,17 +181,16 @@
                 >
                 {% endif %}
               </div>
-
+              {% endif %}
               <a
-                href="{{ url_for('appointments.create') }}?date={{ selected_date.strftime('%Y-%m-%d') }}&time={{ hour.strftime('%H:%M') }}&master_id={{ master.id }}&from_schedule=1"
+                href="{{ url_for('appointments.create') }}?date={{ selected_date.strftime('%Y-%m-%d') }}&time={{ sub_slot.strftime('%H:%M') }}&master_id={{ master.id }}&from_schedule=1"
                 class="btn btn-sm btn-outline-primary"
                 >+</a
               >
-              {% endif %}
             </td>
             {% endfor %}
           </tr>
-          {% endfor %}
+          {% endfor %} {% endfor %}
         </tbody>
       </table>
     </div>

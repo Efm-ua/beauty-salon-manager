@@ -146,34 +146,72 @@ def schedule():
         client_id for client_id, count in client_appointments_count.items() if count > 1
     }
 
-    # Підготовка погодинного розкладу від 8:00 до 20:00
-    hours = []
+    # Створення структури 30-хвилинних слотів з 15-хвилинними підслотами
+    time_intervals = []
     for hour in range(8, 21):
-        for minute in [0, 15, 30, 45]:
-            hours.append(time(hour, minute))
+        for minute in [0, 30]:
+            main_time = time(hour, minute)
+            sub_slots = [time(hour, minute), time(hour, minute + 15)]
+            time_intervals.append(
+                {"main_time": main_time, "sub_slots": sub_slots, "expanded": False}
+            )
+
+    # Додавання останнього слоту 20:30
+    if time_intervals[-1]["main_time"] != time(20, 30):
+        time_intervals.append(
+            {
+                "main_time": time(20, 30),
+                "sub_slots": [time(20, 30), time(20, 45)],
+                "expanded": False,
+            }
+        )
 
     # Створення структури даних для розкладу
-    schedule_data = {master.id: {h: None for h in hours} for master in masters}
+    all_15min_slots = []
+    for interval in time_intervals:
+        all_15min_slots.extend(interval["sub_slots"])
 
-    # Заповнення розкладу записами
+    schedule_data = {
+        master.id: {slot: [] for slot in all_15min_slots} for master in masters
+    }
+
+    # Заповнення розкладу записами та встановлення expanded
     for appointment in appointments:
-        start_time = appointment.start_time
+        # Визначення, чи запис починається або закінчується в :15 або :45 хвилин
+        starts_at_15_or_45 = appointment.start_time.minute in [15, 45]
+        ends_at_15_or_45 = appointment.end_time.minute in [15, 45]
 
-        # Знаходження найближчого часу в розкладі
-        for h in hours:
+        # Визначення всіх 15-хвилинних слотів, які займає запис
+        current_time = datetime.combine(selected_date, appointment.start_time)
+        end_datetime = datetime.combine(selected_date, appointment.end_time)
+
+        while current_time < end_datetime:
+            current_slot_time = current_time.time()
+
+            # Додавання запису до відповідного слоту
             if (
-                h.hour == start_time.hour
-                and h.minute <= start_time.minute < h.minute + 15
+                appointment.master_id in schedule_data
+                and current_slot_time in schedule_data[appointment.master_id]
             ):
-                if appointment.master_id in schedule_data:
-                    schedule_data[appointment.master_id][h] = appointment
-                break
+                schedule_data[appointment.master_id][current_slot_time].append(
+                    appointment
+                )
+
+            # Пошук відповідного 30-хвилинного інтервалу для встановлення expanded
+            if starts_at_15_or_45 or ends_at_15_or_45:
+                for interval in time_intervals:
+                    if current_slot_time in interval["sub_slots"]:
+                        interval["expanded"] = True
+                        break
+
+            # Перехід до наступного 15-хвилинного слоту
+            current_time += timedelta(minutes=15)
 
     return render_template(
         "main/schedule.html",
         title="Розклад майстрів",
         masters=masters,
-        hours=hours,
+        time_intervals=time_intervals,
         schedule_data=schedule_data,
         selected_date=selected_date,
         multi_booking_client_ids=multi_booking_client_ids,
