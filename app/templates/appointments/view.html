@@ -1,208 +1,265 @@
-{% extends "base.html" %}
-
-{% block content %}
+{% extends "base.html" %} {% block content %}
 <div class="row mb-3">
-    <div class="col">
-        <a href="{{ url_for('appointments.index') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-2"></i>Назад до списку
-        </a>
-        <!-- Нова кнопка для повернення до розкладу -->
-        <a href="{{ url_for('main.schedule') }}" class="btn btn-info ms-2">
-            <i class="fas fa-calendar-week me-2"></i>Назад до розкладу майстрів
-        </a>
-    </div>
-    <div class="col text-end">
-        <a href="{{ url_for('appointments.edit', id=appointment.id) }}" class="btn btn-warning">
-            <i class="fas fa-edit me-2"></i>Редагувати запис
-        </a>
-    </div>
+  <div class="col">
+    <a href="{{ url_for('appointments.index') }}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-2"></i>Назад до списку
+    </a>
+    <!-- Нова кнопка для повернення до розкладу -->
+    <a
+      href="{{ url_for('main.schedule', date=appointment.date.strftime('%Y-%m-%d')) }}"
+      class="btn btn-info ms-2"
+    >
+      <i class="fas fa-calendar-week me-2"></i>Назад до розкладу майстрів
+    </a>
+  </div>
+  <div class="col text-end">
+    <a
+      href="{{ url_for('appointments.edit', id=appointment.id) }}"
+      class="btn btn-warning"
+    >
+      <i class="fas fa-edit me-2"></i>Редагувати запис
+    </a>
+  </div>
 </div>
 
 <div class="row">
-    <!-- Основні дані запису -->
-    <div class="col-md-7">
-        <div class="card mb-3">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Інформація про запис #{{ appointment.id }}</h5>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <h6>Дата:</h6>
-                        <p class="lead">{{ appointment.date.strftime('%d.%m.%Y') }}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Час:</h6>
-                        <p class="lead">{{ appointment.start_time.strftime('%H:%M') }} - {{ appointment.end_time.strftime('%H:%M') }}</p>
-                    </div>
-                </div>
-                
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <h6>Клієнт:</h6>
-                        <p class="lead">
-                            <a href="{{ url_for('clients.view', id=appointment.client.id) }}">
-                                {{ appointment.client.name }}
-                            </a>
-                        </p>
-                        <p>
-                            <i class="fas fa-phone me-2"></i>{{ appointment.client.phone }}<br>
-                            {% if appointment.client.email %}
-                                <i class="fas fa-envelope me-2"></i>{{ appointment.client.email }}
-                            {% endif %}
-                        </p>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Майстер:</h6>
-                        <p class="lead">{{ appointment.master.full_name }}</p>
-                    </div>
-                </div>
-                
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <h6>Статус:</h6>
-                        <p>
-                            {% if appointment.status == 'scheduled' %}
-                                <span class="badge bg-primary">Заплановано</span>
-                            {% elif appointment.status == 'completed' %}
-                                <span class="badge bg-success">Виконано</span>
-                            {% elif appointment.status == 'cancelled' %}
-                                <span class="badge bg-danger">Скасовано</span>
-                            {% endif %}
-                        </p>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Створено:</h6>
-                        <p>{{ appointment.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
-                    </div>
-                </div>
-                
-                {% if appointment.notes %}
-                    <div class="mb-3">
-                        <h6>Примітки:</h6>
-                        <div class="border rounded p-3">
-                            {{ appointment.notes }}
-                        </div>
-                    </div>
-                {% endif %}
-                
-                <!-- Кнопки зміни статусу -->
-                <div class="d-flex gap-2 mt-3">
-                    {% if appointment.status == 'scheduled' %}
-                        <form method="POST" action="{{ url_for('appointments.change_status', id=appointment.id, status='completed') }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-success">
-                                <i class="fas fa-check me-2"></i>Позначити як виконано
-                            </button>
-                        </form>
-                        <form method="POST" action="{{ url_for('appointments.change_status', id=appointment.id, status='cancelled') }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-danger">
-                                <i class="fas fa-times me-2"></i>Скасувати
-                            </button>
-                        </form>
-                    {% elif appointment.status == 'completed' or appointment.status == 'cancelled' %}
-                        <form method="POST" action="{{ url_for('appointments.change_status', id=appointment.id, status='scheduled') }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-redo me-2"></i>Повернути до запланованих
-                            </button>
-                        </form>
-                    {% endif %}
-                </div>
-            </div>
+  <!-- Основні дані запису -->
+  <div class="col-md-7">
+    <div class="card mb-3">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+          <i class="fas fa-info-circle me-2"></i>Інформація про запис #{{
+          appointment.id }}
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <h6>Дата:</h6>
+            <p class="lead">{{ appointment.date.strftime('%d.%m.%Y') }}</p>
+          </div>
+          <div class="col-md-6">
+            <h6>Час:</h6>
+            <p class="lead">
+              {{ appointment.start_time.strftime('%H:%M') }} - {{
+              appointment.end_time.strftime('%H:%M') }}
+            </p>
+          </div>
         </div>
-    </div>
-    
-    <!-- Послуги -->
-    <div class="col-md-5">
-        <div class="card mb-3">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="fas fa-list-alt me-2"></i>Послуги та оплата</h5>
-            </div>
-            <div class="card-body">
-                {% if services %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Послуга</th>
-                                    <th class="text-end">Ціна</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody id="services-table">
-                                {% for service in services %}
-                                    <tr>
-                                        <td>{{ service.service.name }}</td>
-                                        <td class="text-end">
-                                            <span id="price-display-{{ service.id }}">{{ "%.2f"|format(service.price) }}</span> грн
-                                            <form id="price-form-{{ service.id }}" method="POST" action="{{ url_for('appointments.edit_service_price', appointment_id=appointment.id, service_id=service.id) }}" class="d-none">
-                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                <div class="input-group input-group-sm">
-                                                    <input type="number" name="price" class="form-control" value="{{ service.price }}" step="0.01" min="0">
-                                                    <button type="submit" class="btn btn-primary">OK</button>
-                                                </div>
-                                            </form>
-                                        </td>
-                                        <td class="text-end">
-                                            <div class="btn-group btn-group-sm">
-                                                <button class="btn btn-sm btn-outline-primary edit-price-btn" data-service-id="{{ service.id }}">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <form method="POST" action="{{ url_for('appointments.remove_service', appointment_id=appointment.id, service_id=service.id) }}" class="d-inline">
-                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Ви впевнені, що хочете видалити цю послугу?')">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <th>Всього:</th>
-                                    <th class="text-end">{{ "%.2f"|format(total) }} грн</th>
-                                    <th></th>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>Послуги ще не додані.
-                    </div>
-                {% endif %}
-                
-                <div class="d-grid mt-3">
-                    <a href="{{ url_for('appointments.add_service', id=appointment.id) }}" class="btn btn-primary">
-                        <i class="fas fa-plus me-2"></i>Додати послугу
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
 
-{% block scripts %}
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <h6>Клієнт:</h6>
+            <p class="lead">
+              <a href="{{ url_for('clients.view', id=appointment.client.id) }}">
+                {{ appointment.client.name }}
+              </a>
+            </p>
+            <p>
+              <i class="fas fa-phone me-2"></i>{{ appointment.client.phone }}<br />
+              {% if appointment.client.email %}
+              <i class="fas fa-envelope me-2"></i>{{ appointment.client.email }}
+              {% endif %}
+            </p>
+          </div>
+          <div class="col-md-6">
+            <h6>Майстер:</h6>
+            <p class="lead">{{ appointment.master.full_name }}</p>
+          </div>
+        </div>
+
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <h6>Статус:</h6>
+            <p>
+              {% if appointment.status == 'scheduled' %}
+              <span class="badge bg-primary">Заплановано</span>
+              {% elif appointment.status == 'completed' %}
+              <span class="badge bg-success">Виконано</span>
+              {% elif appointment.status == 'cancelled' %}
+              <span class="badge bg-danger">Скасовано</span>
+              {% endif %}
+            </p>
+          </div>
+          <div class="col-md-6">
+            <h6>Створено:</h6>
+            <p>{{ appointment.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+          </div>
+        </div>
+
+        {% if appointment.notes %}
+        <div class="mb-3">
+          <h6>Примітки:</h6>
+          <div class="border rounded p-3">{{ appointment.notes }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Кнопки зміни статусу -->
+        <div class="d-flex gap-2 mt-3">
+          {% if appointment.status == 'scheduled' %}
+          <form
+            method="POST"
+            action="{{ url_for('appointments.change_status', id=appointment.id, status='completed') }}"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="btn btn-success">
+              <i class="fas fa-check me-2"></i>Позначити як виконано
+            </button>
+          </form>
+          <form
+            method="POST"
+            action="{{ url_for('appointments.change_status', id=appointment.id, status='cancelled') }}"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="btn btn-danger">
+              <i class="fas fa-times me-2"></i>Скасувати
+            </button>
+          </form>
+          {% elif appointment.status == 'completed' or appointment.status ==
+          'cancelled' %}
+          <form
+            method="POST"
+            action="{{ url_for('appointments.change_status', id=appointment.id, status='scheduled') }}"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-redo me-2"></i>Повернути до запланованих
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Послуги -->
+  <div class="col-md-5">
+    <div class="card mb-3">
+      <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+          <i class="fas fa-list-alt me-2"></i>Послуги та оплата
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if services %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Послуга</th>
+                <th class="text-end">Ціна</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="services-table">
+              {% for service in services %}
+              <tr>
+                <td>{{ service.service.name }}</td>
+                <td class="text-end">
+                  <span id="price-display-{{ service.id }}"
+                    >{{ "%.2f"|format(service.price) }}</span
+                  >
+                  грн
+                  <form
+                    id="price-form-{{ service.id }}"
+                    method="POST"
+                    action="{{ url_for('appointments.edit_service_price', appointment_id=appointment.id, service_id=service.id) }}"
+                    class="d-none"
+                  >
+                    <input
+                      type="hidden"
+                      name="csrf_token"
+                      value="{{ csrf_token() }}"
+                    />
+                    <div class="input-group input-group-sm">
+                      <input
+                        type="number"
+                        name="price"
+                        class="form-control"
+                        value="{{ service.price }}"
+                        step="0.01"
+                        min="0"
+                      />
+                      <button type="submit" class="btn btn-primary">OK</button>
+                    </div>
+                  </form>
+                </td>
+                <td class="text-end">
+                  <div class="btn-group btn-group-sm">
+                    <button
+                      class="btn btn-sm btn-outline-primary edit-price-btn"
+                      data-service-id="{{ service.id }}"
+                    >
+                      <i class="fas fa-edit"></i>
+                    </button>
+                    <form
+                      method="POST"
+                      action="{{ url_for('appointments.remove_service', appointment_id=appointment.id, service_id=service.id) }}"
+                      class="d-inline"
+                    >
+                      <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                      />
+                      <button
+                        type="submit"
+                        class="btn btn-sm btn-outline-danger"
+                        onclick="return confirm('Ви впевнені, що хочете видалити цю послугу?')"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th>Всього:</th>
+                <th class="text-end">{{ "%.2f"|format(total) }} грн</th>
+                <th></th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+          <i class="fas fa-info-circle me-2"></i>Послуги ще не додані.
+        </div>
+        {% endif %}
+
+        <div class="d-grid mt-3">
+          <a
+            href="{{ url_for('appointments.add_service', id=appointment.id) }}"
+            class="btn btn-primary"
+          >
+            <i class="fas fa-plus me-2"></i>Додати послугу
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Редагування ціни послуги
-        const editButtons = document.querySelectorAll('.edit-price-btn');
-        
-        editButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const serviceId = this.getAttribute('data-service-id');
-                const displayElement = document.getElementById(`price-display-${serviceId}`);
-                const formElement = document.getElementById(`price-form-${serviceId}`);
-                
-                displayElement.classList.add('d-none');
-                formElement.classList.remove('d-none');
-            });
-        });
+  document.addEventListener("DOMContentLoaded", function () {
+    // Редагування ціни послуги
+    const editButtons = document.querySelectorAll(".edit-price-btn");
+
+    editButtons.forEach((button) => {
+      button.addEventListener("click", function () {
+        const serviceId = this.getAttribute("data-service-id");
+        const displayElement = document.getElementById(
+          `price-display-${serviceId}`
+        );
+        const formElement = document.getElementById(`price-form-${serviceId}`);
+
+        displayElement.classList.add("d-none");
+        formElement.classList.remove("d-none");
+      });
     });
+  });
 </script>
 {% endblock %}

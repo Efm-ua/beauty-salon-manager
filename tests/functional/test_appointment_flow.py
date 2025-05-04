@@ -541,3 +541,78 @@ def test_appointment_form_uses_date_parameter(
     # Check that the form's date field contains the correct date value
     # The HTML should contain an input with the date value set
     assert f'value="{formatted_date}"' in response.text
+
+
+def test_appointment_back_to_schedule_button_includes_date(
+    session, client, test_client, regular_user, admin_user
+):
+    """
+    Tests that the "Back to schedule" button on the appointment details page
+    includes the appointment date as a parameter.
+
+    This test verifies:
+    1. When viewing appointment details for a date X, the "Back to schedule"
+       button href contains the date parameter with value X
+    2. The date is correctly formatted as YYYY-MM-DD
+    """
+    # Login first as admin (required for viewing schedule)
+    client.get("/auth/logout", follow_redirects=True)
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user.username,
+            "password": "admin_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Create a test date for a future date (not today)
+    test_date = date.today() + timedelta(days=5)
+    formatted_date = test_date.strftime("%Y-%m-%d")
+
+    # Create a new appointment for the test date
+    response = client.post(
+        "/appointments/create",
+        data={
+            "client_id": test_client.id,
+            "master_id": regular_user.id,
+            "date": formatted_date,
+            "start_time": "14:00",
+            "end_time": "15:00",
+            "notes": "Test appointment for back button",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Запис успішно створено!" in response.text
+
+    # Find the appointment using database query
+    from app.models import Appointment
+
+    appointment = (
+        Appointment.query.filter_by(
+            client_id=test_client.id,
+            master_id=regular_user.id,
+            date=test_date,
+            notes="Test appointment for back button",
+        )
+        .order_by(Appointment.id.desc())
+        .first()
+    )
+    assert appointment is not None, "Appointment not found in database"
+
+    # View the appointment details
+    response = client.get(f"/appointments/{appointment.id}")
+    assert response.status_code == 200
+
+    # Check that the "Back to schedule" button includes the correct date parameter
+    # Look for the link with "Назад до розкладу майстрів" text that contains the date
+    expected_date_param = f"date={formatted_date}"
+
+    # Find the button/link with "Назад до розкладу майстрів" text
+    # and verify it contains the date parameter
+    assert (
+        f'href="/schedule?{expected_date_param}"' in response.text
+    ), f"Link with date parameter {formatted_date} not found in response"

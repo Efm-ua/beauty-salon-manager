@@ -160,6 +160,7 @@ def create():
             end_time=form.end_time.data,
             notes=form.notes.data,
             status="scheduled",
+            payment_status="unpaid",  # За замовчуванням "unpaid"
         )
         db.session.add(appointment)
         db.session.flush()  # отримуємо ID запису
@@ -185,7 +186,9 @@ def create():
         # Перевіряємо, чи був запит з розкладу майстрів
         from_schedule = request.args.get("from_schedule")
         if from_schedule:
-            return redirect(url_for("main.schedule"))
+            return redirect(
+                url_for("main.schedule", date=appointment.date.strftime("%Y-%m-%d"))
+            )
         else:
             return redirect(url_for("appointments.view", id=appointment.id))
 
@@ -250,21 +253,34 @@ def edit(id):
         form.master_id.data = current_user.id
 
     if form.validate_on_submit():
+        # Початок редагування
         if not current_user.is_admin and form.master_id.data != current_user.id:
-            flash("Ви можете створювати записи тільки для себе", "danger")
-            return redirect(url_for("appointments.edit", id=appointment.id))
+            flash("Ви не можете змінити майстра запису", "danger")
+            return redirect(url_for("appointments.edit", id=id))
 
-        form.populate_obj(appointment)
+        # Оновлення даних запису
+        appointment.client_id = form.client_id.data
+        appointment.master_id = form.master_id.data
+        appointment.date = form.date.data
+        appointment.start_time = form.start_time.data
+        appointment.end_time = form.end_time.data
+        appointment.notes = form.notes.data
+        # Збереження поточних значень для payment_status, amount_paid та payment_method
+
         db.session.commit()
-
         flash("Запис успішно оновлено!", "success")
-        return redirect(url_for("appointments.view", id=appointment.id))
+
+        # Перевіряємо, чи був запит з розкладу майстрів
+        from_schedule = request.args.get("from_schedule")
+        if from_schedule:
+            return redirect(
+                url_for("main.schedule", date=appointment.date.strftime("%Y-%m-%d"))
+            )
+        else:
+            return redirect(url_for("appointments.view", id=id))
 
     return render_template(
-        "appointments/edit.html",
-        title=f"Редагування запису #{id}",
-        form=form,
-        appointment=appointment,
+        "appointments/edit.html", title=f"Редагування запису #{id}", form=form
     )
 
 
