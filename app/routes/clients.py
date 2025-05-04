@@ -1,10 +1,9 @@
-from flask import (Blueprint, flash, jsonify, redirect, render_template,
-                   request, url_for)
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, TextAreaField
-from wtforms.validators import (DataRequired, Email, Length, Optional,
-                                ValidationError)
+from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError
+from sqlalchemy import and_, or_
 
 from app.models import Appointment, Client, db
 
@@ -46,11 +45,30 @@ def index():
 
     # Додавання фільтрації за пошуком
     if search:
-        query = query.filter(
-            (Client.name.ilike(f"%{search}%"))
-            | (Client.phone.ilike(f"%{search}%"))
-            | (Client.email.ilike(f"%{search}%"))
-        )
+        # Розбиваємо пошуковий запит на слова
+        search_words = search.split()
+
+        if search_words:
+            # Створюємо умову для пошуку за іменем, де кожне слово має бути в імені
+            name_conditions = []
+            for word in search_words:
+                name_conditions.append(Client.name.ilike(f"%{word}%"))
+
+            # Об'єднуємо умови для імені з AND (всі слова повинні бути присутні)
+            name_condition = and_(*name_conditions)
+
+            # Додаємо умови для телефону та email (для повного пошукового запиту)
+            phone_condition = Client.phone.ilike(f"%{search}%")
+            email_condition = Client.email.ilike(f"%{search}%")
+            notes_condition = Client.notes.ilike(f"%{search}%")
+
+            # Об'єднуємо всі умови з OR
+            query = query.filter(
+                or_(name_condition, phone_condition, email_condition, notes_condition)
+            )
+        else:
+            # Порожній пошуковий запит після розбиття - просто повертаємо всіх клієнтів
+            pass
 
     # Отримання клієнтів
     clients = query.order_by(Client.name).all()
@@ -173,13 +191,27 @@ def api_search():
     if not query or len(query) < 2:
         return jsonify([])
 
-    clients = (
-        Client.query.filter(
-            (Client.name.ilike(f"%{query}%")) | (Client.phone.ilike(f"%{query}%"))
+    # Розбиваємо пошуковий запит на слова
+    search_words = query.split()
+
+    if search_words:
+        # Створюємо умову для пошуку за іменем, де кожне слово має бути в імені
+        name_conditions = []
+        for word in search_words:
+            name_conditions.append(Client.name.ilike(f"%{word}%"))
+
+        # Об'єднуємо умови для імені з AND
+        name_condition = and_(*name_conditions)
+
+        # Додаємо умову для телефону (для повного пошукового запиту)
+        phone_condition = Client.phone.ilike(f"%{query}%")
+
+        # Об'єднуємо всі умови з OR
+        clients = (
+            Client.query.filter(or_(name_condition, phone_condition)).limit(10).all()
         )
-        .limit(10)
-        .all()
-    )
+    else:
+        clients = []
 
     result = []
     for client in clients:

@@ -25,6 +25,7 @@
 5. Пошук клієнтів:
    - test_client_search_by_name: Пошук клієнтів за ім'ям
    - test_client_search_by_phone: Пошук клієнтів за телефоном
+   - test_client_search_by_multiple_name_words: Пошук клієнтів за кількома словами в імені
 
 6. Видалення клієнта:
    - test_client_delete_with_appointments: Заборона видалення клієнта з майбутніми записами
@@ -32,6 +33,7 @@
 
 7. API клієнтів:
    - test_client_api_search: Тест API пошуку клієнтів
+   - test_client_api_search_multiple_words: Тест API пошуку клієнтів за кількома словами
 """
 
 import uuid
@@ -557,3 +559,94 @@ def test_client_api_search(auth_client_for_clients, session):
             break
 
     assert found, "Тестовий клієнт не знайдений в результатах API пошуку"
+
+
+def test_client_search_by_multiple_name_words(auth_client_for_clients, session):
+    """
+    Тест пошуку клієнтів за кількома словами в імені.
+    Перевіряє відображення результатів пошуку, коли використовується кілька слів з імені клієнта.
+    """
+    # Створюємо тестового клієнта з іменем, що містить кілька слів
+    unique_id = uuid.uuid4().hex[:8]
+    first_name = f"TestFirstName{unique_id}"
+    last_name = f"TestLastName{unique_id}"
+    unique_name = f"{first_name} {last_name}"
+
+    test_client = Client(
+        name=unique_name,
+        phone=f"+38022{unique_id}",
+        email=f"multiword_search_{unique_id}@example.com",
+        notes="Test client for multi-word search test",
+    )
+    session.add(test_client)
+    session.commit()
+
+    # 1. Використовуємо пошук з двома словами в правильному порядку
+    search_term = f"{first_name} {last_name}"
+    response = auth_client_for_clients.get(f"/clients/?search={search_term}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    assert unique_name in content
+    assert f"+38022{unique_id}" in content
+
+    # 2. Використовуємо пошук з двома словами в зворотному порядку
+    search_term = f"{last_name} {first_name}"
+    response = auth_client_for_clients.get(f"/clients/?search={search_term}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    assert unique_name in content
+    assert f"+38022{unique_id}" in content
+
+    # 3. Використовуємо пошук з частинами обох слів
+    search_term = f"{first_name[:5]} {last_name[:5]}"
+    response = auth_client_for_clients.get(f"/clients/?search={search_term}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    assert unique_name in content
+    assert f"+38022{unique_id}" in content
+
+
+def test_client_api_search_multiple_words(auth_client_for_clients, session):
+    """
+    Тест API пошуку клієнтів з кількома словами.
+    Перевіряє коректність роботи API для пошуку клієнтів за кількома словами імені.
+    """
+    # Створюємо тестового клієнта з іменем, що містить кілька слів
+    unique_id = uuid.uuid4().hex[:8]
+    first_name = f"ApiMultiFirstName{unique_id}"
+    last_name = f"ApiMultiLastName{unique_id}"
+    unique_name = f"{first_name} {last_name}"
+
+    test_client = Client(
+        name=unique_name,
+        phone=f"+38666{unique_id}",
+        email=f"api_multi_search_{unique_id}@example.com",
+        notes="Test client for API multi-word search test",
+    )
+    session.add(test_client)
+    session.commit()
+    client_id = test_client.id
+
+    # 1. Використовуємо пошук з двома словами в правильному порядку
+    search_term = f"{first_name} {last_name}"
+    response = auth_client_for_clients.get(f"/clients/api/search?q={search_term}")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+    assert any(c["id"] == client_id for c in data)
+
+    # 2. Використовуємо пошук з двома словами в зворотному порядку
+    search_term = f"{last_name} {first_name}"
+    response = auth_client_for_clients.get(f"/clients/api/search?q={search_term}")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+    assert any(c["id"] == client_id for c in data)
+
+    # 3. Використовуємо пошук з частинами обох слів
+    search_term = f"{first_name[:5]} {last_name[:5]}"
+    response = auth_client_for_clients.get(f"/clients/api/search?q={search_term}")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+    assert any(c["id"] == client_id for c in data)
