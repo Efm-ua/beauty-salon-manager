@@ -26,6 +26,7 @@
    - test_client_search_by_name: Пошук клієнтів за ім'ям
    - test_client_search_by_phone: Пошук клієнтів за телефоном
    - test_client_search_by_multiple_name_words: Пошук клієнтів за кількома словами в імені
+   - test_client_search_cyrillic_case_insensitive: Пошук клієнтів за кириличним ім'ям з різним регістром
 
 6. Видалення клієнта:
    - test_client_delete_with_appointments: Заборона видалення клієнта з майбутніми записами
@@ -34,6 +35,7 @@
 7. API клієнтів:
    - test_client_api_search: Тест API пошуку клієнтів
    - test_client_api_search_multiple_words: Тест API пошуку клієнтів за кількома словами
+   - test_client_api_search_cyrillic_case_insensitive: Тест API пошуку клієнтів за кириличним ім'ям з різним регістром
 """
 
 import uuid
@@ -645,6 +647,148 @@ def test_client_api_search_multiple_words(auth_client_for_clients, session):
 
     # 3. Використовуємо пошук з частинами обох слів
     search_term = f"{first_name[:5]} {last_name[:5]}"
+    response = auth_client_for_clients.get(f"/clients/api/search?q={search_term}")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+    assert any(c["id"] == client_id for c in data)
+
+
+def test_client_search_cyrillic_case_insensitive(auth_client_for_clients, session):
+    """
+    Тест пошуку клієнтів за кириличним ім'ям з різним регістром.
+    Перевіряє нечутливість до регістру для кириличних символів.
+    """
+    # Створюємо тестового клієнта з кириличним ім'ям
+    unique_id = uuid.uuid4().hex[:8]
+    cyrillic_name = f"Анна Іванова {unique_id}"
+
+    # Виведення інформації про клієнта, якого ми збираємося створити
+    print(f"\nCreating client with name: {cyrillic_name}")
+    print(f"Unique ID: {unique_id}")
+
+    test_client = Client(
+        name=cyrillic_name,
+        phone=f"+38044{unique_id}",
+        email=f"anna_{unique_id}@example.com",
+        notes="Test client for Cyrillic case-insensitive search",
+    )
+    session.add(test_client)
+    session.commit()
+
+    # Перевіряємо, що клієнт був створений
+    created_client = Client.query.filter_by(phone=f"+38044{unique_id}").first()
+    print(f"Created client: {created_client.name}, ID: {created_client.id}")
+
+    # Перевіримо, чи працює базовий пошук без врахування регістру
+    print("\nTesting direct SQL query with UPPER():")
+    from sqlalchemy import func
+
+    sql_result = Client.query.filter(
+        func.UPPER(Client.name).like(f"%{('анна').upper()}%")
+    ).all()
+    print(f"SQL Query direct result (length: {len(sql_result)}):")
+    for c in sql_result:
+        print(f"  - {c.id}: {c.name}")
+
+    # 1. Пошук малими літерами кирилиці
+    search_term = "анна"
+    print(f"\nSearching for: {search_term}")
+    response = auth_client_for_clients.get(f"/clients/?search={search_term}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+
+    # Виводимо всіх клієнтів з бази даних для порівняння
+    all_clients = Client.query.all()
+    print("\nAll clients in database:")
+    for client in all_clients:
+        print(f"ID: {client.id}, Name: {client.name}, Phone: {client.phone}")
+
+    # Перевіряємо, чи містить сторінка необхідні дані
+    if cyrillic_name not in content:
+        print("\nClient not found in response content!")
+        print(f"Looking for: {cyrillic_name}")
+
+        # Виведення частини контенту для аналізу
+        print("\nPart of the response content:")
+        print(content[:1000])
+
+        # Додаємо спрощену перевірку, щоб побачити, чи є клієнт на сторінці
+        assert (
+            "Клієнтів не знайдено" not in content
+        ), "No clients found message displayed"
+        # Перевіряємо, чи є унікальний ідентифікатор в контенті
+        assert unique_id in content, f"Unique ID {unique_id} not found in response"
+
+    assert cyrillic_name in content
+    assert f"+38044{unique_id}" in content
+
+    # 2. Пошук змішаним регістром
+    search_term = "аНнА"
+    print(f"\nSearching with mixed case: {search_term}")
+    response = auth_client_for_clients.get(f"/clients/?search={search_term}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    if cyrillic_name not in content:
+        print("\nClient not found in response content for mixed case search!")
+        print(f"Looking for: {cyrillic_name}")
+        print("\nPart of the response content:")
+        print(content[:1000])
+    assert cyrillic_name in content
+    assert f"+38044{unique_id}" in content
+
+    # 3. Пошук за прізвищем малими літерами
+    search_term = "іванова"
+    print(f"\nSearching by last name: {search_term}")
+    response = auth_client_for_clients.get(f"/clients/?search={search_term}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    if cyrillic_name not in content:
+        print("\nClient not found in response content for last name search!")
+        print(f"Looking for: {cyrillic_name}")
+        print("\nPart of the response content:")
+        print(content[:1000])
+    assert cyrillic_name in content
+    assert f"+38044{unique_id}" in content
+
+
+def test_client_api_search_cyrillic_case_insensitive(auth_client_for_clients, session):
+    """
+    Тест API пошуку клієнтів за кириличним ім'ям з різним регістром.
+    Перевіряє нечутливість API пошуку до регістру для кириличних символів.
+    """
+    # Створюємо тестового клієнта з кириличним ім'ям
+    unique_id = uuid.uuid4().hex[:8]
+    cyrillic_name = f"Олена Петрова {unique_id}"
+
+    test_client = Client(
+        name=cyrillic_name,
+        phone=f"+38055{unique_id}",
+        email=f"olena_{unique_id}@example.com",
+        notes="Test client for API Cyrillic case-insensitive search",
+    )
+    session.add(test_client)
+    session.commit()
+    client_id = test_client.id
+
+    # 1. Пошук малими літерами кирилиці
+    search_term = "олена"
+    response = auth_client_for_clients.get(f"/clients/api/search?q={search_term}")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+    assert any(c["id"] == client_id for c in data)
+
+    # 2. Пошук змішаним регістром
+    search_term = "оЛеНа"
+    response = auth_client_for_clients.get(f"/clients/api/search?q={search_term}")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+    assert any(c["id"] == client_id for c in data)
+
+    # 3. Пошук за прізвищем малими літерами
+    search_term = "петрова"
     response = auth_client_for_clients.get(f"/clients/api/search?q={search_term}")
     assert response.status_code == 200
     data = response.get_json()

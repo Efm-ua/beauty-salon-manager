@@ -3,7 +3,9 @@ from flask_login import login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func, text
+from sqlalchemy.sql import text as sql_text
+from datetime import datetime
 
 from app.models import Appointment, Client, db
 
@@ -39,39 +41,59 @@ class ClientForm(FlaskForm):
 def index():
     # Отримання параметра пошуку
     search = request.args.get("search", "")
+    print(f"Searching for: {search}")
 
-    # Базовий запит
-    query = Client.query
+    # Для підтримки пошуку з регістронезалежністю для кирилиці
+    # використовуємо нашу функцію CASEFOLD для правильної обробки Unicode
 
-    # Додавання фільтрації за пошуком
-    if search:
+    # Запит клієнтів
+    if search and search.strip():
         # Розбиваємо пошуковий запит на слова
         search_words = search.split()
+        print(f"Search words: {search_words}")
 
         if search_words:
-            # Створюємо умову для пошуку за іменем, де кожне слово має бути в імені
-            name_conditions = []
+            # Створюємо умови для пошуку за іменем, де кожне слово має бути в імені
+            name_filters = []
             for word in search_words:
-                name_conditions.append(Client.name.ilike(f"%{word}%"))
+                # Використовуємо SQL функцію CASEFOLD для правильного порівняння Unicode
+                name_filters.append(
+                    func.CASEFOLD(Client.name).like(f"%{word.casefold()}%")
+                )
 
-            # Об'єднуємо умови для імені з AND (всі слова повинні бути присутні)
-            name_condition = and_(*name_conditions)
+            # Об'єднуємо умови для імені з AND
+            name_condition = and_(*name_filters)
 
-            # Додаємо умови для телефону та email (для повного пошукового запиту)
+            # Умови для інших полів
             phone_condition = Client.phone.ilike(f"%{search}%")
             email_condition = Client.email.ilike(f"%{search}%")
-            notes_condition = Client.notes.ilike(f"%{search}%")
+            # Використовуємо CASEFOLD для нотаток також, оскільки там можуть бути кириличні символи
+            notes_condition = func.CASEFOLD(Client.notes).like(f"%{search.casefold()}%")
 
-            # Об'єднуємо всі умови з OR
-            query = query.filter(
-                or_(name_condition, phone_condition, email_condition, notes_condition)
+            # Формуємо запит
+            clients = (
+                Client.query.filter(
+                    or_(
+                        name_condition,
+                        phone_condition,
+                        email_condition,
+                        notes_condition,
+                    )
+                )
+                .order_by(Client.name)
+                .all()
             )
         else:
-            # Порожній пошуковий запит після розбиття - просто повертаємо всіх клієнтів
-            pass
+            # Якщо пошуковий запит порожній
+            clients = Client.query.order_by(Client.name).all()
+    else:
+        # Без пошуку просто повертаємо всіх клієнтів
+        clients = Client.query.order_by(Client.name).all()
 
-    # Отримання клієнтів
-    clients = query.order_by(Client.name).all()
+    print(f"Total clients found: {len(clients)}")
+    if clients:
+        for client in clients:
+            print(f"Client: {client.name}, ID: {client.id}")
 
     return render_template(
         "clients/index.html", title="Клієнти", clients=clients, search=search
@@ -187,31 +209,45 @@ def delete(id):
 @bp.route("/api/search")
 @login_required
 def api_search():
-    query = request.args.get("q", "")
-    if not query or len(query) < 2:
+    query_string = request.args.get("q", "")
+    if not query_string or len(query_string) < 2:
         return jsonify([])
 
-    # Розбиваємо пошуковий запит на слова
-    search_words = query.split()
+    print(f"API searching for: {query_string}")
 
-    if search_words:
-        # Створюємо умову для пошуку за іменем, де кожне слово має бути в імені
-        name_conditions = []
-        for word in search_words:
-            name_conditions.append(Client.name.ilike(f"%{word}%"))
+    # Використовуємо функцію CASEFOLD для правильної обробки Unicode
+    if query_string:
+        # Розбиваємо пошуковий запит на слова
+        search_words = query_string.split()
 
-        # Об'єднуємо умови для імені з AND
-        name_condition = and_(*name_conditions)
+        if search_words:
+            # Створюємо умови для пошуку за іменем, де кожне слово має бути в імені
+            name_filters = []
+            for word in search_words:
+                # Використовуємо SQL функцію CASEFOLD для правильного порівняння Unicode
+                name_filters.append(
+                    func.CASEFOLD(Client.name).like(f"%{word.casefold()}%")
+                )
 
-        # Додаємо умову для телефону (для повного пошукового запиту)
-        phone_condition = Client.phone.ilike(f"%{query}%")
+            # Об'єднуємо умови для імені з AND
+            name_condition = and_(*name_filters)
 
-        # Об'єднуємо всі умови з OR
-        clients = (
-            Client.query.filter(or_(name_condition, phone_condition)).limit(10).all()
-        )
+            # Умови для телефону
+            phone_condition = Client.phone.ilike(f"%{query_string}%")
+
+            # Формуємо запит
+            clients = (
+                Client.query.filter(or_(name_condition, phone_condition))
+                .order_by(Client.name)
+                .limit(10)
+                .all()
+            )
+        else:
+            clients = []
     else:
         clients = []
+
+    print(f"API found {len(clients)} clients")
 
     result = []
     for client in clients:
@@ -225,6 +261,3 @@ def api_search():
         )
 
     return jsonify(result)
-
-
-from datetime import datetime  # Додайте цей імпорт на початку файлу
