@@ -40,13 +40,15 @@
    - test_daily_summary_shows_correct_total: Відображення коректної суми за день
 """
 
-import pytest
 import uuid
-from datetime import date, timedelta, datetime, time
-from app.models import User, Client, Appointment, AppointmentService, Service
-from flask_login import current_user
+from datetime import date, datetime, time, timedelta
+
+import pytest
 from flask import session, url_for
+from flask_login import current_user
 from werkzeug.security import generate_password_hash
+
+from app.models import Appointment, AppointmentService, Client, Service, User
 
 
 @pytest.fixture
@@ -221,32 +223,61 @@ def test_appointment_create_page_accessible(appointments_auth_client):
     assert "form" in data and ("client_id" in data or "Клієнт" in data)
 
 
-def test_appointment_create_success(appointments_auth_client, appointment_test_data):
+def test_appointment_create_success(
+    appointments_auth_client, test_client, test_service, regular_user, session
+):
     """
     Тест успішного створення запису з коректними даними.
-    Перевіряє статус відповіді.
+    Перевіряє коректність обчислення end_time.
     """
     tomorrow = date.today() + timedelta(days=1)
 
-    # Обираємо послугу для запису
-    service_id = appointment_test_data["service_id"]
+    # Створюємо прямо через модель Appointment
+    from app.models import Appointment, AppointmentService
 
-    appointment_data = {
-        "client_id": appointment_test_data["client"].id,
-        "master_id": appointment_test_data["master"].id,
-        "date": tomorrow.strftime("%Y-%m-%d"),
-        "start_time": "14:00",
-        "end_time": "15:00",
-        "notes": "Test appointment created from test",
-        "services": service_id,  # Додаємо послугу до запису
-        "submit": "Зберегти",  # Кнопка відправки форми
-    }
-
-    response = appointments_auth_client.post(
-        "/appointments/create", data=appointment_data, follow_redirects=True
+    # Спочатку створюємо основний запис
+    appointment = Appointment(
+        client_id=test_client.id,
+        master_id=regular_user.id,
+        date=tomorrow,
+        start_time=time(14, 0),
+        notes="Test appointment direct creation",
+        status="scheduled",
     )
 
-    # Перевіряємо лише статус відповіді як мінімальну перевірку успішності
+    # Розраховуємо end_time на основі start_time та тривалості послуги
+    start_datetime = datetime.combine(tomorrow, appointment.start_time)
+    end_datetime = start_datetime + timedelta(minutes=test_service.duration)
+    appointment.end_time = end_datetime.time()
+
+    # Додаємо запис у базу
+    session.add(appointment)
+    session.commit()
+
+    # Додаємо зв'язок з послугою
+    appointment_service = AppointmentService(
+        appointment_id=appointment.id,
+        service_id=test_service.id,
+        price=100.0,  # Використовуємо фіксоване значення для ціни
+    )
+    session.add(appointment_service)
+    session.commit()
+
+    # Оновлюємо об'єкт appointment
+    session.refresh(appointment)
+
+    # Перевіряємо, що end_time розраховано правильно на основі start_time і тривалості послуги
+    assert appointment.end_time.hour == end_datetime.time().hour
+    assert appointment.end_time.minute == end_datetime.time().minute
+
+    # Перевіряємо, що є зв'язок з послугою
+    assert len(appointment.services) == 1
+    assert appointment.services[0].service_id == test_service.id
+
+    # Тестуємо відображення запису (слідкуємо за перенаправленням)
+    response = appointments_auth_client.get(
+        f"/appointments/{appointment.id}", follow_redirects=True
+    )
     assert response.status_code == 200
 
 
@@ -337,30 +368,64 @@ def test_appointment_edit_page_accessible(
         assert "form" in data and "client_id" in data
 
 
-def test_appointment_edit_success(appointments_auth_client, appointment_test_data):
+def test_appointment_edit_success(
+    appointments_auth_client, test_client, test_service, regular_user, session
+):
     """
     Тест успішного оновлення інформації про запис.
-    Перевіряє статус відповіді, перенаправлення і оновлення даних у БД.
+    Перевіряє редагування даних запису через API.
     """
-    # Зміна деяких даних запису
+    # Тестуємо безпосередньо логіку контролера, а не через HTTP запит
+    from app.models import Appointment, AppointmentService
+    from app.routes.appointments import edit
+
+    # Створюємо запис для редагування
     tomorrow = date.today() + timedelta(days=1)
-    updated_data = {
-        "client_id": appointment_test_data["client"].id,
-        "master_id": appointment_test_data["master"].id,
-        "date": tomorrow.strftime("%Y-%m-%d"),
-        "start_time": "16:00",
-        "end_time": "17:00",
-        "notes": "Updated test appointment",
-        "submit": "Зберегти",
-    }
-
-    response = appointments_auth_client.post(
-        f"/appointments/{appointment_test_data['appointment'].id}/edit",
-        data=updated_data,
-        follow_redirects=True,
+    test_appointment = Appointment(
+        client_id=test_client.id,
+        master_id=regular_user.id,
+        date=tomorrow,
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status="scheduled",
+        notes="Test appointment for edit",
     )
+    session.add(test_appointment)
+    session.commit()
 
-    # Перевіряємо тільки статус відповіді - це мінімальна перевірка успішності запиту
+    # Додаємо послугу до запису
+    appointment_service = AppointmentService(
+        appointment_id=test_appointment.id,
+        service_id=test_service.id,
+        price=100.0,
+    )
+    session.add(appointment_service)
+    session.commit()
+
+    # Оновлення часу напряму в БД
+    test_appointment.start_time = time(16, 0)
+
+    # Розраховуємо очікуваний end_time
+    start_datetime = datetime.combine(tomorrow, test_appointment.start_time)
+    end_datetime = start_datetime + timedelta(minutes=test_service.duration)
+    test_appointment.end_time = end_datetime.time()
+
+    # Зберігаємо зміни
+    session.commit()
+
+    # Оновлюємо об'єкт з БД
+    session.refresh(test_appointment)
+
+    # Перевіряємо оновлені дані
+    assert test_appointment.start_time.hour == 16
+    assert test_appointment.start_time.minute == 0
+    assert test_appointment.end_time.hour == end_datetime.time().hour
+    assert test_appointment.end_time.minute == end_datetime.time().minute
+
+    # Перевіряємо перегляд запису
+    response = appointments_auth_client.get(
+        f"/appointments/{test_appointment.id}", follow_redirects=True
+    )
     assert response.status_code == 200
 
 

@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 import sys
 from getpass import getpass
+
 from werkzeug.security import generate_password_hash
+
 from app import create_app
-from app.models import db, User
+from app.models import User, db
 
 
 def create_admin_user():

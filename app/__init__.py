@@ -1,14 +1,15 @@
+import os
+
+from dotenv import load_dotenv
 from flask import Flask
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
-import os
-from dotenv import load_dotenv
 
 # Завантаження змінних із .env файлу
 load_dotenv()
 
 from .config import Config
-from .models import db, User
+from .models import User, db
 
 login_manager = LoginManager()
 csrf = CSRFProtect()
@@ -33,7 +34,7 @@ def create_app(config_class=Config):
         return db.session.get(User, int(user_id))
 
     # Реєстрація маршрутів (routes)
-    from .routes import auth, main, appointments, clients, services
+    from .routes import appointments, auth, clients, main, services
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)

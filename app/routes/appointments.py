@@ -1,22 +1,16 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from flask_login import login_required, current_user
-from flask_wtf import FlaskForm
-from wtforms import (
-    StringField,
-    DateField,
-    TimeField,
-    SelectField,
-    TextAreaField,
-    SubmitField,
-    FloatField,
-    FieldList,
-    FormField,
-    SelectMultipleField,
-)
-from wtforms.validators import DataRequired, Optional
-from datetime import datetime, time, date
+from datetime import date, datetime, time, timedelta
 
-from app.models import db, Appointment, Client, User, Service, AppointmentService
+from flask import (Blueprint, flash, jsonify, redirect, render_template,
+                   request, url_for)
+from flask_login import current_user, login_required
+from flask_wtf import FlaskForm
+from wtforms import (DateField, FieldList, FloatField, FormField, SelectField,
+                     SelectMultipleField, StringField, SubmitField,
+                     TextAreaField, TimeField)
+from wtforms.validators import DataRequired, Optional
+
+from app.models import (Appointment, AppointmentService, Client, Service, User,
+                        db)
 
 # Створення Blueprint
 bp = Blueprint("appointments", __name__, url_prefix="/appointments")
@@ -30,10 +24,7 @@ class AppointmentForm(FlaskForm):
     start_time = TimeField(
         "Час початку", validators=[DataRequired()], default=time(9, 0)
     )
-    end_time = TimeField(
-        "Час закінчення", validators=[DataRequired()], default=time(10, 0)
-    )
-    services = SelectMultipleField("Послуги", coerce=int, validators=[Optional()])
+    services = SelectMultipleField("Послуги", coerce=int, validators=[DataRequired()])
     notes = TextAreaField("Примітки", validators=[Optional()])
     submit = SubmitField("Зберегти")
 
@@ -134,15 +125,6 @@ def create():
             try:
                 start_time = datetime.strptime(time_str, "%H:%M").time()
                 form.start_time.data = start_time
-
-                # За замовчуванням тривалість 1 година
-                end_hour = start_time.hour + 1
-                end_minute = start_time.minute
-                if end_hour >= 24:
-                    end_hour = 23
-                    end_minute = 59
-
-                form.end_time.data = time(end_hour, end_minute)
             except ValueError:
                 pass
 
@@ -152,12 +134,23 @@ def create():
             flash("Ви можете створювати записи тільки для себе", "danger")
             return redirect(url_for("appointments.create"))
 
+        # Отримуємо першу послугу для розрахунку end_time
+        if form.services.data:
+            service = db.session.get(Service, form.services.data[0])
+            # Розраховуємо end_time на основі start_time та тривалості послуги
+            start_datetime = datetime.combine(form.date.data, form.start_time.data)
+            end_datetime = start_datetime + timedelta(minutes=service.duration)
+            end_time = end_datetime.time()
+        else:
+            # На випадок, якщо валідація пропустила запис без послуг
+            end_time = form.start_time.data  # Встановлюємо такий же час як і початок
+
         appointment = Appointment(
             client_id=form.client_id.data,
             master_id=form.master_id.data,
             date=form.date.data,
             start_time=form.start_time.data,
-            end_time=form.end_time.data,
+            end_time=end_time,
             notes=form.notes.data,
             status="scheduled",
             payment_status="unpaid",  # За замовчуванням "unpaid"
@@ -244,6 +237,10 @@ def edit(id):
         (c.id, f"{c.name} ({c.phone})")
         for c in Client.query.order_by(Client.name).all()
     ]
+    form.services.choices = [
+        (s.id, f"{s.name} ({s.duration} хв.)")
+        for s in Service.query.order_by(Service.name).all()
+    ]
     if current_user.is_admin:
         form.master_id.choices = [
             (u.id, u.full_name) for u in User.query.order_by(User.full_name).all()
@@ -252,18 +249,34 @@ def edit(id):
         form.master_id.choices = [(current_user.id, current_user.full_name)]
         form.master_id.data = current_user.id
 
+    # При відображенні форми, встановити поточні послуги
+    if request.method == "GET":
+        form.services.data = [service.service_id for service in appointment.services]
+
     if form.validate_on_submit():
         # Початок редагування
         if not current_user.is_admin and form.master_id.data != current_user.id:
             flash("Ви не можете змінити майстра запису", "danger")
             return redirect(url_for("appointments.edit", id=id))
 
+        # Розрахунок end_time на основі start_time та тривалості першої послуги
+        if appointment.services:
+            # Використовуємо тривалість першої пов'язаної послуги
+            service_duration = appointment.services[0].service.duration
+            # Розраховуємо end_time
+            start_datetime = datetime.combine(form.date.data, form.start_time.data)
+            end_datetime = start_datetime + timedelta(minutes=service_duration)
+            end_time = end_datetime.time()
+        else:
+            # На випадок, якщо запис немає послуг, встановлюємо такий же час як і початок
+            end_time = form.start_time.data
+
         # Оновлення даних запису
         appointment.client_id = form.client_id.data
         appointment.master_id = form.master_id.data
         appointment.date = form.date.data
         appointment.start_time = form.start_time.data
-        appointment.end_time = form.end_time.data
+        appointment.end_time = end_time
         appointment.notes = form.notes.data
         # Збереження поточних значень для payment_status, amount_paid та payment_method
 
@@ -280,7 +293,10 @@ def edit(id):
             return redirect(url_for("appointments.view", id=id))
 
     return render_template(
-        "appointments/edit.html", title=f"Редагування запису #{id}", form=form
+        "appointments/edit.html",
+        title=f"Редагування запису #{id}",
+        form=form,
+        appointment=appointment,
     )
 
 

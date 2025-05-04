@@ -11,8 +11,8 @@
    За замовчуванням використовується шлях 'instance/app.db'
 """
 
-import sys
 import sqlite3
+import sys
 from datetime import datetime
 
 

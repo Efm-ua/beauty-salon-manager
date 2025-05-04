@@ -1,11 +1,13 @@
-import pytest
 import uuid
-from datetime import datetime, time, date
-from app import create_app
-from app.models import db as _db
-from app.models import User, Client, Service, Appointment, AppointmentService
+from datetime import date, datetime, time, timedelta
+
+import pytest
 from werkzeug.security import generate_password_hash
+
+from app import create_app
 from app.config import Config
+from app.models import Appointment, AppointmentService, Client, Service, User
+from app.models import db as _db
 
 
 # Клас тестової конфігурації
@@ -168,12 +170,19 @@ def test_appointment(session, test_client, regular_user, test_service):
     Створює тестовий запис клієнта з призначеною послугою.
     """
     # Створення запису
+    start_time = time(10, 0)  # 10:00
+
+    # Обчислення end_time на основі start_time та тривалості послуги
+    start_datetime = datetime.combine(date.today(), start_time)
+    end_datetime = start_datetime + timedelta(minutes=test_service.duration)
+    end_time = end_datetime.time()
+
     appointment = Appointment(
         client_id=test_client.id,
         master_id=regular_user.id,
         date=date.today(),
-        start_time=time(10, 0),  # 10:00
-        end_time=time(11, 0),  # 11:00
+        start_time=start_time,
+        end_time=end_time,
         status="scheduled",
         payment_status="unpaid",
         amount_paid=None,

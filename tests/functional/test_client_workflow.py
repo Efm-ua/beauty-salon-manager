@@ -1,5 +1,6 @@
+from datetime import date, datetime, time, timedelta
+
 import pytest
-from datetime import datetime, timedelta, date, time
 from flask_login import login_user
 
 

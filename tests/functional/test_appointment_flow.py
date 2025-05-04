@@ -1,5 +1,7 @@
+from datetime import date, datetime, time, timedelta
+
 import pytest
-from datetime import datetime, timedelta, date, time
+from flask import url_for
 
 
 def test_appointment_complete_flow(
@@ -47,7 +49,6 @@ def test_appointment_complete_flow(
             "master_id": regular_user.id,
             "date": today.strftime("%Y-%m-%d"),
             "start_time": "13:00",
-            "end_time": "14:00",
             "services": str(test_service.id),
             "notes": "Flow test appointment",
         },
@@ -77,7 +78,14 @@ def test_appointment_complete_flow(
     # Verify initial appointment state
     assert appointment.status == "scheduled"
     assert appointment.start_time.strftime("%H:%M") == "13:00"
-    assert appointment.end_time.strftime("%H:%M") == "14:00"
+
+    # Calculate the expected end_time using the service duration
+    start_datetime = datetime.combine(today, time(13, 0))
+    expected_end_datetime = start_datetime + timedelta(minutes=test_service.duration)
+    expected_end_time = expected_end_datetime.time()
+
+    assert appointment.end_time.hour == expected_end_time.hour
+    assert appointment.end_time.minute == expected_end_time.minute
 
     # Create a second test service for adding to the appointment
     from app.models import Service
@@ -207,7 +215,6 @@ def test_appointment_filtering(
             "master_id": regular_user.id,
             "date": today.strftime("%Y-%m-%d"),
             "start_time": "09:00",
-            "end_time": "10:00",
             "services": str(test_service.id),
             "notes": "Today's filter test appointment",
         },
@@ -224,7 +231,6 @@ def test_appointment_filtering(
             "master_id": regular_user.id,
             "date": tomorrow.strftime("%Y-%m-%d"),
             "start_time": "11:00",
-            "end_time": "12:00",
             "services": str(test_service.id),
             "notes": "Tomorrow's filter test appointment",
         },
@@ -246,7 +252,14 @@ def test_appointment_filtering(
 
     assert today_appointment is not None, "Today's appointment not found in database"
     assert today_appointment.start_time.strftime("%H:%M") == "09:00"
-    assert today_appointment.end_time.strftime("%H:%M") == "10:00"
+
+    # Calculate expected end_time for today's appointment
+    start_datetime = datetime.combine(today, time(9, 0))
+    expected_end_datetime = start_datetime + timedelta(minutes=test_service.duration)
+    expected_end_time = expected_end_datetime.time()
+
+    assert today_appointment.end_time.hour == expected_end_time.hour
+    assert today_appointment.end_time.minute == expected_end_time.minute
 
     # Find tomorrow's appointment
     tomorrow_appointment = Appointment.query.filter_by(
@@ -260,7 +273,14 @@ def test_appointment_filtering(
         tomorrow_appointment is not None
     ), "Tomorrow's appointment not found in database"
     assert tomorrow_appointment.start_time.strftime("%H:%M") == "11:00"
-    assert tomorrow_appointment.end_time.strftime("%H:%M") == "12:00"
+
+    # Calculate expected end_time for tomorrow's appointment
+    start_datetime = datetime.combine(tomorrow, time(11, 0))
+    expected_end_datetime = start_datetime + timedelta(minutes=test_service.duration)
+    expected_end_time = expected_end_datetime.time()
+
+    assert tomorrow_appointment.end_time.hour == expected_end_time.hour
+    assert tomorrow_appointment.end_time.minute == expected_end_time.minute
 
     # Query appointments by date and verify filtering works
     today_appointments = Appointment.query.filter_by(date=today).all()
@@ -329,7 +349,6 @@ def test_appointment_pricing(session, client, test_client, test_service, regular
             "master_id": regular_user.id,
             "date": today.strftime("%Y-%m-%d"),
             "start_time": "15:00",
-            "end_time": "16:00",
             "services": str(test_service.id),
             "notes": "Pricing test appointment",
         },
@@ -437,10 +456,11 @@ def test_appointment_pricing(session, client, test_client, test_service, regular
 
 
 def test_appointment_redirect_to_schedule_date(
-    session, client, test_client, regular_user
+    session, client, test_client, regular_user, test_service
 ):
     """
     Tests that appointments created or edited from the schedule view redirect back to the schedule
+
     with the same date as the appointment.
     """
     # Login
@@ -465,27 +485,32 @@ def test_appointment_redirect_to_schedule_date(
             "master_id": regular_user.id,
             "date": future_date,
             "start_time": "14:00",
-            "end_time": "15:00",
             "notes": "Appointment with redirect test",
+            "services": str(test_service.id),  # Services are required now
         },
         follow_redirects=False,
     )
 
     # Check redirection location contains the appointment date
     assert response.status_code == 302
-    assert f"schedule?date={future_date}" in response.location
+    redirect_location = response.headers["Location"]
+    assert f"date={future_date}" in redirect_location
 
-    # Find the appointment we just created
+    # Test that updating an appointment from schedule view also redirects back to schedule
+    # First find the appointment
     from app.models import Appointment
 
-    appointment = Appointment.query.filter_by(
-        client_id=test_client.id,
-        master_id=regular_user.id,
-        notes="Appointment with redirect test",
-    ).first()
-    assert appointment is not None
+    appointment = (
+        Appointment.query.filter_by(
+            client_id=test_client.id,
+            master_id=regular_user.id,
+            notes="Appointment with redirect test",
+        )
+        .order_by(Appointment.id.desc())
+        .first()
+    )
 
-    # Edit the appointment (change time) and check redirection
+    # Now edit the appointment from the schedule view
     response = client.post(
         f"/appointments/{appointment.id}/edit?from_schedule=1",
         data={
@@ -493,19 +518,20 @@ def test_appointment_redirect_to_schedule_date(
             "master_id": regular_user.id,
             "date": future_date,
             "start_time": "15:00",  # Changed time
-            "end_time": "16:00",  # Changed time
             "notes": "Appointment with redirect test",
+            "services": str(test_service.id),  # Services are required now
         },
         follow_redirects=False,
     )
 
-    # Check redirection location contains the appointment date
+    # Check redirection
     assert response.status_code == 302
-    assert f"schedule?date={future_date}" in response.location
+    redirect_location = response.headers["Location"]
+    assert f"date={future_date}" in redirect_location
 
 
 def test_appointment_form_uses_date_parameter(
-    session, client, test_client, regular_user
+    session, client, test_client, regular_user, test_service
 ):
     """
     Tests that the appointment creation form uses the date parameter from the URL.
@@ -536,15 +562,50 @@ def test_appointment_form_uses_date_parameter(
 
     # Access the appointment creation page with the date parameter
     response = client.get(f"/appointments/create?date={formatted_date}")
+
+    # Check the page loads successfully
     assert response.status_code == 200
 
-    # Check that the form's date field contains the correct date value
-    # The HTML should contain an input with the date value set
+    # Verify the form's date field is pre-populated with the correct date
     assert f'value="{formatted_date}"' in response.text
+
+    # Test that it carries the date to form submission
+    response = client.post(
+        f"/appointments/create?date={formatted_date}",
+        data={
+            "client_id": test_client.id,
+            "master_id": regular_user.id,
+            "date": formatted_date,
+            "start_time": "10:00",
+            "services": str(test_service.id),  # Services are required now
+            "notes": "Test appointment with date parameter",
+        },
+        follow_redirects=True,
+    )
+
+    # Check that the appointment was created with the correct date
+    assert response.status_code == 200
+    assert "Запис успішно створено!" in response.text
+
+    # Find the appointment and verify date
+    from app.models import Appointment
+
+    appointment = (
+        Appointment.query.filter_by(
+            client_id=test_client.id,
+            master_id=regular_user.id,
+            notes="Test appointment with date parameter",
+        )
+        .order_by(Appointment.id.desc())
+        .first()
+    )
+
+    assert appointment is not None, "Appointment not found in database"
+    assert appointment.date == test_date
 
 
 def test_appointment_back_to_schedule_button_includes_date(
-    session, client, test_client, regular_user, admin_user
+    session, client, test_client, regular_user, admin_user, test_service
 ):
     """
     Tests that the "Back to schedule" button on the appointment details page
@@ -580,15 +641,15 @@ def test_appointment_back_to_schedule_button_includes_date(
             "master_id": regular_user.id,
             "date": formatted_date,
             "start_time": "14:00",
-            "end_time": "15:00",
             "notes": "Test appointment for back button",
+            "services": str(test_service.id),  # Services are required now
         },
         follow_redirects=True,
     )
     assert response.status_code == 200
     assert "Запис успішно створено!" in response.text
 
-    # Find the appointment using database query
+    # Get the newly created appointment
     from app.models import Appointment
 
     appointment = (
@@ -603,16 +664,19 @@ def test_appointment_back_to_schedule_button_includes_date(
     )
     assert appointment is not None, "Appointment not found in database"
 
-    # View the appointment details
-    response = client.get(f"/appointments/{appointment.id}")
+    # View the appointment details with a from_schedule parameter
+    response = client.get(
+        f"/appointments/{appointment.id}?from_schedule=1",
+        follow_redirects=False,
+    )
+
+    # Check that the page includes a back button with the correct date
     assert response.status_code == 200
+    assert "Назад до розкладу" in response.text
 
-    # Check that the "Back to schedule" button includes the correct date parameter
-    # Look for the link with "Назад до розкладу майстрів" text that contains the date
-    expected_date_param = f"date={formatted_date}"
-
-    # Find the button/link with "Назад до розкладу майстрів" text
-    # and verify it contains the date parameter
+    # Extract the href attribute of the "Back to schedule" button using regex or other means
+    # For simplicity, we'll just check if the HTML contains the correct URL
+    href_content = f'href="{url_for("main.schedule")}?date={formatted_date}"'
     assert (
-        f'href="/schedule?{expected_date_param}"' in response.text
-    ), f"Link with date parameter {formatted_date} not found in response"
+        href_content in response.text or href_content.replace('"', "'") in response.text
+    )

@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required, current_user
-from datetime import datetime, timedelta, time
 from collections import Counter
+from datetime import datetime, time, timedelta
 
-from app.models import db, Appointment, AppointmentService, User, Service
+from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy import func
+
+from app.models import Appointment, AppointmentService, Service, User, db
 
 # Створення Blueprint
 bp = Blueprint("main", __name__)

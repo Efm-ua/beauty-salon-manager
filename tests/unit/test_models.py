@@ -1,10 +1,11 @@
-import pytest
 import uuid
-from sqlalchemy.exc import IntegrityError
-from datetime import datetime, time, date
+from datetime import date, datetime, time
 
-from app.models import User, Client, Service, Appointment, AppointmentService
+import pytest
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
+
+from app.models import Appointment, AppointmentService, Client, Service, User
 
 
 class TestUserModel:

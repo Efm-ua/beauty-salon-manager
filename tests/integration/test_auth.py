@@ -30,9 +30,10 @@
 """
 
 import pytest
-from flask import url_for, session
-from app.models import User, db
+from flask import session, url_for
 from werkzeug.security import generate_password_hash
+
+from app.models import User, db
 
 
 def test_login_success(client, regular_user):

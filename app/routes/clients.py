@@ -1,10 +1,12 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import (Blueprint, flash, jsonify, redirect, render_template,
+                   request, url_for)
 from flask_login import login_required
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SubmitField
-from wtforms.validators import DataRequired, Email, Optional, Length, ValidationError
+from wtforms import StringField, SubmitField, TextAreaField
+from wtforms.validators import (DataRequired, Email, Length, Optional,
+                                ValidationError)
 
-from app.models import db, Client, Appointment
+from app.models import Appointment, Client, db
 
 # Створення Blueprint
 bp = Blueprint("clients", __name__, url_prefix="/clients")

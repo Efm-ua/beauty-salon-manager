@@ -1,6 +1,8 @@
-import pytest
-from datetime import datetime, timedelta, date, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+
+import pytest
+
 from app.models import Appointment
 
 

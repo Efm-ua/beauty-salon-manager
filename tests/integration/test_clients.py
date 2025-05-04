@@ -34,12 +34,14 @@
    - test_client_api_search: Тест API пошуку клієнтів
 """
 
-import pytest
 import uuid
-from flask import url_for
 from datetime import date, time, timedelta
-from app.models import Client, Appointment, User, db
+
+import pytest
+from flask import url_for
 from werkzeug.security import generate_password_hash
+
+from app.models import Appointment, Client, User, db
 
 
 # Фікстура для авторизованого користувача спеціально для тестів клієнтів

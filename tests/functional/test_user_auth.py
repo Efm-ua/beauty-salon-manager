@@ -1,7 +1,8 @@
-import pytest
 from datetime import datetime
-from werkzeug.security import generate_password_hash
+
+import pytest
 from flask_login import login_user
+from werkzeug.security import generate_password_hash
 
 
 def test_direct_login_logout(client, regular_user):
