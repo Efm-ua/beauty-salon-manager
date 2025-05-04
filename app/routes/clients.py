@@ -13,6 +13,15 @@ from app.models import Appointment, Client, db
 bp = Blueprint("clients", __name__, url_prefix="/clients")
 
 
+# Функція для перевірки чи містить рядок всі слова пошуку
+def contains_all_words(text, search_words):
+    if not text:
+        return False
+
+    text_lower = text.lower()
+    return all(word in text_lower for word in search_words)
+
+
 # Форма для клієнта
 class ClientForm(FlaskForm):
     name = StringField("Ім'я", validators=[DataRequired(), Length(max=100)])
@@ -43,49 +52,40 @@ def index():
     search = request.args.get("search", "")
     print(f"Searching for: {search}")
 
-    # Для підтримки пошуку з регістронезалежністю для кирилиці
-    # використовуємо нашу функцію CASEFOLD для правильної обробки Unicode
-
     # Запит клієнтів
     if search and search.strip():
-        # Розбиваємо пошуковий запит на слова
-        search_words = search.split()
+        # Get all clients and filter in Python
+        # This is a workaround for SQLite's case-sensitivity issues with Cyrillic
+        all_clients = Client.query.all()
+
+        # Split search string into words and convert to lowercase for case-insensitive comparison
+        search_words = [word.lower() for word in search.split()]
         print(f"Search words: {search_words}")
 
-        if search_words:
-            # Створюємо умови для пошуку за іменем, де кожне слово має бути в імені
-            name_filters = []
-            for word in search_words:
-                # Використовуємо SQL функцію CASEFOLD для правильного порівняння Unicode
-                name_filters.append(
-                    func.CASEFOLD(Client.name).like(f"%{word.casefold()}%")
-                )
+        # Filter clients in Python (case-insensitive)
+        clients = []
+        for client in all_clients:
+            # Check if all search words are in the client name (in any order)
+            if contains_all_words(client.name, search_words):
+                clients.append(client)
+                continue
 
-            # Об'єднуємо умови для імені з AND
-            name_condition = and_(*name_filters)
+            # Check phone (exact match for phone numbers)
+            if client.phone and search in client.phone:
+                clients.append(client)
+                continue
 
-            # Умови для інших полів
-            phone_condition = Client.phone.ilike(f"%{search}%")
-            email_condition = Client.email.ilike(f"%{search}%")
-            # Використовуємо CASEFOLD для нотаток також, оскільки там можуть бути кириличні символи
-            notes_condition = func.CASEFOLD(Client.notes).like(f"%{search.casefold()}%")
+            # Check email
+            if contains_all_words(client.email, search_words):
+                clients.append(client)
+                continue
 
-            # Формуємо запит
-            clients = (
-                Client.query.filter(
-                    or_(
-                        name_condition,
-                        phone_condition,
-                        email_condition,
-                        notes_condition,
-                    )
-                )
-                .order_by(Client.name)
-                .all()
-            )
-        else:
-            # Якщо пошуковий запит порожній
-            clients = Client.query.order_by(Client.name).all()
+            # Check notes
+            if contains_all_words(client.notes, search_words):
+                clients.append(client)
+                continue
+
+        print(f"Python filtering found {len(clients)} clients")
     else:
         # Без пошуку просто повертаємо всіх клієнтів
         clients = Client.query.order_by(Client.name).all()
@@ -215,49 +215,43 @@ def api_search():
 
     print(f"API searching for: {query_string}")
 
-    # Використовуємо функцію CASEFOLD для правильної обробки Unicode
-    if query_string:
-        # Розбиваємо пошуковий запит на слова
-        search_words = query_string.split()
+    # Get all clients and filter in Python
+    all_clients = Client.query.all()
 
-        if search_words:
-            # Створюємо умови для пошуку за іменем, де кожне слово має бути в імені
-            name_filters = []
-            for word in search_words:
-                # Використовуємо SQL функцію CASEFOLD для правильного порівняння Unicode
-                name_filters.append(
-                    func.CASEFOLD(Client.name).like(f"%{word.casefold()}%")
-                )
+    # Split query string into words and convert to lowercase for case-insensitive comparison
+    query_words = [word.lower() for word in query_string.split()]
+    print(f"API search words: {query_words}")
 
-            # Об'єднуємо умови для імені з AND
-            name_condition = and_(*name_filters)
-
-            # Умови для телефону
-            phone_condition = Client.phone.ilike(f"%{query_string}%")
-
-            # Формуємо запит
-            clients = (
-                Client.query.filter(or_(name_condition, phone_condition))
-                .order_by(Client.name)
-                .limit(10)
-                .all()
+    # Filter clients in Python (case-insensitive)
+    clients = []
+    for client in all_clients:
+        # Check if all query words are in the client name (in any order)
+        if contains_all_words(client.name, query_words):
+            clients.append(
+                {
+                    "id": client.id,
+                    "name": client.name,
+                    "phone": client.phone,
+                    "email": client.email,
+                }
             )
-        else:
-            clients = []
-    else:
-        clients = []
+            continue
+
+        # Check phone (exact match for phone numbers)
+        if client.phone and query_string in client.phone:
+            clients.append(
+                {
+                    "id": client.id,
+                    "name": client.name,
+                    "phone": client.phone,
+                    "email": client.email,
+                }
+            )
+            continue
+
+    # Limit to 10 results
+    clients = clients[:10]
 
     print(f"API found {len(clients)} clients")
 
-    result = []
-    for client in clients:
-        result.append(
-            {
-                "id": client.id,
-                "name": client.name,
-                "phone": client.phone,
-                "email": client.email,
-            }
-        )
-
-    return jsonify(result)
+    return jsonify(clients)
