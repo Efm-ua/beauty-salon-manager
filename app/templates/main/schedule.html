@@ -162,7 +162,8 @@
               appointment = schedule_data[master.id][sub_slot][0] %} {% if
               appointment.client_id in multi_booking_client_ids %} {% set
               extra_class = ' multi-booking' %} {% else %} {% set extra_class =
-              '' %} {% endif %}
+              '' %} {% endif %} {% if appointment.start_time.strftime('%H:%M')
+              == sub_slot.strftime('%H:%M') %}
               <div
                 class="schedule-appointment status-{{ appointment.payment_status }}{{ extra_class }}"
                 onclick="window.location.href='{{ url_for('appointments.view', id=appointment.id) }}'"
