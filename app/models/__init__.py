@@ -1,6 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from datetime import datetime
+from datetime import datetime, timezone
 
 db = SQLAlchemy()
 
@@ -12,7 +12,9 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(120), nullable=False)
     full_name = db.Column(db.String(100), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
-    appointments = db.relationship("Appointment", backref="master", lazy=True)
+    appointments = db.relationship(
+        "Appointment", backref="master", lazy=True, cascade="all, delete-orphan"
+    )
 
     def is_administrator(self):
         return self.is_admin
@@ -30,8 +32,10 @@ class Client(db.Model):
         db.String(120), unique=True, nullable=True
     )  # nullable=True дозволяє NULL
     notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    appointments = db.relationship("Appointment", backref="client", lazy=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    appointments = db.relationship(
+        "Appointment", backref="client", lazy=True, cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Client {self.name}>"
@@ -63,7 +67,7 @@ class Appointment(db.Model):
         db.String(20), nullable=False, default="scheduled"
     )  # scheduled, completed, cancelled
     notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     services = db.relationship(
         "AppointmentService",
         backref="appointment",

@@ -1,0 +1,23 @@
+# Python test artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Environments and virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Test databases
+*.db
+*.sqlite
+
+# Test logs
+*.log

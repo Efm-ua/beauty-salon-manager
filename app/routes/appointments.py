@@ -167,7 +167,7 @@ def create():
         # Додавання вибраних послуг
         if form.services.data:
             for service_id in form.services.data:
-                service = Service.query.get(service_id)
+                service = db.session.get(Service, service_id)
                 if service:
                     # Встановлюємо базову ціну послуги (тут можна змінити логіку розрахунку)
                     appointment_service = AppointmentService(
@@ -306,7 +306,7 @@ def add_service(id):
     ]
 
     if form.validate_on_submit():
-        service = Service.query.get(form.service_id.data)
+        service = db.session.get(Service, form.service_id.data)
 
         appointment_service = AppointmentService(
             appointment_id=appointment.id,
@@ -454,7 +454,7 @@ def daily_summary():
         master_ids = User.query.with_entities(User.id).all()
         for master_id in master_ids:
             master_id = master_id[0]
-            master = User.query.get(master_id)
+            master = db.session.get(User, master_id)
 
             master_sum = 0
             master_appointments = Appointment.query.filter(
