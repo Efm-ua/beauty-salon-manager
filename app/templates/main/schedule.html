@@ -57,7 +57,10 @@
     </a>
   </div>
   <div class="col-md-6 text-end">
-    <a href="{{ url_for('appointments.create') }}" class="btn btn-success">
+    <a
+      href="{{ url_for('appointments.create', date=selected_date.strftime('%Y-%m-%d')) }}"
+      class="btn btn-success"
+    >
       <i class="fas fa-plus me-2"></i>Новий запис
     </a>
   </div>

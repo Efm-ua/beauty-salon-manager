@@ -189,3 +189,43 @@ def test_multi_booking_client_highlight(
 
     # Check that this div doesn't have the multi-booking class
     assert "multi-booking" not in div_class_attr
+
+
+def test_schedule_new_appointment_button_date_parameter(
+    session, client, admin_user, test_client, regular_user
+):
+    """
+    Tests that the "New Appointment" button on the schedule page correctly includes the date parameter.
+
+    This test verifies:
+    1. The href of the "New Appointment" button includes the date parameter with the current schedule date
+    2. The date parameter is correctly formatted as YYYY-MM-DD
+    """
+    # Login first - use a direct GET request to make sure we're logged out
+    client.get("/auth/logout", follow_redirects=True)
+
+    # Then login as admin (required to access schedule view)
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user.username,
+            "password": "admin_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Create a test date for tomorrow (to ensure it's not using today's date by default)
+    test_date = date.today() + timedelta(days=1)
+    formatted_date = test_date.strftime("%Y-%m-%d")
+
+    # Access the schedule view for the test date
+    response = client.get(f"/schedule?date={formatted_date}")
+    assert response.status_code == 200
+
+    # Check for the date parameter in the URL
+    assert (
+        f'href="/appointments/create?date={formatted_date}"' in response.text
+        or f"href='/appointments/create?date={formatted_date}'" in response.text
+    )

@@ -434,3 +434,110 @@ def test_appointment_pricing(session, client, test_client, test_service, regular
     assert (
         appointment.get_total_price() == total_price
     ), "Appointment.get_total_price() calculated incorrectly"
+
+
+def test_appointment_redirect_to_schedule_date(
+    session, client, test_client, regular_user
+):
+    """
+    Tests that appointments created or edited from the schedule view redirect back to the schedule
+    with the same date as the appointment.
+    """
+    # Login
+    client.get("/auth/logout", follow_redirects=True)
+    client.post(
+        "/auth/login",
+        data={
+            "username": regular_user.username,
+            "password": "user_password",
+            "remember_me": "y",
+        },
+    )
+
+    # Get a future date for the appointment
+    future_date = (date.today() + timedelta(days=7)).strftime("%Y-%m-%d")
+
+    # Create an appointment from the schedule view (don't follow redirects)
+    response = client.post(
+        "/appointments/create?from_schedule=1",
+        data={
+            "client_id": test_client.id,
+            "master_id": regular_user.id,
+            "date": future_date,
+            "start_time": "14:00",
+            "end_time": "15:00",
+            "notes": "Appointment with redirect test",
+        },
+        follow_redirects=False,
+    )
+
+    # Check redirection location contains the appointment date
+    assert response.status_code == 302
+    assert f"schedule?date={future_date}" in response.location
+
+    # Find the appointment we just created
+    from app.models import Appointment
+
+    appointment = Appointment.query.filter_by(
+        client_id=test_client.id,
+        master_id=regular_user.id,
+        notes="Appointment with redirect test",
+    ).first()
+    assert appointment is not None
+
+    # Edit the appointment (change time) and check redirection
+    response = client.post(
+        f"/appointments/{appointment.id}/edit?from_schedule=1",
+        data={
+            "client_id": test_client.id,
+            "master_id": regular_user.id,
+            "date": future_date,
+            "start_time": "15:00",  # Changed time
+            "end_time": "16:00",  # Changed time
+            "notes": "Appointment with redirect test",
+        },
+        follow_redirects=False,
+    )
+
+    # Check redirection location contains the appointment date
+    assert response.status_code == 302
+    assert f"schedule?date={future_date}" in response.location
+
+
+def test_appointment_form_uses_date_parameter(
+    session, client, test_client, regular_user
+):
+    """
+    Tests that the appointment creation form uses the date parameter from the URL.
+
+    This test verifies:
+    1. When accessing the appointment creation page with a date parameter,
+       the form's date field is pre-populated with that date
+    2. The date is correctly formatted in the form field
+    """
+    # Login first - use a direct GET request to make sure we're logged out
+    client.get("/auth/logout", follow_redirects=True)
+
+    # Then login
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": regular_user.username,
+            "password": "user_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Create a test date for next week (to ensure it's not using today's date by default)
+    test_date = date.today() + timedelta(days=7)
+    formatted_date = test_date.strftime("%Y-%m-%d")
+
+    # Access the appointment creation page with the date parameter
+    response = client.get(f"/appointments/create?date={formatted_date}")
+    assert response.status_code == 200
+
+    # Check that the form's date field contains the correct date value
+    # The HTML should contain an input with the date value set
+    assert f'value="{formatted_date}"' in response.text
