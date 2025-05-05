@@ -353,18 +353,21 @@ def change_status(id, status):
             flash("Для завершеного запису потрібно вибрати метод оплати", "danger")
             return redirect(url_for("appointments.view", id=id))
 
-        try:
-            # Встановлюємо метод оплати використовуючи enum PaymentMethod
-            appointment.payment_method = PaymentMethod[payment_method.upper()]
-        except (KeyError, AttributeError):
-            # Альтернативна спроба порівнянням рядків з можливими значеннями
-            if payment_method.lower() == "cash" or payment_method.lower() == "готівка":
-                appointment.payment_method = PaymentMethod.CASH
-            elif payment_method.lower() == "card" or payment_method.lower() == "картка":
-                appointment.payment_method = PaymentMethod.CARD
-            else:
-                flash(f"Невірний метод оплати: {payment_method}", "danger")
-                return redirect(url_for("appointments.view", id=id))
+        # Більш надійна валідація методу оплати з урахуванням усіх можливих значень
+        payment_method_found = False
+        for method in PaymentMethod:
+            # Порівнюємо як з назвою enum (DEBT), так і з його значенням ("Борг")
+            if (
+                payment_method.lower() == method.name.lower()
+                or payment_method.lower() == method.value.lower()
+            ):
+                appointment.payment_method = method
+                payment_method_found = True
+                break
+
+        if not payment_method_found:
+            flash(f"Невірний метод оплати: {payment_method}", "danger")
+            return redirect(url_for("appointments.view", id=id))
 
     # Якщо змінюємо на статус, який не completed, скидаємо метод оплати
     if status != "completed":

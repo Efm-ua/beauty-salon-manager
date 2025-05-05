@@ -695,6 +695,64 @@ def test_change_appointment_status_completed_with_payment(
     ), f"Метод оплати має бути CASH, але він {test_appointment.payment_method}"
 
 
+def test_change_appointment_status_completed_with_debt_payment(
+    client, regular_user, test_appointment
+):
+    """
+    Тестує зміну статусу запису на "completed" з вибором методу оплати "Борг" (DEBT).
+    Перевіряє виправлення для підтримки методу оплати "Борг".
+    """
+    # Логін звичайним користувачем
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": regular_user.username,
+            "password": "user_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Вийти" in response.text or "Logout" in response.text
+
+    # Встановлюємо запис на цього майстра
+    test_appointment.master_id = regular_user.id
+    # Явно встановлюємо статус scheduled
+    test_appointment.status = "scheduled"
+    # Скидаємо метод оплати, якщо він був встановлений
+    test_appointment.payment_method = None
+    db.session.commit()
+
+    # Зберігаємо початкові дані для порівняння
+    original_status = test_appointment.status
+    assert (
+        original_status == "scheduled"
+    ), f"Початковий статус повинен бути 'scheduled', але він '{original_status}'"
+
+    # Змінюємо статус на виконано з вибором типу оплати "Борг"
+    response = client.post(
+        f"/appointments/{test_appointment.id}/status/completed",
+        data={
+            "payment_method": "Борг"
+        },  # Використовуємо значення для PaymentMethod.DEBT
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+
+    # Оновлюємо об'єкт з бази даних
+    db.session.expire(test_appointment)
+    db.session.refresh(test_appointment)
+
+    # Перевіряємо оновлення в базі даних
+    assert (
+        test_appointment.status == "completed"
+    ), f"Статус має бути 'completed', але він '{test_appointment.status}'"
+    assert (
+        test_appointment.payment_method == PaymentMethod.DEBT
+    ), f"Метод оплати має бути DEBT, але він {test_appointment.payment_method}"
+
+
 def test_change_appointment_status_scheduled(client, regular_user, test_appointment):
     """
     Тестує зміну статусу запису з completed на scheduled (без payment_method).
