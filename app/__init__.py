@@ -31,7 +31,7 @@ def create_app(test_config=None):
     # Ініціалізація міграцій після ініціалізації SQLAlchemy
     from flask_migrate import Migrate
 
-    migrate = Migrate(app, db)
+    _migrate = Migrate(app, db)  # noqa: F841
 
     login_manager.init_app(app)
     csrf.init_app(app)
@@ -82,6 +82,8 @@ def create_app(test_config=None):
     def ping():
         return "pong"
 
+    # Set upload folder path
+    app.config["UPLOAD_FOLDER"] = os.path.join(app.instance_path, "uploads")
     # Create upload directory if it doesn't exist
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
