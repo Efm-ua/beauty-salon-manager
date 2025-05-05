@@ -1,17 +1,41 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from flask import (Blueprint, flash, jsonify, redirect, render_template,
-                   request, url_for)
+from flask import (
+    Blueprint,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+    make_response,
+)
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import (DateField, FieldList, FloatField, FormField, SelectField,
-                     SelectMultipleField, StringField, SubmitField,
-                     TextAreaField, TimeField)
+from wtforms import (
+    DateField,
+    FieldList,
+    FloatField,
+    FormField,
+    SelectField,
+    SelectMultipleField,
+    StringField,
+    SubmitField,
+    TextAreaField,
+    TimeField,
+)
 from wtforms.validators import DataRequired, Optional
 
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User, db)
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    PaymentMethod,
+    Service,
+    User,
+    db,
+)
 
 # Створення Blueprint
 bp = Blueprint("appointments", __name__, url_prefix="/appointments")
@@ -311,50 +335,46 @@ def edit(id):
 def change_status(id, status):
     appointment = Appointment.query.get_or_404(id)
 
+    # Перевірка доступу: тільки адміністратор або майстер цього запису можуть змінювати
     if not current_user.is_admin and appointment.master_id != current_user.id:
         flash("У вас немає доступу до зміни статусу цього запису", "danger")
         return redirect(url_for("appointments.index"))
 
-    if status not in ["scheduled", "completed", "cancelled"]:
-        flash("Невірний статус!", "danger")
+    # Валідація статусу
+    allowed_statuses = ["scheduled", "completed", "cancelled", "no_show"]
+    if status not in allowed_statuses:
+        flash(f"Невірний статус: {status}", "danger")
         return redirect(url_for("appointments.view", id=id))
 
-    # Якщо статус змінюється на "completed", перевіряємо наявність типу оплати
+    # Якщо змінюємо на "completed", перевіряємо наявність методу оплати
     if status == "completed":
-        payment_methods = request.form.getlist("payment_method")
-
-        # Перевірка, що вибрано рівно один тип оплати
-        if len(payment_methods) != 1:
-            flash("Помилка: будь ласка, виберіть рівно один тип оплати.", "danger")
+        payment_method = request.form.get("payment_method")
+        if not payment_method:
+            flash("Для завершеного запису потрібно вибрати метод оплати", "danger")
             return redirect(url_for("appointments.view", id=id))
 
-        # Перевірка, що обраний тип оплати є дійсним
-        payment_method = payment_methods[0]
-        valid_payment_methods = [method.value for method in PaymentMethod]
+        try:
+            # Встановлюємо метод оплати використовуючи enum PaymentMethod
+            appointment.payment_method = PaymentMethod[payment_method.upper()]
+        except (KeyError, AttributeError):
+            # Альтернативна спроба порівнянням рядків з можливими значеннями
+            if payment_method.lower() == "cash" or payment_method.lower() == "готівка":
+                appointment.payment_method = PaymentMethod.CASH
+            elif payment_method.lower() == "card" or payment_method.lower() == "картка":
+                appointment.payment_method = PaymentMethod.CARD
+            else:
+                flash(f"Невірний метод оплати: {payment_method}", "danger")
+                return redirect(url_for("appointments.view", id=id))
 
-        if payment_method not in valid_payment_methods:
-            flash("Помилка: вибрано недійсний тип оплати.", "danger")
-            return redirect(url_for("appointments.view", id=id))
+    # Якщо змінюємо на статус, який не completed, скидаємо метод оплати
+    if status != "completed":
+        appointment.payment_method = None
 
-        # Знаходимо об'єкт PaymentMethod за значенням
-        payment_method_enum = next(
-            (method for method in PaymentMethod if method.value == payment_method), None
-        )
-
-        # Встановлюємо тип оплати
-        appointment.payment_method = payment_method_enum
-
+    # Оновлюємо статус
     appointment.status = status
     db.session.commit()
 
-    if status == "completed":
-        flash(
-            f'Статус запису змінено на "{status}" з типом оплати "{appointment.payment_method.value}"',
-            "success",
-        )
-    else:
-        flash(f'Статус запису змінено на "{status}"', "success")
-
+    flash(f"Статус запису змінено на '{status}'", "success")
     return redirect(url_for("appointments.view", id=id))
 
 
@@ -365,7 +385,7 @@ def add_service(id):
     appointment = Appointment.query.get_or_404(id)
 
     if not current_user.is_admin and appointment.master_id != current_user.id:
-        flash("У вас немає доступу до редагування цього запису", "danger")
+        flash("У вас немає доступу", "danger")
         return redirect(url_for("appointments.index"))
 
     form = ServiceForm()
@@ -386,7 +406,7 @@ def add_service(id):
         db.session.add(appointment_service)
         db.session.commit()
 
-        flash(f'Послугу "{service.name}" додано!', "success")
+        flash(f'Послугу успішно додано: "{service.name}"', "success")
         return redirect(url_for("appointments.view", id=appointment.id))
 
     return render_template(
@@ -405,7 +425,7 @@ def remove_service(appointment_id, service_id):
     appointment = Appointment.query.get_or_404(appointment_id)
 
     if not current_user.is_admin and appointment.master_id != current_user.id:
-        flash("У вас немає доступу до редагування цього запису", "danger")
+        flash("У вас немає доступу", "danger")
         return redirect(url_for("appointments.index"))
 
     if appointment_service.appointment_id != appointment_id:
@@ -428,7 +448,7 @@ def edit_service_price(appointment_id, service_id):
     appointment = Appointment.query.get_or_404(appointment_id)
 
     if not current_user.is_admin and appointment.master_id != current_user.id:
-        flash("У вас немає доступу до редагування цього запису", "danger")
+        flash("У вас немає доступу", "danger")
         return redirect(url_for("appointments.index"))
 
     if appointment_service.appointment_id != appointment_id:
