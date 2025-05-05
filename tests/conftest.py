@@ -105,7 +105,12 @@ def admin_user(session):
     )
     session.add(user)
     session.commit()
-    return user
+    return {
+        "username": user.username,
+        "password": "admin_password",
+        "id": user.id,
+        "full_name": user.full_name,
+    }
 
 
 # Фікстура для звичайного користувача
@@ -234,8 +239,63 @@ def admin_auth_client(client, admin_user):
     """
     client.post(
         "/login",
-        data={"username": admin_user.username, "password": "admin_password"},
+        data={"username": admin_user["username"], "password": admin_user["password"]},
         follow_redirects=True,
     )
 
     return client
+
+
+# Фікстура для створення і використання тестового користувача
+@pytest.fixture(scope="function")
+def test_user(session):
+    """
+    Створює тестового користувача для використання в тестах.
+    """
+    user = User(
+        username=f"test_user_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("test_password"),
+        full_name="Test User",
+        is_admin=False,
+    )
+    session.add(user)
+    session.commit()
+    return {
+        "username": user.username,
+        "password": "test_password",
+        "id": user.id,
+        "full_name": user.full_name,
+    }
+
+
+# Фікстура для процесу авторизації
+@pytest.fixture(scope="function")
+def auth(client):
+    """
+    Допоміжна фікстура, яка надає методи для авторизації користувача.
+    """
+
+    class AuthActions:
+        def __init__(self, client):
+            self._client = client
+
+        def login(self, username="test_user", password="test_password"):
+            return self._client.post(
+                "/auth/login",
+                data={"username": username, "password": password},
+                follow_redirects=True,
+            )
+
+        def logout(self):
+            return self._client.get("/auth/logout", follow_redirects=True)
+
+    return AuthActions(client)
+
+
+# Фікстура для роботи з тестовою базою даних
+@pytest.fixture(scope="function")
+def test_db(session):
+    """
+    Повертає сесію бази даних для використання в тестах.
+    """
+    return session

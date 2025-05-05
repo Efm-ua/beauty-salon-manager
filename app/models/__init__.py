@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
-from typing import Any, Type, cast
 import enum
+from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any, Type, cast
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy

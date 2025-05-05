@@ -1,32 +1,17 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask import (Blueprint, flash, jsonify, redirect, render_template,
+                   request, url_for)
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import (
-    DateField,
-    FieldList,
-    FloatField,
-    FormField,
-    SelectField,
-    SelectMultipleField,
-    StringField,
-    SubmitField,
-    TextAreaField,
-    TimeField,
-)
+from wtforms import (DateField, FieldList, FloatField, FormField, SelectField,
+                     SelectMultipleField, StringField, SubmitField,
+                     TextAreaField, TimeField)
 from wtforms.validators import DataRequired, Optional
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    Service,
-    User,
-    db,
-    PaymentMethod,
-)
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User, db)
 
 # Створення Blueprint
 bp = Blueprint("appointments", __name__, url_prefix="/appointments")

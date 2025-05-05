@@ -23,7 +23,7 @@ def test_schedule_payment_status_display(
     response = client.post(
         "/auth/login",
         data={
-            "username": admin_user.username,
+            "username": admin_user["username"],
             "password": "admin_password",
             "remember_me": "y",
         },
@@ -111,7 +111,7 @@ def test_multi_booking_client_highlight(
     response = client.post(
         "/auth/login",
         data={
-            "username": admin_user.username,
+            "username": admin_user["username"],
             "password": "admin_password",
             "remember_me": "y",
         },
@@ -210,7 +210,7 @@ def test_schedule_new_appointment_button_date_parameter(
     response = client.post(
         "/auth/login",
         data={
-            "username": admin_user.username,
+            "username": admin_user["username"],
             "password": "admin_password",
             "remember_me": "y",
         },

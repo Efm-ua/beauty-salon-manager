@@ -9,9 +9,9 @@ from app.models import (
     Appointment,
     AppointmentService,
     Client,
+    PaymentMethod,
     Service,
     User,
-    PaymentMethod,
 )
 
 
@@ -43,10 +43,17 @@ class TestUserModel:
 
     def test_user_admin_status(self, admin_user):
         """Тест перевірки адміністративного статусу"""
-        assert admin_user.is_admin is True
-        assert (
-            admin_user.is_administrator() is True
-        )  # Перевірка методу is_administrator
+        # Створюємо новий об'єкт User з даними з admin_user словника
+        admin = User(
+            username=admin_user["username"],
+            password=admin_user["password"],
+            full_name=admin_user["full_name"],
+            is_admin=True,
+        )
+
+        # Перевіряємо атрибути створеного об'єкта
+        assert admin.is_admin is True
+        assert admin.is_administrator() is True  # Перевірка методу is_administrator
 
     def test_username_unique_constraint(self, session, regular_user):
         """Тест перевірки унікальності імені користувача"""

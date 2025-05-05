@@ -1,5 +1,3 @@
-import os
-
 from dotenv import load_dotenv
 from flask import Flask
 from flask_login import LoginManager
@@ -9,8 +7,9 @@ from sqlalchemy import text
 # Завантаження змінних із .env файлу
 load_dotenv()
 
-from .config import Config
-from .models import User, db
+# Imports after load_dotenv to ensure environment variables are loaded
+from .config import Config  # noqa: E402
+from .models import User, db  # noqa: E402
 
 login_manager = LoginManager()
 csrf = CSRFProtect()
@@ -27,7 +26,7 @@ def create_app(config_class=Config):
 
     # Налаштування менеджера входу
     login_manager.login_view = "auth.login"
-    login_manager.login_message = "Будь ласка, увійдіть для доступу до цієї сторінки"
+    login_manager.login_message = "Please login to access this page"
     login_manager.login_message_category = "info"
 
     @login_manager.user_loader
@@ -35,13 +34,14 @@ def create_app(config_class=Config):
         return db.session.get(User, int(user_id))
 
     # Реєстрація маршрутів (routes)
-    from .routes import appointments, auth, clients, main, services
+    from .routes import appointments, auth, clients, main, reports, services
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
     app.register_blueprint(appointments.bp)
     app.register_blueprint(clients.bp)
     app.register_blueprint(services.bp)
+    app.register_blueprint(reports.bp)
 
     # Створення бази даних при першому запуску
     with app.app_context():

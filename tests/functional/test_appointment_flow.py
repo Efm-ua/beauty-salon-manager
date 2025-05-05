@@ -627,7 +627,7 @@ def test_appointment_back_to_schedule_button_includes_date(
     response = client.post(
         "/auth/login",
         data={
-            "username": admin_user.username,
+            "username": admin_user["username"],
             "password": "admin_password",
             "remember_me": "y",
         },
