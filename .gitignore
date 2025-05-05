@@ -24,11 +24,17 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+**/__pycache__/
+*.py[cod]
 
 # База даних
 *.db
 *.sqlite
 *.sqlite3
+# Виняток: зберігати скрипти міграцій
+!migrations/
+!migrations/versions/
+!migrations/versions/*.py
 
 # Логи
 *.log
