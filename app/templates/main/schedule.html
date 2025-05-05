@@ -123,7 +123,10 @@
         <tbody>
           {% for interval in time_intervals %}
           <!-- Основний 30-хвилинний рядок -->
-          <tr data-interval="{{ interval.main_time.strftime('%H:%M') }}">
+          <tr
+            class="main-slot-row"
+            data-interval="{{ interval.main_time.strftime('%H:%M') }}"
+          >
             <td class="time-column">
               <span
                 class="toggle-icon"
@@ -138,12 +141,45 @@
             <td
               class="main-slot-cell"
               data-time="{{ interval.main_time.strftime('%H:%M') }}"
-            ></td>
+            >
+              {% if schedule_data[master.id][interval.main_time] and
+              schedule_data[master.id][interval.main_time]|length > 0 %} {% set
+              appointment = schedule_data[master.id][interval.main_time][0] %}
+              {% if appointment.client_id in multi_booking_client_ids %} {% set
+              extra_class = ' multi-booking' %} {% else %} {% set extra_class =
+              '' %} {% endif %} {% if appointment.start_time.strftime('%H:%M')
+              == interval.main_time.strftime('%H:%M') %}
+              <div
+                class="schedule-appointment status-{{ appointment.payment_status }}{{ extra_class }}"
+                onclick="window.location.href='{{ url_for('appointments.view', id=appointment.id) }}'"
+              >
+                <strong>{{ appointment.client.name }}</strong><br />
+                <small
+                  >{{ appointment.start_time.strftime('%H:%M') }} - {{
+                  appointment.end_time.strftime('%H:%M') }}</small
+                >
+                {% if appointment.services %}
+                <br />
+                <small>
+                  {% for service in appointment.services[:1] %} {{
+                  service.service.name }} {% if loop.index <
+                  appointment.services|length %} ... {% endif %} {% endfor %}
+                </small>
+                {% endif %} {% if appointment.amount_paid %}
+                <br />
+                <small class="fw-bold"
+                  >{{ "%.2f"|format(appointment.amount_paid) }} грн</small
+                >
+                {% endif %}
+              </div>
+              {% endif %} {% endif %}
+            </td>
             {% endfor %}
           </tr>
 
-          <!-- 15-хвилинні підслоти -->
-          {% for sub_slot in interval.sub_slots %}
+          <!-- 15-хвилинний підслот (лише один для :15/:45) -->
+          {% for sub_slot in interval.sub_slots %}{% if sub_slot !=
+          interval.main_time %}
           <tr
             class="sub-slot-row {% if interval.expanded %}expanded{% endif %}"
             data-sub-slot="{{ sub_slot.strftime('%H:%M') }}"
@@ -191,7 +227,7 @@
             </td>
             {% endfor %}
           </tr>
-          {% endfor %} {% endfor %}
+          {% endif %}{% endfor %} {% endfor %}
         </tbody>
       </table>
     </div>

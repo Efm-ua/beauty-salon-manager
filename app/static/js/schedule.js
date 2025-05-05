@@ -6,22 +6,22 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelector('tbody').addEventListener('click', function(event) {
         // Check if the clicked element is a toggle icon
         if (event.target.classList.contains('toggle-icon')) {
-            // Get the parent row's data-interval attribute
-            const mainTime = event.target.closest('tr').dataset.interval;
+            // Get the parent row
+            const mainRow = event.target.closest('tr');
             
-            // Find all sub-slot rows related to this main slot
-            const subSlotRows = document.querySelectorAll(`tr.sub-slot-row[data-parent="${mainTime.replace(':', '')}"]`);
+            // Find the next sub-slot row (sibling element)
+            const subRow = mainRow.nextElementSibling;
             
-            // Toggle visibility of sub-slot rows
-            subSlotRows.forEach(row => {
-                row.classList.toggle('expanded');
-            });
-            
-            // Toggle the icon (▸ or ▾)
-            if (event.target.textContent.trim() === '▸') {
-                event.target.textContent = '▾';
-            } else {
-                event.target.textContent = '▸';
+            // Toggle visibility of the sub-slot row if it exists and has the correct class
+            if (subRow && subRow.classList.contains('sub-slot-row')) {
+                subRow.classList.toggle('expanded');
+                
+                // Toggle the icon (▸ or ▾)
+                if (event.target.textContent.trim() === '▸') {
+                    event.target.textContent = '▾';
+                } else {
+                    event.target.textContent = '▸';
+                }
             }
             
             // Prevent other click handlers from firing
