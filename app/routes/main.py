@@ -1,7 +1,8 @@
 from collections import Counter
 from datetime import datetime, time, timedelta
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import (Blueprint, abort, current_app, flash, redirect,
+                   render_template, request, url_for)
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
@@ -113,106 +114,112 @@ def stats():
 @bp.route("/schedule")
 @login_required
 def schedule():
-    # Перевірка, чи є користувач адміністратором
-    if not current_user.is_admin:
-        flash("Тільки адміністратори мають доступ до цієї сторінки", "danger")
-        return redirect(url_for("main.index"))
+    try:
+        # Перевірка, чи є користувач адміністратором
+        if not current_user.is_admin:
+            flash("Тільки адміністратори мають доступ до цієї сторінки", "danger")
+            return redirect(url_for("main.index"))
 
-    # Отримання дати з параметрів запиту або використання поточної дати
-    date_str = request.args.get("date")
-    if date_str:
-        try:
-            selected_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
+        # Отримання дати з параметрів запиту або використання поточної дати
+        date_str = request.args.get("date")
+        if date_str:
+            try:
+                selected_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                selected_date = datetime.now().date()
+        else:
             selected_date = datetime.now().date()
-    else:
-        selected_date = datetime.now().date()
 
-    # Отримання всіх майстрів
-    masters = User.query.order_by(User.full_name).all()
+        # Отримання всіх майстрів
+        masters = User.query.order_by(User.full_name).all()
 
-    # Отримання записів на вибрану дату
-    appointments = Appointment.query.filter(
-        Appointment.date == selected_date, Appointment.status != "cancelled"
-    ).all()
+        # Отримання записів на вибрану дату
+        appointments = Appointment.query.filter(
+            Appointment.date == selected_date, Appointment.status != "cancelled"
+        ).all()
 
-    # Підрахунок записів для кожного клієнта на вибрану дату
-    client_appointments_count = Counter(
-        appointment.client_id for appointment in appointments
-    )
-
-    # Створення множини client_id, у яких більше одного запису
-    multi_booking_client_ids = {
-        client_id for client_id, count in client_appointments_count.items() if count > 1
-    }
-
-    # Створення структури 30-хвилинних слотів з 15-хвилинними підслотами
-    time_intervals = []
-    for hour in range(8, 21):
-        for minute in [0, 30]:
-            main_time = time(hour, minute)
-            sub_slots = [time(hour, minute), time(hour, minute + 15)]
-            time_intervals.append(
-                {"main_time": main_time, "sub_slots": sub_slots, "expanded": False}
-            )
-
-    # Додавання останнього слоту 20:30
-    if time_intervals[-1]["main_time"] != time(20, 30):
-        time_intervals.append(
-            {
-                "main_time": time(20, 30),
-                "sub_slots": [time(20, 30), time(20, 45)],
-                "expanded": False,
-            }
+        # Підрахунок записів для кожного клієнта на вибрану дату
+        client_appointments_count = Counter(
+            appointment.client_id for appointment in appointments
         )
 
-    # Створення структури даних для розкладу
-    all_15min_slots = []
-    for interval in time_intervals:
-        all_15min_slots.extend(interval["sub_slots"])
+        # Створення множини client_id, у яких більше одного запису
+        multi_booking_client_ids = {
+            client_id
+            for client_id, count in client_appointments_count.items()
+            if count > 1
+        }
 
-    schedule_data = {
-        master.id: {slot: [] for slot in all_15min_slots} for master in masters
-    }
-
-    # Заповнення розкладу записами та встановлення expanded
-    for appointment in appointments:
-        # Визначення, чи запис починається або закінчується в :15 або :45 хвилин
-        starts_at_15_or_45 = appointment.start_time.minute in [15, 45]
-        ends_at_15_or_45 = appointment.end_time.minute in [15, 45]
-
-        # Визначення всіх 15-хвилинних слотів, які займає запис
-        current_time = datetime.combine(selected_date, appointment.start_time)
-        end_datetime = datetime.combine(selected_date, appointment.end_time)
-
-        while current_time < end_datetime:
-            current_slot_time = current_time.time()
-
-            # Додавання запису до відповідного слоту
-            if (
-                appointment.master_id in schedule_data
-                and current_slot_time in schedule_data[appointment.master_id]
-            ):
-                schedule_data[appointment.master_id][current_slot_time].append(
-                    appointment
+        # Створення структури 30-хвилинних слотів з 15-хвилинними підслотами
+        time_intervals = []
+        for hour in range(8, 21):
+            for minute in [0, 30]:
+                main_time = time(hour, minute)
+                sub_slots = [time(hour, minute), time(hour, minute + 15)]
+                time_intervals.append(
+                    {"main_time": main_time, "sub_slots": sub_slots, "expanded": False}
                 )
 
-            # Пошук відповідного 30-хвилинного інтервалу для встановлення expanded
-            if starts_at_15_or_45 or ends_at_15_or_45:
-                for interval in time_intervals:
-                    if current_slot_time in interval["sub_slots"]:
-                        interval["expanded"] = True
-                        break
+        # Додавання останнього слоту 20:30
+        if time_intervals[-1]["main_time"] != time(20, 30):
+            time_intervals.append(
+                {
+                    "main_time": time(20, 30),
+                    "sub_slots": [time(20, 30), time(20, 45)],
+                    "expanded": False,
+                }
+            )
 
-            # Перехід до наступного 15-хвилинного слоту
-            current_time += timedelta(minutes=15)
+        # Створення структури даних для розкладу
+        all_15min_slots = []
+        for interval in time_intervals:
+            all_15min_slots.extend(interval["sub_slots"])
 
-    return render_template(
-        "main/schedule.html",
-        title="Розклад майстрів",
-        masters=masters,
-        time_intervals=time_intervals,
-        schedule_data=schedule_data,
-        selected_date=selected_date,
-        multi_booking_client_ids=multi_booking_client_ids,
-    )
+        schedule_data = {
+            master.id: {slot: [] for slot in all_15min_slots} for master in masters
+        }
+
+        # Заповнення розкладу записами та встановлення expanded
+        for appointment in appointments:
+            # Визначення, чи запис починається або закінчується в :15 або :45 хвилин
+            starts_at_15_or_45 = appointment.start_time.minute in [15, 45]
+            ends_at_15_or_45 = appointment.end_time.minute in [15, 45]
+
+            # Визначення всіх 15-хвилинних слотів, які займає запис
+            current_time = datetime.combine(selected_date, appointment.start_time)
+            end_datetime = datetime.combine(selected_date, appointment.end_time)
+
+            while current_time < end_datetime:
+                current_slot_time = current_time.time()
+
+                # Додавання запису до відповідного слоту
+                if (
+                    appointment.master_id in schedule_data
+                    and current_slot_time in schedule_data[appointment.master_id]
+                ):
+                    schedule_data[appointment.master_id][current_slot_time].append(
+                        appointment
+                    )
+
+                # Пошук відповідного 30-хвилинного інтервалу для встановлення expanded
+                if starts_at_15_or_45 or ends_at_15_or_45:
+                    for interval in time_intervals:
+                        if current_slot_time in interval["sub_slots"]:
+                            interval["expanded"] = True
+                            break
+
+                # Перехід до наступного 15-хвилинного слоту
+                current_time += timedelta(minutes=15)
+
+        return render_template(
+            "main/schedule.html",
+            title="Розклад майстрів",
+            masters=masters,
+            time_intervals=time_intervals,
+            schedule_data=schedule_data,
+            selected_date=selected_date,
+            multi_booking_client_ids=multi_booking_client_ids,
+        )
+    except Exception as e:
+        current_app.logger.exception(f"!!! EXCEPTION in /schedule route: {e}")
+        abort(500)
