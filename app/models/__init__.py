@@ -1,7 +1,6 @@
 import enum
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Type, cast
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
@@ -86,6 +85,9 @@ class Appointment(db.Model):  # type: ignore
     )  # paid, unpaid
     amount_paid = db.Column(Numeric(10, 2), nullable=True)
     payment_method = db.Column(db.Enum(PaymentMethod), nullable=True)
+    discount_percentage = db.Column(
+        db.Numeric(precision=5, scale=2), default=Decimal("0.0"), nullable=False
+    )
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     services = db.relationship(
@@ -97,6 +99,11 @@ class Appointment(db.Model):  # type: ignore
 
     def get_total_price(self):
         return sum(service.price for service in self.services)
+
+    def get_discounted_price(self):
+        total_price = self.get_total_price()
+        discount_factor = 1 - (self.discount_percentage / 100)
+        return total_price * discount_factor
 
     def __repr__(self):
         return f"<Appointment {self.id} - {self.date} {self.start_time}>"

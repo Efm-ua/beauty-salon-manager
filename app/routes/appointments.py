@@ -1,41 +1,17 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from flask import (
-    Blueprint,
-    flash,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    url_for,
-    make_response,
-)
+from flask import (Blueprint, flash, jsonify, redirect, render_template,
+                   request, url_for)
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import (
-    DateField,
-    FieldList,
-    FloatField,
-    FormField,
-    SelectField,
-    SelectMultipleField,
-    StringField,
-    SubmitField,
-    TextAreaField,
-    TimeField,
-)
-from wtforms.validators import DataRequired, Optional
+from wtforms import (DateField, DecimalField, FloatField, SelectField,
+                     SelectMultipleField, SubmitField, TextAreaField,
+                     TimeField)
+from wtforms.validators import DataRequired, NumberRange, Optional
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    PaymentMethod,
-    Service,
-    User,
-    db,
-)
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User, db)
 
 # Створення Blueprint
 bp = Blueprint("appointments", __name__, url_prefix="/appointments")
@@ -50,6 +26,12 @@ class AppointmentForm(FlaskForm):
         "Час початку", validators=[DataRequired()], default=time(9, 0)
     )
     services = SelectMultipleField("Послуги", coerce=int, validators=[DataRequired()])
+    discount_percentage = DecimalField(
+        "Знижка, %",
+        validators=[Optional(), NumberRange(min=0, max=100)],
+        render_kw={"placeholder": "0.00"},
+        default=Decimal("0.0"),
+    )
     notes = TextAreaField("Примітки", validators=[Optional()])
     submit = SubmitField("Зберегти")
 
@@ -183,6 +165,7 @@ def create():
             notes=form.notes.data,
             status="scheduled",
             payment_status="unpaid",  # За замовчуванням "unpaid"
+            discount_percentage=form.discount_percentage.data or Decimal("0.0"),
         )
         db.session.add(appointment)
         db.session.flush()  # отримуємо ID запису
@@ -261,69 +244,72 @@ def edit(id):
 
     form = AppointmentForm(obj=appointment)
 
-    # Заповнення варіантів вибору
+    # Заповнення варіантів вибору для клієнтів, майстрів та послуг
     form.client_id.choices = [
         (c.id, f"{c.name} ({c.phone})")
         for c in Client.query.order_by(Client.name).all()
+    ]
+    form.master_id.choices = [
+        (u.id, u.full_name) for u in User.query.order_by(User.full_name).all()
     ]
     form.services.choices = [
         (s.id, f"{s.name} ({s.duration} хв.)")
         for s in Service.query.order_by(Service.name).all()
     ]
-    if current_user.is_admin:
-        form.master_id.choices = [
-            (u.id, u.full_name) for u in User.query.order_by(User.full_name).all()
-        ]
-    else:
-        form.master_id.choices = [(current_user.id, current_user.full_name)]
-        form.master_id.data = current_user.id
 
-    # При відображенні форми, встановити поточні послуги
+    # Встановлення поточних послуг для запису
     if request.method == "GET":
         form.services.data = [service.service_id for service in appointment.services]
 
     if form.validate_on_submit():
-        # Початок редагування
+        # Перевірка, чи має право користувач редагувати для вибраного майстра
         if not current_user.is_admin and form.master_id.data != current_user.id:
-            flash("Ви не можете змінити майстра запису", "danger")
+            flash("Ви можете редагувати записи тільки для себе", "danger")
             return redirect(url_for("appointments.edit", id=id))
 
-        # Розрахунок end_time на основі start_time та тривалості першої послуги
-        if appointment.services:
-            # Використовуємо тривалість першої пов'язаної послуги
-            service_duration = appointment.services[0].service.duration
-            # Розраховуємо end_time
-            start_datetime = datetime.combine(form.date.data, form.start_time.data)
-            end_datetime = start_datetime + timedelta(minutes=service_duration)
-            end_time = end_datetime.time()
-        else:
-            # На випадок, якщо запис немає послуг, встановлюємо такий же час як і початок
-            end_time = form.start_time.data
-
-        # Оновлення даних запису
+        # Оновлюємо основні дані запису
         appointment.client_id = form.client_id.data
         appointment.master_id = form.master_id.data
         appointment.date = form.date.data
         appointment.start_time = form.start_time.data
-        appointment.end_time = end_time
         appointment.notes = form.notes.data
-        # Збереження поточних значень для payment_status, amount_paid та payment_method
+        appointment.discount_percentage = form.discount_percentage.data or Decimal(
+            "0.0"
+        )
+
+        # Оновлюємо end_time на основі першої послуги
+        if form.services.data:
+            service = db.session.get(Service, form.services.data[0])
+            # Розраховуємо end_time на основі start_time та тривалості послуги
+            start_datetime = datetime.combine(form.date.data, form.start_time.data)
+            end_datetime = start_datetime + timedelta(minutes=service.duration)
+            appointment.end_time = end_datetime.time()
+
+        # Видаляємо всі попередні послуги та додаємо нові
+        AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
+
+        # Додавання вибраних послуг
+        if form.services.data:
+            for service_id in form.services.data:
+                service = db.session.get(Service, service_id)
+                if service:
+                    # Встановлюємо базову ціну послуги (тут можна змінити логіку розрахунку)
+                    appointment_service = AppointmentService(
+                        appointment_id=appointment.id,
+                        service_id=service_id,
+                        price=float(service.duration),
+                        notes="",
+                    )
+                    db.session.add(appointment_service)
 
         db.session.commit()
-        flash("Запис успішно оновлено!", "success")
 
-        # Перевіряємо, чи був запит з розкладу майстрів
-        from_schedule = request.args.get("from_schedule")
-        if from_schedule:
-            return redirect(
-                url_for("main.schedule", date=appointment.date.strftime("%Y-%m-%d"))
-            )
-        else:
-            return redirect(url_for("appointments.view", id=id))
+        flash("Запис успішно оновлено!", "success")
+        return redirect(url_for("appointments.view", id=appointment.id))
 
     return render_template(
         "appointments/edit.html",
-        title=f"Редагування запису #{id}",
+        title="Редагування запису",
         form=form,
         appointment=appointment,
     )

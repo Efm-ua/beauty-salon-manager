@@ -1,19 +1,13 @@
-from datetime import datetime, date, timedelta
 import re
+from datetime import date, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 import pytest
 from werkzeug.security import generate_password_hash
-from unittest.mock import patch, MagicMock
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    Service,
-    User,
-    PaymentMethod,
-)
 from app import db
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User)
 
 
 def test_salary_report_access_without_login(client):
@@ -951,3 +945,248 @@ def test_financial_report_complete_payment_methods_coverage(
 
         # Check response code
         assert response.status_code == 200
+
+
+def test_financial_report_with_discount(client, admin_user):
+    """
+    Тестує фінансовий звіт з урахуванням знижки.
+    """
+    import random
+    from datetime import date, time
+    from decimal import Decimal
+
+    from app.models import (Appointment, AppointmentService, Client,
+                            PaymentMethod, Service, User)
+
+    # Логін адміністратором
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user["username"],
+            "password": admin_user["password"],
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Створюємо тестові дані з різними знижками
+    today = date.today()
+    master = User.query.filter_by(is_admin=True).first()
+    client_obj = Client.query.first()
+    service = Service.query.first()
+
+    if not client_obj:
+        client_obj = Client(name="Test Client", phone="123456789")
+        db.session.add(client_obj)
+        db.session.commit()
+
+    if not service:
+        service = Service(name="Test Service", duration=60)
+        db.session.add(service)
+        db.session.commit()
+
+    # Створюємо записи з різними знижками та типами оплати
+    appointments = []
+
+    # Запис 1: без знижки, оплата готівкою
+    appointment1 = Appointment(
+        client_id=client_obj.id,
+        master_id=master.id,
+        date=today,
+        start_time=time(9, 0),
+        end_time=time(10, 0),
+        status="completed",
+        discount_percentage=Decimal("0.0"),
+        payment_method=PaymentMethod.CASH,
+    )
+    db.session.add(appointment1)
+    db.session.flush()
+
+    # Додаємо послугу до запису
+    service1 = AppointmentService(
+        appointment_id=appointment1.id,
+        service_id=service.id,
+        price=100.0,  # Ціна без знижки
+    )
+    db.session.add(service1)
+    appointments.append(appointment1)
+
+    # Запис 2: знижка 10%, оплата карткою
+    appointment2 = Appointment(
+        client_id=client_obj.id,
+        master_id=master.id,
+        date=today,
+        start_time=time(11, 0),
+        end_time=time(12, 0),
+        status="completed",
+        discount_percentage=Decimal("10.0"),
+        payment_method=PaymentMethod.PRIVAT,
+    )
+    db.session.add(appointment2)
+    db.session.flush()
+
+    # Додаємо послугу до запису
+    service2 = AppointmentService(
+        appointment_id=appointment2.id,
+        service_id=service.id,
+        price=100.0,  # Та сама ціна, але зі знижкою 10%
+    )
+    db.session.add(service2)
+    appointments.append(appointment2)
+
+    # Запис 3: знижка 30%, оплата через MONO
+    appointment3 = Appointment(
+        client_id=client_obj.id,
+        master_id=master.id,
+        date=today,
+        start_time=time(14, 0),
+        end_time=time(15, 0),
+        status="completed",
+        discount_percentage=Decimal("30.0"),
+        payment_method=PaymentMethod.MONO,
+    )
+    db.session.add(appointment3)
+    db.session.flush()
+
+    # Додаємо послугу до запису
+    service3 = AppointmentService(
+        appointment_id=appointment3.id,
+        service_id=service.id,
+        price=100.0,  # Та сама ціна, але зі знижкою 30%
+    )
+    db.session.add(service3)
+    appointments.append(appointment3)
+
+    db.session.commit()
+
+    # Формуємо фінансовий звіт
+    response = client.post(
+        "/reports/financial",
+        data={"report_date": today.strftime("%Y-%m-%d"), "master_id": master.id},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Перевіряємо правильні суми зі знижками:
+    # Запис 1: 100.0 (без знижки)
+    # Запис 2: 90.0 (10% знижки від 100)
+    # Запис 3: 70.0 (30% знижки від 100)
+    # Загальна сума: 260.0
+
+    # Перевіряємо, що загальна сума враховує знижки
+    assert (
+        "Загальна сума: 260.00" in response.text
+        or "Загальна сума:260.00" in response.text
+    )
+
+    # Перевіряємо суми за типами оплати
+    assert "Готівка" in response.text
+    assert "100.00" in response.text  # Сума за готівку (запис 1)
+
+    assert "Приват" in response.text
+    assert "90.00" in response.text  # Сума за Приват (запис 2 зі знижкою 10%)
+
+    assert "MONO" in response.text
+    assert "70.00" in response.text  # Сума за MONO (запис 3 зі знижкою 30%)
+
+    # Перевіряємо підрахунок відсотків
+    # Готівка: 100/260 * 100 = 38.5%
+    # Приват: 90/260 * 100 = 34.6%
+    # MONO: 70/260 * 100 = 26.9%
+    assert (
+        "38.5%" in response.text or "38.4%" in response.text
+    )  # Через округлення може бути невелика різниця
+    assert "34.6%" in response.text or "34.5%" in response.text
+    assert "26.9%" in response.text or "27.0%" in response.text
+
+    # Очищення тестових даних
+    for appointment in appointments:
+        AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
+
+    for appointment in appointments:
+        db.session.delete(appointment)
+
+    db.session.commit()
+
+
+def test_salary_report_ignores_discount(client, admin_user):
+    """
+    Тестує, що звіт зарплат не враховує знижки.
+    """
+    import random
+    from datetime import date, time
+    from decimal import Decimal
+
+    from app.models import (Appointment, AppointmentService, Client,
+                            PaymentMethod, Service, User)
+
+    # Логін адміністратором
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user["username"],
+            "password": admin_user["password"],
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Створюємо тестові дані зі знижкою
+    today = date.today()
+    master = User.query.filter_by(is_admin=True).first()
+    client_obj = Client.query.first()
+    service = Service.query.first()
+
+    if not client_obj:
+        client_obj = Client(name="Test Client", phone="123456789")
+        db.session.add(client_obj)
+        db.session.commit()
+
+    if not service:
+        service = Service(name="Test Service", duration=60)
+        db.session.add(service)
+        db.session.commit()
+
+    # Створюємо запис зі знижкою 20%
+    appointment = Appointment(
+        client_id=client_obj.id,
+        master_id=master.id,
+        date=today,
+        start_time=time(9, 0),
+        end_time=time(10, 0),
+        status="completed",
+        discount_percentage=Decimal("20.0"),
+        payment_method=PaymentMethod.CASH,
+    )
+    db.session.add(appointment)
+    db.session.flush()
+
+    # Додаємо послугу до запису
+    service_price = 100.0
+    appointment_service = AppointmentService(
+        appointment_id=appointment.id, service_id=service.id, price=service_price
+    )
+    db.session.add(appointment_service)
+    db.session.commit()
+
+    # Генеруємо звіт зарплат
+    response = client.post(
+        "/reports/salary",
+        data={"report_date": today.strftime("%Y-%m-%d"), "master_id": master.id},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Перевіряємо, що звіт зарплат показує повну вартість послуг без знижки
+    # Знижка 20% від 100 = 20, сума зі знижкою = 80, але звіт повинен показати 100
+    assert f"{service_price:.2f}" in response.text
+    # Не повинно бути суми зі знижкою
+    discounted_price = service_price * 0.8
+    assert f"{discounted_price:.2f}" not in response.text
+
+    # Очищення тестових даних
+    AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
+    db.session.delete(appointment)
+    db.session.commit()

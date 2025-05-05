@@ -47,7 +47,9 @@
   <div class="col-md-6">
     <div class="card mb-4">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Загальна сума: {{ "%.2f"|format(total_amount) }}</h5>
+        <h5 class="mb-0">
+          Загальна сума: {{ total_amount | format_currency }}
+        </h5>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -63,7 +65,7 @@
               {% for method_name, amount in payment_breakdown %}
               <tr>
                 <td>{{ method_name }}</td>
-                <td class="text-end">{{ "%.2f"|format(amount) }}</td>
+                <td class="text-end">{{ amount | format_currency }}</td>
                 <td class="text-end">
                   {% if total_amount > 0 %} {{ "%.1f"|format((amount /
                   total_amount) * 100) }}% {% else %} 0% {% endif %}
@@ -74,7 +76,7 @@
             <tfoot>
               <tr class="table-secondary">
                 <th>Загалом:</th>
-                <th class="text-end">{{ "%.2f"|format(total_amount) }}</th>
+                <th class="text-end">{{ total_amount | format_currency }}</th>
                 <th class="text-end">100%</th>
               </tr>
             </tfoot>

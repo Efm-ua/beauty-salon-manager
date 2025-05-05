@@ -1,11 +1,12 @@
+import unittest.mock
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-import unittest.mock
 
 import pytest
 from flask import url_for
 
-from app.models import Appointment, AppointmentService, Service, User, Client, db
+from app.models import (Appointment, AppointmentService, Client, Service, User,
+                        db)
 
 
 def test_index_route_with_no_completed_appointments(session, client, admin_user):

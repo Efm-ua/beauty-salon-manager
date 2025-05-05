@@ -1,19 +1,15 @@
-import pytest
-from datetime import date, time, datetime, timedelta
-from app.models import (
-    Appointment,
-    User,
-    Service,
-    AppointmentService,
-    PaymentMethod,
-    Client,
-)
-from app import db
-import uuid
-from unittest.mock import Mock
-import unittest.mock as mock
-from flask import render_template, make_response, current_app
 import random
+import unittest.mock as mock
+import uuid
+from datetime import date, datetime, time, timedelta
+from unittest.mock import Mock
+
+import pytest
+from flask import current_app, make_response, render_template
+
+from app import db
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User)
 
 
 def test_appointment_complete_with_payment_method(
@@ -98,8 +94,9 @@ def test_create_appointment_as_non_admin_for_another_master_mock(
     db.session.commit()
 
     # Встановлюємо current_user.is_admin = False (імітація звичайного користувача)
-    from app.routes.appointments import current_user
     from unittest.mock import patch
+
+    from app.routes.appointments import current_user
 
     with patch("app.routes.appointments.current_user") as mock_current_user:
         # Налаштовуємо макет current_user
@@ -119,8 +116,9 @@ def test_create_appointment_as_non_admin_for_another_master_mock(
         )
 
         # Перевіряємо безпосередньо логіку обмеження доступу
-        from app.routes.appointments import create
         import flask
+
+        from app.routes.appointments import create
 
         with pytest.raises(Exception):
             # Імітуємо POST-запит з даними, де майстер - інший користувач
@@ -279,6 +277,7 @@ def test_edit_appointment_as_non_admin_change_master_mock(db):
 
     # Тестуємо безпосередньо логіку обмеження доступу
     from unittest.mock import patch
+
     from app.routes.appointments import current_user
 
     # Симулюємо спроту зміни майстра звичайним користувачем
@@ -1240,3 +1239,157 @@ def test_create_appointment_from_schedule(
     # Перевіряємо перенаправлення на сторінку розкладу
     assert response.status_code == 302
     assert "/schedule?date=2025-01-01" in response.location
+
+
+def test_create_appointment_with_discount(
+    client, admin_user, test_client, test_service
+):
+    """
+    Тестує створення запису зі знижкою у відсотках.
+    """
+    # Логін адміністратором
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user["username"],
+            "password": admin_user["password"],
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Створення запису зі знижкою 15%
+    response = client.post(
+        "/appointments/create",
+        data={
+            "client_id": test_client.id,
+            "master_id": admin_user["id"],
+            "date": date.today().strftime("%Y-%m-%d"),
+            "start_time": "14:00",
+            "services": [test_service.id],
+            "discount_percentage": "15.0",
+            "notes": "Test appointment with discount",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+
+    # Перевіряємо, що запис було створено
+    appointment = Appointment.query.filter_by(
+        client_id=test_client.id, notes="Test appointment with discount"
+    ).first()
+
+    assert appointment is not None
+    assert float(appointment.discount_percentage) == 15.0
+
+    # Перевіряємо відображення знижки на сторінці запису
+    response = client.get(f"/appointments/{appointment.id}")
+    assert response.status_code == 200
+    assert "Знижка:" in response.text
+    assert "15.00%" in response.text
+
+    # Перевіряємо правильний розрахунок ціни зі знижкою
+    total_price = appointment.get_total_price()
+    expected_discounted_price = total_price * 0.85  # 15% знижка
+    assert f"{expected_discounted_price:.2f}" in response.text
+
+
+def test_create_appointment_with_invalid_discount(
+    client, admin_user, test_client, test_service
+):
+    """
+    Тестує валідацію при створенні запису з некоректною знижкою.
+    """
+    # Логін адміністратором
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user["username"],
+            "password": admin_user["password"],
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Спроба створити запис з некоректною знижкою (більше 100%)
+    response = client.post(
+        "/appointments/create",
+        data={
+            "client_id": test_client.id,
+            "master_id": admin_user["id"],
+            "date": date.today().strftime("%Y-%m-%d"),
+            "start_time": "15:00",
+            "services": [test_service.id],
+            "discount_percentage": "120.0",
+            "notes": "Test appointment with invalid discount",
+        },
+        follow_redirects=True,
+    )
+
+    # Перевіряємо наявність помилки валідації
+    assert (
+        "Number must be between 0 and 100" in response.text
+        or "Число має бути між 0 та 100" in response.text
+    )
+
+    # Перевіряємо, що запис не було створено
+    appointment = Appointment.query.filter_by(
+        notes="Test appointment with invalid discount"
+    ).first()
+
+    assert appointment is None
+
+
+def test_edit_appointment_discount(client, admin_user, test_appointment):
+    """
+    Тестує редагування знижки для існуючого запису.
+    """
+    # Логін адміністратором
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user["username"],
+            "password": admin_user["password"],
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Спочатку перевіряємо, що немає знижки
+    assert float(test_appointment.discount_percentage) == 0.0
+
+    # Отримуємо форму редагування
+    response = client.get(f"/appointments/{test_appointment.id}/edit")
+    assert response.status_code == 200
+
+    # Отримуємо поточні дані для форми
+    current_data = {
+        "client_id": test_appointment.client_id,
+        "master_id": test_appointment.master_id,
+        "date": test_appointment.date.strftime("%Y-%m-%d"),
+        "start_time": test_appointment.start_time.strftime("%H:%M"),
+        "services": [service.service_id for service in test_appointment.services],
+        "notes": test_appointment.notes,
+        "discount_percentage": "10.0",  # Нова знижка 10%
+    }
+
+    # Редагуємо запис, додаючи знижку
+    response = client.post(
+        f"/appointments/{test_appointment.id}/edit",
+        data=current_data,
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Перевіряємо, що знижку збережено
+    updated_appointment = Appointment.query.get(test_appointment.id)
+    assert float(updated_appointment.discount_percentage) == 10.0
+
+    # Перевіряємо відображення знижки на сторінці перегляду
+    response = client.get(f"/appointments/{test_appointment.id}")
+    assert "Знижка:" in response.text
+    assert "10.00%" in response.text

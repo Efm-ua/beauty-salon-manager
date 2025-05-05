@@ -3,12 +3,12 @@ from datetime import date
 from flask import Blueprint, render_template
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
+from sqlalchemy import func
 from wtforms import DateField, SelectField, SubmitField
 from wtforms.validators import DataRequired
-from sqlalchemy import func
 
 from app import db
-from app.models import Appointment, User, AppointmentService, PaymentMethod
+from app.models import Appointment, AppointmentService, PaymentMethod, User
 
 # Blueprint creation
 bp = Blueprint("reports", __name__, url_prefix="/reports")
@@ -133,19 +133,29 @@ def financial_report():
         appointment_ids = [appointment.id for appointment in completed_appointments]
 
         if appointment_ids:
-            # Calculate total income for the day
-            total_amount_result = (
-                db.session.query(func.sum(AppointmentService.price))
+            # Calculate total income for the day (now considering discount)
+            total_income_query = (
+                db.session.query(
+                    func.sum(
+                        AppointmentService.price
+                        * (1 - func.coalesce(Appointment.discount_percentage, 0) / 100)
+                    )
+                )
+                .join(Appointment, Appointment.id == AppointmentService.appointment_id)
                 .filter(AppointmentService.appointment_id.in_(appointment_ids))
-                .scalar()
             )
 
+            total_amount_result = total_income_query.scalar()
             total_amount = total_amount_result or 0
 
-            # Get breakdown by payment method
+            # Get breakdown by payment method (with discount)
             payment_breakdown_query = (
                 db.session.query(
-                    Appointment.payment_method, func.sum(AppointmentService.price)
+                    Appointment.payment_method,
+                    func.sum(
+                        AppointmentService.price
+                        * (1 - func.coalesce(Appointment.discount_percentage, 0) / 100)
+                    ),
                 )
                 .join(
                     AppointmentService,

@@ -315,9 +315,27 @@
             <tfoot>
               <tr>
                 <th>Всього:</th>
-                <th class="text-end">{{ "%.2f"|format(total) }} грн</th>
+                <th class="text-end">{{ total | format_currency }} грн</th>
                 <th></th>
               </tr>
+              {% if appointment.discount_percentage and
+              appointment.discount_percentage > 0 %}
+              <tr>
+                <th>Знижка:</th>
+                <th class="text-end">
+                  {{ appointment.discount_percentage | format_percentage }}%
+                </th>
+                <th></th>
+              </tr>
+              <tr class="table-success">
+                <th>До сплати:</th>
+                <th class="text-end">
+                  {{ (total * (1 - (appointment.discount_percentage | float /
+                  100))) | format_currency }} грн
+                </th>
+                <th></th>
+              </tr>
+              {% endif %}
             </tfoot>
           </table>
         </div>

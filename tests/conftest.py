@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import date, datetime, time, timedelta
 
@@ -29,7 +30,16 @@ def app():
     - SQLALCHEMY_DATABASE_URI='sqlite:///:memory:' - база даних SQLite у пам'яті
     - WTF_CSRF_ENABLED=False - відключений CSRF захист для тестових форм
     """
-    app = create_app(config_class=TestConfig)
+    test_config = {
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "WTF_CSRF_ENABLED": False,
+        "SECRET_KEY": "test-secret-key",
+        "UPLOAD_FOLDER": os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "uploads"
+        ),
+    }
+    app = create_app(test_config=test_config)
 
     # Створення контексту додатка
     with app.app_context():
