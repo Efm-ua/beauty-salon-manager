@@ -5,7 +5,14 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 
-from app.models import Appointment, AppointmentService, Client, Service, User
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    Service,
+    User,
+    PaymentMethod,
+)
 
 
 class TestUserModel:
@@ -292,7 +299,7 @@ class TestAppointmentModel:
             status="completed",
             payment_status="paid",
             amount_paid=500.50,
-            payment_method="Картка",
+            payment_method=PaymentMethod.CASH,
             notes="Paid appointment",
         )
         session.add(appointment)
@@ -307,7 +314,8 @@ class TestAppointmentModel:
         assert saved_appointment is not None
         assert saved_appointment.payment_status == "paid"
         assert float(saved_appointment.amount_paid) == 500.50
-        assert saved_appointment.payment_method == "Картка"
+        assert saved_appointment.payment_method == PaymentMethod.CASH
+        assert saved_appointment.payment_method.value == "Готівка"
 
 
 class TestAppointmentServiceModel:
@@ -381,3 +389,17 @@ class TestAppointmentServiceModel:
         # Перевіряємо, що послуга додана до запису
         updated_appointment = session.query(Appointment).get(test_appointment.id)
         assert len(updated_appointment.services) > 1  # Має бути більше однієї послуги
+
+
+def test_payment_method_enum():
+    """Перевірка Enum PaymentMethod"""
+    # Перевірка всіх значень у перерахуванні
+    assert PaymentMethod.CASH.value == "Готівка"
+    assert PaymentMethod.MALIBU.value == "Малібу"
+    assert PaymentMethod.FOP.value == "ФОП"
+    assert PaymentMethod.PRIVAT.value == "Приват"
+    assert PaymentMethod.MONO.value == "MONO"
+    assert PaymentMethod.DEBT.value == "Борг"
+
+    # Перевірка кількості елементів
+    assert len(list(PaymentMethod)) == 6

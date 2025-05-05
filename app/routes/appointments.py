@@ -1,16 +1,32 @@
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 
-from flask import (Blueprint, flash, jsonify, redirect, render_template,
-                   request, url_for)
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import (DateField, FieldList, FloatField, FormField, SelectField,
-                     SelectMultipleField, StringField, SubmitField,
-                     TextAreaField, TimeField)
+from wtforms import (
+    DateField,
+    FieldList,
+    FloatField,
+    FormField,
+    SelectField,
+    SelectMultipleField,
+    StringField,
+    SubmitField,
+    TextAreaField,
+    TimeField,
+)
 from wtforms.validators import DataRequired, Optional
 
-from app.models import (Appointment, AppointmentService, Client, Service, User,
-                        db)
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    Service,
+    User,
+    db,
+    PaymentMethod,
+)
 
 # Створення Blueprint
 bp = Blueprint("appointments", __name__, url_prefix="/appointments")
@@ -318,10 +334,42 @@ def change_status(id, status):
         flash("Невірний статус!", "danger")
         return redirect(url_for("appointments.view", id=id))
 
+    # Якщо статус змінюється на "completed", перевіряємо наявність типу оплати
+    if status == "completed":
+        payment_methods = request.form.getlist("payment_method")
+
+        # Перевірка, що вибрано рівно один тип оплати
+        if len(payment_methods) != 1:
+            flash("Помилка: будь ласка, виберіть рівно один тип оплати.", "danger")
+            return redirect(url_for("appointments.view", id=id))
+
+        # Перевірка, що обраний тип оплати є дійсним
+        payment_method = payment_methods[0]
+        valid_payment_methods = [method.value for method in PaymentMethod]
+
+        if payment_method not in valid_payment_methods:
+            flash("Помилка: вибрано недійсний тип оплати.", "danger")
+            return redirect(url_for("appointments.view", id=id))
+
+        # Знаходимо об'єкт PaymentMethod за значенням
+        payment_method_enum = next(
+            (method for method in PaymentMethod if method.value == payment_method), None
+        )
+
+        # Встановлюємо тип оплати
+        appointment.payment_method = payment_method_enum
+
     appointment.status = status
     db.session.commit()
 
-    flash(f'Статус запису змінено на "{status}"', "success")
+    if status == "completed":
+        flash(
+            f'Статус запису змінено на "{status}" з типом оплати "{appointment.payment_method.value}"',
+            "success",
+        )
+    else:
+        flash(f'Статус запису змінено на "{status}"', "success")
+
     return redirect(url_for("appointments.view", id=id))
 
 

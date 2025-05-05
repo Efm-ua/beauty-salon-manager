@@ -1,4 +1,7 @@
 from datetime import datetime, timezone
+from typing import Any, Type, cast
+import enum
+from decimal import Decimal
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
@@ -7,8 +10,18 @@ from sqlalchemy import Numeric
 db = SQLAlchemy()
 
 
+# Enum для типів оплати
+class PaymentMethod(enum.Enum):
+    CASH = "Готівка"
+    MALIBU = "Малібу"
+    FOP = "ФОП"
+    PRIVAT = "Приват"
+    MONO = "MONO"
+    DEBT = "Борг"
+
+
 # Модель користувача (майстри салону)
-class User(db.Model, UserMixin):
+class User(UserMixin, db.Model):  # type: ignore
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
@@ -26,7 +39,7 @@ class User(db.Model, UserMixin):
 
 
 # Модель клієнта
-class Client(db.Model):
+class Client(db.Model):  # type: ignore
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20), unique=True, nullable=False)
@@ -44,7 +57,7 @@ class Client(db.Model):
 
 
 # Модель послуги
-class Service(db.Model):
+class Service(db.Model):  # type: ignore
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -58,7 +71,7 @@ class Service(db.Model):
 
 
 # Модель запису клієнта
-class Appointment(db.Model):
+class Appointment(db.Model):  # type: ignore
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False)
     master_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
@@ -72,7 +85,7 @@ class Appointment(db.Model):
         db.String(10), nullable=False, default="unpaid"
     )  # paid, unpaid
     amount_paid = db.Column(Numeric(10, 2), nullable=True)
-    payment_method = db.Column(db.String(50), nullable=True)
+    payment_method = db.Column(db.Enum(PaymentMethod), nullable=True)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     services = db.relationship(
@@ -90,7 +103,7 @@ class Appointment(db.Model):
 
 
 # Модель послуг, наданих під час запису
-class AppointmentService(db.Model):
+class AppointmentService(db.Model):  # type: ignore
     id = db.Column(db.Integer, primary_key=True)
     appointment_id = db.Column(
         db.Integer, db.ForeignKey("appointment.id"), nullable=False

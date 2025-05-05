@@ -155,6 +155,7 @@ def test_appointment_complete_flow(
     # Change appointment status to completed
     response = client.post(
         f"/appointments/{appointment_id}/status/completed",
+        data={"payment_method": "Готівка"},
         follow_redirects=True,
     )
 
@@ -163,6 +164,11 @@ def test_appointment_complete_flow(
     assert (
         appointment.status == "completed"
     ), "Appointment status was not updated to completed"
+
+    # Перевірка, що тип оплати також збережено
+    from app.models import PaymentMethod
+
+    assert appointment.payment_method == PaymentMethod.CASH
 
     # Calculate and verify total price
     appointment_services = AppointmentService.query.filter_by(
