@@ -6,7 +6,7 @@ def test_appointment_complete_with_payment_method(
 
     Цей тест перевіряє:
     1. Доступність сторінки деталей запису
-    2. Наявність чекбоксів для вибору типу оплати
+    2. Наявність радіо-кнопок для вибору типу оплати
     3. Успішну зміну статусу та збереження типу оплати при виборі коректного типу
     4. Відображення обраного типу оплати на сторінці деталей
     """
@@ -25,7 +25,10 @@ def test_appointment_complete_with_payment_method(
     response = client.get(f"/appointments/{test_appointment.id}")
     assert response.status_code == 200
 
-    # Перевіряємо наявність чекбоксів для вибору типу оплати
+    # Перевіряємо наявність радіо-кнопок для вибору типу оплати
+    assert 'type="radio"' in response.text
+    assert 'class="form-check-input payment-checkbox"' in response.text
+    assert 'name="payment_method"' in response.text
     assert 'value="Готівка"' in response.text
     assert 'value="Малібу"' in response.text
     assert 'value="ФОП"' in response.text
