@@ -1,19 +1,13 @@
 import uuid
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from app import db
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    PaymentMethod,
-    Service,
-    User,
-)
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User)
 
 
 def test_appointment_complete_with_payment_method(
