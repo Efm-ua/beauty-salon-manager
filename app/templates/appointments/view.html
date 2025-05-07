@@ -103,38 +103,22 @@
             id="payment-methods-container"
             style="{% if appointment.status != 'scheduled' %}display: none;{% endif %}"
           >
+            {% for method in payment_methods %}
             <div class="form-check form-check-inline">
               <input
                 type="radio"
                 class="form-check-input payment-checkbox"
-                id="payment-cash"
+                id="payment-{{ method.name.lower() }}"
                 name="payment_method"
-                value="Готівка"
+                value="{{ method.value }}"
               />
-              <label class="form-check-label" for="payment-cash">Готівка</label>
-            </div>
-            <div class="form-check form-check-inline">
-              <input
-                type="radio"
-                class="form-check-input payment-checkbox"
-                id="payment-privat"
-                name="payment_method"
-                value="Приват"
-              />
-              <label class="form-check-label" for="payment-privat"
-                >Приват</label
+              <label
+                class="form-check-label"
+                for="payment-{{ method.name.lower() }}"
+                >{{ method.value }}</label
               >
             </div>
-            <div class="form-check form-check-inline">
-              <input
-                type="radio"
-                class="form-check-input payment-checkbox"
-                id="payment-mono"
-                name="payment_method"
-                value="Mono"
-              />
-              <label class="form-check-label" for="payment-mono">Mono</label>
-            </div>
+            {% endfor %}
           </div>
 
           <form
