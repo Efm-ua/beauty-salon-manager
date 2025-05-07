@@ -27,9 +27,14 @@
   <div class="card-body">
     <form
       method="POST"
-      action="{{ url_for('appointments.edit', id=appointment.id) }}"
+      action="{{ url_for('appointments.edit', id=appointment.id) }}{% if from_schedule %}?from_schedule=1{% endif %}"
     >
       {{ form.hidden_tag() }}
+
+      <!-- Додаємо приховане поле для передачі параметра from_schedule у формі -->
+      {% if from_schedule %}
+      <input type="hidden" name="from_schedule" value="{{ from_schedule }}" />
+      {% endif %}
 
       <div class="row mb-3">
         <div class="col-md-6">

@@ -464,8 +464,7 @@ def test_appointment_redirect_to_schedule_date(
     session, client, test_client, regular_user, test_service
 ):
     """
-    Tests that appointments created or edited from the schedule view redirect back to the schedule
-
+    Tests that appointments created from the schedule view redirect back to the schedule view
     with the same date as the appointment.
     """
     # Login
@@ -497,39 +496,6 @@ def test_appointment_redirect_to_schedule_date(
     )
 
     # Check redirection location contains the appointment date
-    assert response.status_code == 302
-    redirect_location = response.headers["Location"]
-    assert f"date={future_date}" in redirect_location
-
-    # Test that updating an appointment from schedule view also redirects back to schedule
-    # First find the appointment
-    from app.models import Appointment
-
-    appointment = (
-        Appointment.query.filter_by(
-            client_id=test_client.id,
-            master_id=regular_user.id,
-            notes="Appointment with redirect test",
-        )
-        .order_by(Appointment.id.desc())
-        .first()
-    )
-
-    # Now edit the appointment from the schedule view
-    response = client.post(
-        f"/appointments/{appointment.id}/edit?from_schedule=1",
-        data={
-            "client_id": test_client.id,
-            "master_id": regular_user.id,
-            "date": future_date,
-            "start_time": "15:00",  # Changed time
-            "notes": "Appointment with redirect test",
-            "services": str(test_service.id),  # Services are required now
-        },
-        follow_redirects=False,
-    )
-
-    # Check redirection
     assert response.status_code == 302
     redirect_location = response.headers["Location"]
     assert f"date={future_date}" in redirect_location
@@ -685,3 +651,129 @@ def test_appointment_back_to_schedule_button_includes_date(
     assert (
         href_content in response.text or href_content.replace('"', "'") in response.text
     )
+
+
+def test_appointment_edit_redirect(
+    session, client, test_client, regular_user, admin_user, test_service
+):
+    """
+    Tests that appointment edit works correctly and redirects to the appropriate page.
+    """
+    # Login as admin
+    client.get("/auth/logout", follow_redirects=True)
+    client.post(
+        "/auth/login",
+        data={
+            "username": admin_user["username"],
+            "password": "admin_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+
+    # Create a test date for a future date
+    test_date = date.today() + timedelta(days=5)
+    formatted_date = test_date.strftime("%Y-%m-%d")
+
+    # First create an appointment
+    response = client.post(
+        "/appointments/create",
+        data={
+            "client_id": test_client.id,
+            "master_id": regular_user.id,
+            "date": formatted_date,
+            "start_time": "14:00",
+            "notes": "Edit redirect test appointment",
+            "services": str(test_service.id),
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Запис успішно створено!" in response.text
+
+    # Find the created appointment
+    from app.models import Appointment
+
+    appointment = (
+        Appointment.query.filter_by(
+            client_id=test_client.id,
+            master_id=regular_user.id,
+            notes="Edit redirect test appointment",
+        )
+        .order_by(Appointment.id.desc())
+        .first()
+    )
+    assert appointment is not None
+
+    # First get the edit form to extract CSRF token
+    response = client.get(f"/appointments/{appointment.id}/edit")
+
+    # Print a debug message with the response content length
+    print(f"Response content length: {len(response.text)}")
+
+    # First get the form directly from the session to find the proper fields
+    from app.routes.appointments import AppointmentForm
+
+    form = AppointmentForm(meta={"csrf": False})  # Disable CSRF for testing
+
+    # Test normal edit (not from schedule)
+    response = client.post(
+        f"/appointments/{appointment.id}/edit",
+        data={
+            "client_id": test_client.id,
+            "master_id": regular_user.id,
+            "date": formatted_date,
+            "start_time": "15:00",  # Change time
+            "notes": "Updated notes",
+            "services": str(test_service.id),
+            "discount_percentage": "0.0",
+            "amount_paid": "0.00",
+        },
+        follow_redirects=False,
+    )
+
+    # Check redirect to appointment view
+    assert response.status_code == 302
+    print(
+        f"DEBUG TEST test_appointment_edit_redirect: Normal edit redirect location = {response.headers['Location']}"
+    )
+    assert f"/appointments/{appointment.id}" in response.headers["Location"]
+
+    # Get the edit form with from_schedule parameter to extract CSRF token
+    response = client.get(f"/appointments/{appointment.id}/edit?from_schedule=1")
+    print(
+        f"DEBUG TEST test_appointment_edit_redirect: from_schedule URL = /appointments/{appointment.id}/edit?from_schedule=1"
+    )
+
+    # Додаємо вивод всіх форм в сторінці редагування
+    for input_field in response.text.split("<input"):
+        if "name=" in input_field:
+            print(f"Form field: {input_field.split('>')[0]}")
+
+    # Update the appointment again, but from schedule view
+    response = client.post(
+        f"/appointments/{appointment.id}/edit?from_schedule=1",
+        data={
+            "client_id": test_client.id,
+            "master_id": regular_user.id,
+            "date": formatted_date,
+            "start_time": "16:00",  # Change time again
+            "notes": "Updated again",
+            "services": str(test_service.id),
+            "discount_percentage": "0.0",
+            "amount_paid": "0.00",
+            "from_schedule": "1",  # Додаємо from_schedule як поле форми
+        },
+        follow_redirects=False,
+    )
+
+    # Should redirect to schedule with date
+    assert response.status_code == 302
+    actual_redirect_location = response.headers["Location"]
+    print(
+        f"DEBUG TEST test_appointment_edit_redirect: Actual redirect location = {actual_redirect_location}"
+    )
+
+    # Відновлюємо правильну перевірку - повинен перенаправляти на /schedule з датою
+    assert "/schedule" in actual_redirect_location
+    assert f"date={formatted_date}" in actual_redirect_location

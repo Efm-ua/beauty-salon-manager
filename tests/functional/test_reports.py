@@ -3,11 +3,11 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
+from flask import url_for
 from werkzeug.security import generate_password_hash
 
-from app.db import db
 from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User)
+                        Service, User, db)
 
 
 def test_salary_report_access_without_login(client):
@@ -744,143 +744,7 @@ def test_salary_report_with_invalid_master_id(client, auth, app, test_db, mocker
 
 
 def test_financial_report_with_complete_payment_methods_coverage(
-    mock_current_user, client, app, test_db
-):
-    """Test financial report with special case for payment methods coverage."""
-    with app.app_context():
-        # Create admin user
-        admin = User(
-            username="complete_coverage_admin",
-            password=generate_password_hash("admin_password"),
-            full_name="Complete Coverage Admin",
-            is_admin=True,
-        )
-        test_db.add(admin)
-        test_db.commit()
-
-        # Mock current_user as our admin user
-        mock_current_user.is_admin = True
-        mock_current_user.username = "complete_coverage_admin"
-        mock_current_user.id = admin.id
-        mock_current_user.is_administrator.return_value = True
-
-        # Create client
-        client_obj = Client(name="Complete Coverage Client", phone="0991234522")
-        test_db.add(client_obj)
-        test_db.commit()
-
-        # Create test service
-        service = Service(
-            name="Complete Coverage Service", duration=60, description="Test service"
-        )
-        test_db.add(service)
-        test_db.commit()
-
-        # Create appointments with all payment methods EXCEPT "Не вказано" (None)
-        # This should trigger the code path that adds the "Не вказано" manually
-        today = datetime.now().date()
-        current_time = datetime.now().time()
-
-        # Create appointments with all defined payment methods
-        for method in PaymentMethod:
-            appointment = Appointment(
-                client_id=client_obj.id,
-                master_id=admin.id,
-                date=today,
-                start_time=current_time,
-                end_time=current_time,
-                status="completed",
-                payment_status="paid",
-                payment_method=method,
-            )
-            test_db.add(appointment)
-            test_db.commit()
-
-            # Add service to appointment
-            appointment_service = AppointmentService(
-                appointment_id=appointment.id, service_id=service.id, price=100.0
-            )
-            test_db.add(appointment_service)
-            test_db.commit()
-
-        # Login as admin
-        response = client.post(
-            "/auth/login",
-            data={"username": "complete_coverage_admin", "password": "admin_password"},
-            follow_redirects=True,
-        )
-
-        # Check if login was successful
-        if "Login" in response.data.decode("utf-8"):
-            pytest.skip("Login failed, skipping test")
-
-        # Send request for financial report
-        response = client.post(
-            "/reports/financial",
-            data={
-                "report_date": today.strftime("%Y-%m-%d"),
-                "master_id": str(admin.id),
-                "submit": "Generate Report",
-            },
-            follow_redirects=True,
-        )
-
-        # Just check response code
-        assert response.status_code == 200
-
-        # Clean up
-        for appointment in Appointment.query.filter_by(master_id=admin.id).all():
-            AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
-            test_db.delete(appointment)
-        test_db.delete(service)
-        test_db.commit()
-
-
-def test_salary_report_with_error_in_db_session_get(client, auth, app, mocker):
-    """Test salary report with a None response from db.session.get."""
-    with app.app_context():
-        # Create admin user
-        admin_user = User(
-            username="none_user_admin",
-            password=generate_password_hash("admin_password"),
-            full_name="None User Admin",
-            is_admin=True,
-        )
-        db.session.add(admin_user)
-        db.session.commit()
-
-        # Login as admin
-        auth.login(username="none_user_admin", password="admin_password")
-
-        # Replace the real db.session.get with a mock that returns None
-        # This simulates a database error or non-existent master
-        original_get = db.session.get
-
-        def mock_get(model, id):
-            # Only mock User.get, let others pass through
-            if model == User:
-                return None
-            return original_get(model, id)
-
-        with patch("app.db.session.get", side_effect=mock_get):
-            # Send request for report
-            response = client.post(
-                "/reports/salary",
-                data={
-                    "report_date": datetime.now().date().strftime("%Y-%m-%d"),
-                    "master_id": "999999",  # Non-existent ID
-                    "submit": "Generate Report",
-                },
-                follow_redirects=True,
-            )
-
-            # Check that the request didn't crash
-            assert response.status_code == 200
-
-
-@patch("app.routes.reports.current_user")
-def test_financial_report_complete_payment_methods_coverage(
-    mock_current_user, client, app, test_db
+    mocker, client, app, test_db
 ):
     """
     Тестує фінансовий звіт на повне покриття методів оплати.
@@ -897,6 +761,7 @@ def test_financial_report_complete_payment_methods_coverage(
         test_db.commit()
 
         # Mock current_user as our admin user
+        mock_current_user = mocker.patch("app.routes.reports.current_user")
         mock_current_user.is_admin = True
         mock_current_user.username = "coverage_admin"
         mock_current_user.id = admin.id
@@ -960,21 +825,65 @@ def test_financial_report_complete_payment_methods_coverage(
         assert response.status_code == 200
 
         # Clean up
-        for appointment in Appointment.query.filter_by(master_id=admin.id).all():
-            AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
+        for appointment in (
+            test_db.query(Appointment).filter_by(master_id=admin.id).all()
+        ):
+            test_db.query(AppointmentService).filter_by(
+                appointment_id=appointment.id
+            ).delete()
             test_db.delete(appointment)
         test_db.delete(service)
         test_db.commit()
+
+
+def test_salary_report_with_error_in_db_session_get(client, auth, app, mocker):
+    """Test salary report with a None response from db.session.get."""
+    with app.app_context():
+        # Create admin user
+        admin_user = User(
+            username="none_user_admin",
+            password=generate_password_hash("admin_password"),
+            full_name="None User Admin",
+            is_admin=True,
+        )
+        db.session.add(admin_user)
+        db.session.commit()
+
+        # Login as admin
+        auth.login(username="none_user_admin", password="admin_password")
+
+        # Replace the real db.session.get with a mock that returns None
+        # This simulates a database error or non-existent master
+        original_get = db.session.get
+
+        def mock_get(model, id):
+            # Only mock User.get, let others pass through
+            if model == User:
+                return None
+            return original_get(model, id)
+
+        with patch("app.db.session.get", side_effect=mock_get):
+            # Send request for report
+            response = client.post(
+                "/reports/salary",
+                data={
+                    "report_date": datetime.now().date().strftime("%Y-%m-%d"),
+                    "master_id": "999999",  # Non-existent ID
+                    "submit": "Generate Report",
+                },
+                follow_redirects=True,
+            )
+
+            # Check that the request didn't crash
+            assert response.status_code == 200
 
 
 def test_financial_report_with_discount(client, admin_user):
     """
     Тестує фінансовий звіт з урахуванням знижки.
     """
-    from app.models import (Appointment, AppointmentService, Client,
-                            PaymentMethod, Service, User)
-
     # Логін адміністратором
+    client.get("/auth/logout", follow_redirects=True)  # Ensure logged out first
     response = client.post(
         "/auth/login",
         data={
@@ -985,6 +894,11 @@ def test_financial_report_with_discount(client, admin_user):
         follow_redirects=True,
     )
     assert response.status_code == 200
+
+    # Check that we're actually logged in and admin
+    response = client.get("/reports/financial", follow_redirects=True)
+    assert response.status_code == 200
+    assert "Тільки адміністратори мають доступ до цього звіту" not in response.text
 
     # Створюємо тестові дані з різними знижками
     today = date.today()
@@ -1204,18 +1118,27 @@ def test_salary_report_ignores_discount(client, admin_user):
     db.session.commit()
 
 
-# Тести для покриття рядків у SalaryReportForm (app/forms.py)
-@pytest.mark.usefixtures("app_context")
-def test_salary_report_form_validate_master_id_valid(admin_user):
+# Тести для покриття рядків у DailySalaryReportForm (app/routes/reports.py)
+def test_salary_report_form_validate_master_id_valid(admin_user, app):
     """Test that the salary report form validates master_id correctly."""
-    from app.forms import SalaryReportForm
+    from wtforms.validators import ValidationError
 
-    with pytest.raises(ValueError):
-        SalaryReportForm().validate_master_id("invalid_id")
+    from app.routes.reports import DailySalaryReportForm
 
-    # This should not raise an exception with a valid admin_user ID
-    form = SalaryReportForm()
-    form.validate_master_id(str(admin_user["id"]))
+    with app.app_context():
+        form = DailySalaryReportForm()
+
+        # Set the choices for the SelectField
+        form.master_id.choices = [(admin_user["id"], admin_user["full_name"])]
+
+        # Test with valid data
+        form.master_id.data = admin_user["id"]
+        assert form.master_id.validate(form) is True
+
+        # Test with invalid data
+        form.master_id.data = 999999  # Non-existent ID
+        form.master_id.choices = [(admin_user["id"], admin_user["full_name"])]
+        assert form.master_id.validate(form) is False
 
 
 # Тест для salary_report з мокуванням current_user та помилки в db.session.get()

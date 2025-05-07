@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime, time
+from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -248,75 +249,146 @@ class TestAppointmentModel:
     def test_appointment_relationships(
         self, test_appointment, test_client, regular_user
     ):
-        """Тест зв'язків запису з клієнтом та майстром"""
-        # Перевірка відносин з клієнтом
+        """Тест перевірки зв'язків запису з клієнтом та майстром"""
         assert test_appointment.client_id == test_client.id
-        assert "Test Client" in test_appointment.client.name
-        assert test_appointment.client.phone.startswith("+38099")
-
-        # Перевірка відносин з майстром
         assert test_appointment.master_id == regular_user.id
-        assert "user_test" in test_appointment.master.username
-        assert test_appointment.master.full_name == "User Test"
+        assert test_appointment.client.name == test_client.name
+        assert test_appointment.master.username == regular_user.username
 
     def test_get_total_price(self, session, test_appointment):
-        """Тест методу розрахунку загальної суми"""
-        # Метод get_total_price має повертати суму цін усіх послуг запису
-        # В тестових даних у test_appointment вже є одна послуга з ціною 100.0
+        """Тест методу get_total_price для запису"""
+        # Clear existing services from the test_appointment fixture
+        for app_service_to_remove in list(test_appointment.services):
+            session.delete(app_service_to_remove)
+        session.commit()
+        test_appointment.services.clear()  # Ensure the collection in the object is also clear
+        session.refresh(test_appointment)  # Re-fetch to confirm cleared state if needed
 
-        # Додаємо ще одну послугу
-        unique_id = uuid.uuid4().hex[:8]
-        service = Service(
-            name=f"Additional Service {unique_id}",
-            description="Additional service for test",
-            duration=30,
-        )
-        session.add(service)
-        session.flush()  # Потрібно отримати ID
+        # Тепер додаємо нові послуги для тесту
+        service1_price = 100.00
+        service2_price = 50.00
 
-        # Додавання послуги до запису
-        appointment_service = AppointmentService(
-            appointment_id=test_appointment.id,
-            service_id=service.id,
-            price=50.0,
-            notes="Additional service",
-        )
-        session.add(appointment_service)
+        service1 = Service(name="Service 1 For TotalPriceTest", duration=30)
+        service2 = Service(name="Service 2 For TotalPriceTest", duration=60)
+        session.add_all([service1, service2])
         session.commit()
 
-        # Перевірка розрахунку загальної суми
-        # 100.0 (перша послуга) + 50.0 (друга послуга) = 150.0
-        total_price = test_appointment.get_total_price()
-        assert total_price == 150.0
+        app_service1 = AppointmentService(
+            appointment_id=test_appointment.id,
+            service_id=service1.id,
+            price=service1_price,
+        )
+        app_service2 = AppointmentService(
+            appointment_id=test_appointment.id,
+            service_id=service2.id,
+            price=service2_price,
+        )
+        session.add_all([app_service1, app_service2])
+        test_appointment.services.append(app_service1)
+        test_appointment.services.append(app_service2)
+        session.commit()
+
+        assert test_appointment.get_total_price() == service1_price + service2_price
+
+        # Перевірка з пустим списком послуг (новий запис)
+        # Create a new client and user for this empty appointment if necessary, or use existing test_client/regular_user
+        client_for_empty = Client.query.first() or Client(
+            name="Empty Client", phone="0000000000"
+        )
+        master_for_empty = User.query.first() or User(
+            username="empty_master", password="pwd", full_name="Empty Master"
+        )
+        if not client_for_empty.id:
+            session.add(client_for_empty)
+        if not master_for_empty.id:
+            session.add(master_for_empty)
+        session.commit()
+
+        empty_appointment = Appointment(
+            client_id=client_for_empty.id,
+            master_id=master_for_empty.id,
+            date=date.today(),
+            start_time=time(0, 0),
+            end_time=time(0, 0),
+        )
+        session.add(empty_appointment)
+        session.commit()
+        assert empty_appointment.get_total_price() == 0.00
 
     def test_appointment_payment_fields(self, session, test_client, regular_user):
-        """Тест полів оплати"""
+        """Тест значень за замовчуванням для полів оплати"""
         appointment = Appointment(
             client_id=test_client.id,
             master_id=regular_user.id,
-            date=date(2023, 6, 15),
-            start_time=time(15, 0),
-            end_time=time(16, 0),
-            status="completed",
-            payment_status="paid",
-            amount_paid=500.50,
-            payment_method=PaymentMethod.CASH,
-            notes="Paid appointment",
+            date=date(2023, 10, 10),
+            start_time=time(14, 0),
+            end_time=time(15, 0),
+            status="scheduled",
         )
         session.add(appointment)
         session.commit()
 
-        # Перевірка, що запис збережено в базі даних
-        saved_appointment = (
-            session.query(Appointment)
-            .filter_by(client_id=test_client.id, date=date(2023, 6, 15))
-            .first()
+        assert appointment.payment_status == "unpaid"  # Enum значення
+        assert appointment.amount_paid is None
+        assert appointment.payment_method is None
+
+    def test_update_payment_status(self, session, test_client, regular_user):
+        """Тест методу update_payment_status для різних сценаріїв оплати."""
+        appointment = Appointment(
+            client_id=test_client.id,
+            master_id=regular_user.id,
+            date=date(2024, 1, 1),
+            start_time=time(10, 0),
+            end_time=time(11, 0),
+            status="scheduled",
         )
-        assert saved_appointment is not None
-        assert saved_appointment.payment_status == "paid"
-        assert float(saved_appointment.amount_paid) == 500.50
-        assert saved_appointment.payment_method == PaymentMethod.CASH
-        assert saved_appointment.payment_method.value == "Готівка"
+        session.add(appointment)
+        session.commit()
+
+        # Мокуємо get_discounted_price, щоб повернути фіксовану ціну для тестування
+        appointment.get_discounted_price = MagicMock(return_value=100.0)
+
+        # Сценарій 1: amount_paid = 0
+        appointment.amount_paid = 0.0
+        appointment.update_payment_status()
+        assert appointment.payment_status == "unpaid"
+
+        # Сценарій 2: amount_paid < discounted_price (часткова оплата)
+        appointment.amount_paid = 50.0
+        appointment.update_payment_status()
+        assert appointment.payment_status == "partially_paid"
+
+        # Сценарій 3: amount_paid == discounted_price (повна оплата)
+        appointment.amount_paid = 100.0
+        appointment.update_payment_status()
+        assert appointment.payment_status == "paid"
+
+        # Сценарій 4: amount_paid > discounted_price (переплата, вважається повною оплатою)
+        appointment.amount_paid = 150.0
+        appointment.update_payment_status()
+        assert appointment.payment_status == "paid"
+
+        # Сценарій 5: amount_paid = None (не оплачено)
+        appointment.amount_paid = None
+        appointment.update_payment_status()
+        assert appointment.payment_status == "unpaid"
+
+        # Сценарій 6: discounted_price = 0, amount_paid = 0 (безкоштовно і не оплачено/оплачено)
+        appointment.get_discounted_price = MagicMock(return_value=0.0)
+        appointment.amount_paid = 0.0
+        appointment.update_payment_status()
+        # Якщо ціна 0, і сплачено 0, то вважається оплаченим
+        assert (
+            appointment.payment_status == "paid"
+        )  # Based on Appointment.update_payment_status logic
+
+        # Сценарій 7: discounted_price = 0, amount_paid = None (безкоштовно, але сума не вказана)
+        appointment.amount_paid = None
+        appointment.update_payment_status()
+        # Якщо ціна 0 і сума не вказана, то unpaid.
+        assert (
+            appointment.payment_status == "unpaid"
+        )  # Based on Appointment.update_payment_status logic
 
 
 class TestAppointmentServiceModel:

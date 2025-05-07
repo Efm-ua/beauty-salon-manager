@@ -32,6 +32,17 @@ class AppointmentForm(FlaskForm):
         render_kw={"placeholder": "0.00"},
         default=Decimal("0.0"),
     )
+    amount_paid = DecimalField(
+        "Сплачено",
+        validators=[Optional(), NumberRange(min=0)],
+        render_kw={"placeholder": "0.00"},
+    )
+    payment_method = SelectField(
+        "Метод оплати",
+        choices=[("", "Виберіть метод оплати...")]
+        + [(pm.value, pm.value) for pm in PaymentMethod],
+        validators=[Optional()],
+    )
     notes = TextAreaField("Примітки", validators=[Optional()])
     submit = SubmitField("Зберегти")
 
@@ -140,6 +151,16 @@ def create():
             form.start_time.data = time(9, 0)  # Default time if not provided
 
     if form.validate_on_submit():
+        # Додаємо логування стану current_user
+        from sqlalchemy import inspect
+
+        print(
+            f"DEBUG ROUTE CREATE: current_user - ID={current_user.id}, "
+            f"username={current_user.username}, "
+            f"is_detached={inspect(current_user).detached if hasattr(inspect(current_user), 'detached') else 'N/A'}, "
+            f"session_id={inspect(current_user).session_id if hasattr(inspect(current_user), 'session_id') else 'N/A'}"
+        )
+
         # Перевірка, чи має право користувач створити запис для вибраного майстра
         if not current_user.is_admin and form.master_id.data != current_user.id:
             flash("Ви можете створювати записи тільки для себе", "danger")
@@ -167,8 +188,39 @@ def create():
             payment_status="unpaid",  # За замовчуванням "unpaid"
             discount_percentage=form.discount_percentage.data or Decimal("0.0"),
         )
+
+        # Логування після створення екземпляра appointment
+        print(
+            f"DEBUG ROUTE CREATE: After instance creation - appointment ID={appointment.id if hasattr(appointment, 'id') else 'None'}, "
+            f"is_transient={inspect(appointment).transient if hasattr(inspect(appointment), 'transient') else 'N/A'}, "
+            f"is_pending={inspect(appointment).pending if hasattr(inspect(appointment), 'pending') else 'N/A'}, "
+            f"is_detached={inspect(appointment).detached if hasattr(inspect(appointment), 'detached') else 'N/A'}"
+        )
+
+        if hasattr(appointment, "master") and appointment.master:
+            print(
+                f"DEBUG ROUTE CREATE: After instance creation - master ID={appointment.master.id}, "
+                f"username={appointment.master.username}, "
+                f"is_detached={inspect(appointment.master).detached}"
+            )
+
         db.session.add(appointment)
         db.session.flush()  # отримуємо ID запису
+
+        # Логування після db.session.flush()
+        print(
+            f"DEBUG ROUTE CREATE: After flush - appointment ID={appointment.id}, "
+            f"is_transient={inspect(appointment).transient}, "
+            f"is_pending={inspect(appointment).pending}, "
+            f"is_detached={inspect(appointment).detached}"
+        )
+
+        if hasattr(appointment, "master") and appointment.master:
+            print(
+                f"DEBUG ROUTE CREATE: After flush - master ID={appointment.master.id}, "
+                f"username={appointment.master.username}, "
+                f"is_detached={inspect(appointment.master).detached}"
+            )
 
         # Додавання вибраних послуг
         if form.services.data:
@@ -184,12 +236,65 @@ def create():
                     )
                     db.session.add(appointment_service)
 
+        # Логування перед commit
+        print(
+            f"DEBUG ROUTE CREATE: Before commit - appointment ID={appointment.id}, "
+            f"is_transient={inspect(appointment).transient}, "
+            f"is_pending={inspect(appointment).pending}, "
+            f"is_detached={inspect(appointment).detached}"
+        )
+
+        if hasattr(appointment, "master") and appointment.master:
+            print(
+                f"DEBUG ROUTE CREATE: Before commit - master ID={appointment.master.id}, "
+                f"username={appointment.master.username}, "
+                f"is_detached={inspect(appointment.master).detached}"
+            )
+
+        appointment.update_payment_status()  # Оновлюємо payment_status
         db.session.commit()
+
+        # Логування після commit
+        print(
+            f"DEBUG ROUTE CREATE: After commit - appointment ID={appointment.id}, "
+            f"is_transient={inspect(appointment).transient}, "
+            f"is_pending={inspect(appointment).pending}, "
+            f"is_detached={inspect(appointment).detached}"
+        )
+
+        if hasattr(appointment, "master") and appointment.master:
+            print(
+                f"DEBUG ROUTE CREATE: After commit - master ID={appointment.master.id}, "
+                f"username={appointment.master.username}, "
+                f"is_detached={inspect(appointment.master).detached}"
+            )
+
+        # Ensure data is fresh for debugging purposes
+        refreshed_appointment = db.session.get(Appointment, appointment.id)
+        print(
+            f"Refreshed appointment services after commit: {refreshed_appointment.services}"
+        )
 
         flash("Запис успішно створено!", "success")
 
         # Перевіряємо, чи був запит з розкладу майстрів
         from_schedule = request.args.get("from_schedule")
+
+        # Логування перед redirect
+        print(
+            f"DEBUG ROUTE CREATE: Before redirect - appointment ID={appointment.id}, "
+            f"is_transient={inspect(appointment).transient}, "
+            f"is_pending={inspect(appointment).pending}, "
+            f"is_detached={inspect(appointment).detached}"
+        )
+
+        if hasattr(appointment, "master") and appointment.master:
+            print(
+                f"DEBUG ROUTE CREATE: Before redirect - master ID={appointment.master.id}, "
+                f"username={appointment.master.username}, "
+                f"is_detached={inspect(appointment.master).detached}"
+            )
+
         if from_schedule:
             return redirect(
                 url_for("main.schedule", date=appointment.date.strftime("%Y-%m-%d"))
@@ -209,7 +314,20 @@ def create():
 @bp.route("/<int:id>")
 @login_required
 def view(id):
-    appointment = Appointment.query.get_or_404(id)
+    # Use eager loading for related objects
+    appointment = (
+        db.session.query(Appointment)
+        .options(
+            db.joinedload(Appointment.master),
+            db.joinedload(Appointment.client),
+            db.joinedload(Appointment.services).joinedload(AppointmentService.service),
+        )
+        .get(id)
+    )
+
+    if not appointment:
+        flash("Запис не знайдено", "danger")
+        return redirect(url_for("appointments.index"))
 
     # Перевірка доступу: тільки адміністратор або майстер цього запису можуть переглядати
     if not current_user.is_admin and appointment.master_id != current_user.id:
@@ -235,142 +353,508 @@ def view(id):
 @bp.route("/<int:id>/edit", methods=["GET", "POST"])
 @login_required
 def edit(id):
-    appointment = Appointment.query.get_or_404(id)
+    # Use eager loading for related objects
+    appointment = (
+        db.session.query(Appointment)
+        .options(
+            db.joinedload(Appointment.master),
+            db.joinedload(Appointment.client),
+            db.joinedload(Appointment.services).joinedload(AppointmentService.service),
+        )
+        .get(id)
+    )
+
+    if not appointment:
+        flash("Запис не знайдено", "danger")
+        return redirect(url_for("appointments.index"))
 
     if not current_user.is_admin and appointment.master_id != current_user.id:
         flash("У вас немає доступу до редагування цього запису", "danger")
         return redirect(url_for("appointments.index"))
 
-    if request.method == "POST":
-        form = (
-            AppointmentForm()
-        )  # For POST, create empty and populate from request.form
-    else:  # GET request
-        form = AppointmentForm(obj=appointment)  # Populate from object for GET
-        if appointment.services:
-            form.services.data = [s.service_id for s in appointment.services]
-        else:
-            form.services.data = []
+    # Отримуємо поточні послуги для передачі у форму (для GET)
+    current_service_ids = [s.service_id for s in appointment.services]
 
+    # Check if we came from the schedule view
+    from_schedule = request.args.get("from_schedule", type=int)
+    print(
+        f"DEBUG EDIT ROUTE: from_schedule = {from_schedule}, type = {type(from_schedule)}"
+    )
+
+    # Логування всіх request.args для більш точної діагностики
+    print(f"DEBUG EDIT ROUTE: All request.args = {request.args}")
+    print(f"DEBUG EDIT ROUTE: request.url = {request.url}")
+    print(f"DEBUG EDIT ROUTE: request.query_string = {request.query_string}")
+    print(f"DEBUG EDIT ROUTE: request.method = {request.method}")
+
+    # Create the form
+    form = AppointmentForm()
+
+    # Populate choices for dropdowns - do this BEFORE form processing to ensure SelectField validation passes
     form.client_id.choices = [
         (c.id, f"{c.name} ({c.phone})")
         for c in Client.query.order_by(Client.name).all()
     ]
     form.master_id.choices = [
-        (u.id, u.full_name) for u in User.query.order_by(User.full_name).all()
+        (m.id, m.full_name) for m in User.query.order_by(User.full_name).all()
     ]
     form.services.choices = [
         (s.id, f"{s.name} ({s.duration} хв.)")
         for s in Service.query.order_by(Service.name).all()
     ]
 
-    if form.validate_on_submit():  # This is for POST requests
-        appointment.client_id = form.client_id.data
-        appointment.master_id = form.master_id.data
-        appointment.date = form.date.data
-        appointment.start_time = form.start_time.data
-        appointment.notes = form.notes.data
-        appointment.discount_percentage = form.discount_percentage.data or Decimal(
-            "0.0"
-        )
+    if request.method == "POST":
+        # Process the form with data from the request
+        print(f"DEBUG EDIT ROUTE: POST request received, form data: {request.form}")
 
-        # Видаляємо всі попередні послуги для цього запису
-        AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
-        # db.session.flush() # Consider if flush is needed before adding new services, generally good practice
+        form.process(request.form)
 
-        current_total_duration = 0
-        if form.services.data:
-            for service_id in form.services.data:
-                service_obj = db.session.get(Service, service_id)
-                if service_obj:
-                    new_appointment_service = AppointmentService(
-                        appointment_id=appointment.id,
-                        service_id=service_id,
-                        price=float(service_obj.duration),  # Or actual price logic
-                        notes="",
+        # Repopulate choices after form.process since it clears them
+        form.client_id.choices = [
+            (c.id, f"{c.name} ({c.phone})")
+            for c in Client.query.order_by(Client.name).all()
+        ]
+        form.master_id.choices = [
+            (m.id, m.full_name) for m in User.query.order_by(User.full_name).all()
+        ]
+        form.services.choices = [
+            (s.id, f"{s.name} ({s.duration} хв.)")
+            for s in Service.query.order_by(Service.name).all()
+        ]
+
+        # Validate form
+        if form.validate_on_submit():
+            try:
+                # Store the refreshed list of services to add after commit
+                original_services = list(appointment.services)
+
+                # Update basic information
+                appointment.client_id = form.client_id.data
+                appointment.master_id = form.master_id.data
+                appointment.date = form.date.data
+                appointment.start_time = form.start_time.data
+
+                # Calculate end_time based on services duration
+                total_duration = 0
+                selected_services = []
+                for service_id in form.services.data:
+                    service = db.session.get(Service, service_id)
+                    if service:
+                        total_duration += service.duration
+                        selected_services.append(service)
+
+                # Add 15 minutes for each service (transition time)
+                if len(selected_services) > 0:
+                    total_duration += 15 * (len(selected_services) - 1)
+
+                # Calculate new end time
+                start_dt = datetime.combine(form.date.data, form.start_time.data)
+                end_dt = start_dt + timedelta(minutes=total_duration)
+                appointment.end_time = end_dt.time()
+
+                # Update payment information
+                appointment.discount_percentage = (
+                    form.discount_percentage.data or Decimal("0.0")
+                )
+                print(
+                    f"DEBUG EDIT ROUTE: Before update - amount_paid={appointment.amount_paid}, payment_method={appointment.payment_method}, payment_status={appointment.payment_status}"
+                )
+
+                if form.amount_paid.data is not None:
+                    appointment.amount_paid = form.amount_paid.data
+                    print(
+                        f"DEBUG EDIT ROUTE: Setting amount_paid to {form.amount_paid.data}"
                     )
-                    db.session.add(new_appointment_service)
-                    current_total_duration += service_obj.duration
+                else:
+                    appointment.amount_paid = Decimal("0.00")
+                    print(
+                        "DEBUG EDIT ROUTE: Setting amount_paid to 0.00 (None in form)"
+                    )
 
-        # Розраховуємо end_time на основі нового start_time та загальної тривалості ОНОВЛЕНИХ послуг
-        if current_total_duration > 0:
-            start_datetime = datetime.combine(appointment.date, appointment.start_time)
-            end_datetime = start_datetime + timedelta(minutes=current_total_duration)
-            appointment.end_time = end_datetime.time()
-        else:
-            # Якщо після редагування послуг немає, end_time = start_time
-            appointment.end_time = appointment.start_time
+                # Handle payment method
+                payment_method_value = form.payment_method.data
+                print(
+                    f"DEBUG EDIT ROUTE: Payment method from form: {payment_method_value}"
+                )
 
-        db.session.commit()
+                if payment_method_value:
+                    # Find the PaymentMethod enum by its value (display string)
+                    for method in PaymentMethod:
+                        if method.value == payment_method_value:
+                            print(
+                                f"DEBUG EDIT ROUTE: Found matching payment method: {method}"
+                            )
+                            appointment.payment_method = method
+                            break
+                    else:
+                        # If we didn't find a match, don't change
+                        print(
+                            f"DEBUG EDIT ROUTE: No matching payment method found for: {payment_method_value}"
+                        )
+                        pass
+                else:
+                    # If form has empty payment_method, set to None
+                    print("DEBUG EDIT ROUTE: Clearing payment method (empty in form)")
+                    appointment.payment_method = None
 
-        flash("Запис успішно оновлено!", "success")
-        return redirect(url_for("appointments.view", id=appointment.id))
-    elif request.method == "POST":  # If POST and validation failed
-        # For debugging, flash errors to see them in the response if test still fails
-        error_messages = []
-        for field, errors in form.errors.items():
-            for error in errors:
-                error_messages.append(f"{field}: {error}")
-        if error_messages:
-            flash("Помилка валідації форми: " + ", ".join(error_messages), "danger")
+                # Update notes
+                appointment.notes = form.notes.data
+
+                # First commit appointment changes
+                db.session.commit()
+
+                # Clear existing services and add new ones
+                # This avoids the InvalidRequestError due to session state
+                for aps in list(appointment.services):
+                    db.session.delete(aps)
+                db.session.commit()
+
+                # Clear the services in Python
+                appointment.services.clear()
+
+                # Now add the newly selected services
+                for service_id in form.services.data:
+                    service = db.session.get(Service, service_id)
+                    if service:
+                        # Використовуємо час послуги, помножений на 10 як базову ціну,
+                        # якщо атрибута price немає
+                        service_price = getattr(service, "price", None)
+                        if service_price is None:
+                            service_price = (
+                                service.duration * 10
+                            )  # Використовуємо тривалість у хвилинах як базу для ціни
+
+                        print(
+                            f"DEBUG EDIT ROUTE: Service id={service.id}, name={service.name}, duration={service.duration}, price={service_price}"
+                        )
+
+                        app_service = AppointmentService(
+                            appointment_id=appointment.id,
+                            service_id=service_id,
+                            price=float(service_price),
+                        )
+                        db.session.add(app_service)
+                        appointment.services.append(app_service)
+
+                # Final commit
+                db.session.commit()
+                print(
+                    f"Refreshed appointment services after commit: {appointment.services}"
+                )
+
+                # Update payment status - force recalculation based on current data
+                print(
+                    f"DEBUG EDIT ROUTE: Before update_payment_status - status={appointment.status}, payment_status={appointment.payment_status}, payment_method={appointment.payment_method}, amount_paid={appointment.amount_paid}"
+                )
+                print(
+                    f"DEBUG EDIT ROUTE: Services: {[s.price for s in appointment.services]}, total_price={appointment.get_total_price()}, discounted_price={appointment.get_discounted_price()}"
+                )
+
+                appointment.update_payment_status()
+                print(
+                    f"DEBUG EDIT ROUTE: After update_payment_status - status={appointment.status}, payment_status={appointment.payment_status}, payment_method={appointment.payment_method}, amount_paid={appointment.amount_paid}"
+                )
+
+                db.session.commit()
+
+                flash("Запис успішно оновлено!", "success")
+
+                # If we came from the schedule view, redirect back there with the appointment date
+                # Проверяем from_schedule в URL параметрах и в данных формы
+                from_schedule_value = request.args.get("from_schedule", type=int)
+                # Також перевіряємо, чи є from_schedule в даних форми
+                form_from_schedule = request.form.get("from_schedule")
+
+                print(
+                    f"DEBUG EDIT ROUTE: Checking from_schedule from URL: {from_schedule_value}"
+                )
+                print(
+                    f"DEBUG EDIT ROUTE: Checking from_schedule from FORM: {form_from_schedule}, type = {type(form_from_schedule)}"
+                )
+                print(f"DEBUG EDIT ROUTE: POST request.form = {request.form}")
+                print(f"DEBUG EDIT ROUTE: POST request.args = {request.args}")
+                print(f"DEBUG EDIT ROUTE: POST request.url = {request.url}")
+                print(
+                    f"DEBUG EDIT ROUTE: POST request.query_string = {request.query_string}"
+                )
+
+                # Перетворюємо form_from_schedule у ціле число, якщо можливо
+                try:
+                    if form_from_schedule:
+                        form_from_schedule = int(form_from_schedule)
+                    else:
+                        form_from_schedule = None
+                except (ValueError, TypeError):
+                    form_from_schedule = None
+
+                print(
+                    f"DEBUG EDIT ROUTE: Converted form_from_schedule = {form_from_schedule}, type = {type(form_from_schedule)}"
+                )
+
+                # Проблема в тому, що код після form.validate_on_submit() не виконується, тому заходимо в catch-блок
+                # Додаємо прямий доступ до даних форми та формування URL для розкладу
+                appointment_date = appointment.date.strftime("%Y-%m-%d")
+
+                if from_schedule_value == 1 or form_from_schedule == 1:
+                    redirect_url = url_for("main.schedule", date=appointment_date)
+                    print(
+                        f"DEBUG EDIT ROUTE: Redirecting to schedule with from_schedule={from_schedule_value or form_from_schedule}, redirect_url={redirect_url}"
+                    )
+                else:
+                    redirect_url = url_for("appointments.view", id=appointment.id)
+                    print(
+                        f"DEBUG EDIT ROUTE: Redirecting to appointment view with from_schedule={from_schedule_value or form_from_schedule}, redirect_url={redirect_url}"
+                    )
+
+                return redirect(redirect_url)
+
+            except Exception as e:
+                db.session.rollback()
+                print(f"DEBUG EDIT ROUTE: Error updating appointment: {str(e)}")
+                print(f"DEBUG EDIT ROUTE: Exception trace: {e.__class__.__name__}")
+                flash(f"Помилка при оновленні запису: {str(e)}", "danger")
+
+                # If an error occurs, we still try to redirect to the schedule page if from_schedule is set
+                from_schedule_value = request.args.get("from_schedule", type=int)
+                form_from_schedule = request.form.get("from_schedule")
+
+                try:
+                    if form_from_schedule:
+                        form_from_schedule = int(form_from_schedule)
+                    else:
+                        form_from_schedule = None
+                except (ValueError, TypeError):
+                    form_from_schedule = None
+
+                if from_schedule_value == 1 or form_from_schedule == 1:
+                    appointment_date = appointment.date.strftime("%Y-%m-%d")
+                    return redirect(url_for("main.schedule", date=appointment_date))
+
+                return redirect(url_for("appointments.edit", id=id))
+    else:
+        # For GET request, populate the form with existing data
+        form = AppointmentForm(obj=appointment)
+        form.services.data = current_service_ids
+
+        # Pre-populate payment method if exists
+        if appointment.payment_method:
+            form.payment_method.data = appointment.payment_method.value
 
     return render_template(
         "appointments/edit.html",
-        title="Редагування запису",
+        title="Редагувати запис",
         form=form,
         appointment=appointment,
+        from_schedule=from_schedule,
     )
 
 
 # Зміна статусу запису
-@bp.route("/<int:id>/status/<status>", methods=["POST"])
+@bp.route("/<int:id>/status/<new_status>", methods=["POST"])
 @login_required
-def change_status(id, status):
-    appointment = Appointment.query.get_or_404(id)
+def change_status(id, new_status):
+    from flask import current_app
+    from sqlalchemy import inspect
 
-    # Перевірка доступу: тільки адміністратор або майстер цього запису можуть змінювати
-    if not current_user.is_admin and appointment.master_id != current_user.id:
-        flash("У вас немає доступу до зміни статусу цього запису", "danger")
+    # Load appointment with eager loading for related objects
+    appointment = (
+        db.session.query(Appointment)
+        .options(
+            db.joinedload(Appointment.master),
+            db.joinedload(Appointment.client),
+            db.joinedload(Appointment.services).joinedload(AppointmentService.service),
+        )
+        .get(id)
+    )
+
+    # Додано логування на початку маршруту
+    if appointment:
+        print(
+            f"DEBUG ROUTE CHANGE_STATUS: Initial appointment: ID={appointment.id}, status={appointment.status}, "
+            f"payment_status={appointment.payment_status}, payment_method={appointment.payment_method}, "
+            f"amount_paid={appointment.amount_paid}, "
+            f"is_detached={inspect(appointment).detached}, "
+            f"session_id={inspect(appointment).session_id}"
+        )
+        if appointment.master:
+            print(
+                f"DEBUG ROUTE: Initial appointment's master: ID={appointment.master.id}, "
+                f"name={appointment.master.username}, "
+                f"is_detached={inspect(appointment.master).detached}, "
+                f"session_id={inspect(appointment.master).session_id}"
+            )
+        else:
+            print("DEBUG ROUTE: Appointment has no master.")
+    else:
+        print(f"DEBUG ROUTE: Appointment with ID={id} not found.")
+
+    if not appointment:
+        flash("Запис не знайдено", "danger")
         return redirect(url_for("appointments.index"))
 
-    # Валідація статусу
-    allowed_statuses = ["scheduled", "completed", "cancelled", "no_show"]
-    if status not in allowed_statuses:
-        flash(f"Невірний статус: {status}", "danger")
+    if not current_user.is_admin and appointment.master_id != current_user.id:
+        flash("У вас немає доступу до зміни статусу цього запису", "danger")
         return redirect(url_for("appointments.view", id=id))
 
-    # Якщо змінюємо на "completed", перевіряємо наявність методу оплати
-    if status == "completed":
-        payment_method = request.form.get("payment_method")
-        if not payment_method:
-            flash("Для завершеного запису потрібно вибрати метод оплати", "danger")
-            return redirect(url_for("appointments.view", id=id))
+    valid_statuses = ["scheduled", "completed", "cancelled"]
+    if new_status not in valid_statuses:
+        flash("Невірний статус", "danger")
+        return redirect(url_for("appointments.view", id=id))
 
-        # Більш надійна валідація методу оплати з урахуванням усіх можливих значень
-        payment_method_found = False
-        for method in PaymentMethod:
-            # Порівнюємо як з назвою enum (DEBT), так і з його значенням ("Борг")
-            if (
-                payment_method.lower() == method.name.lower()
-                or payment_method.lower() == method.value.lower()
-            ):
-                appointment.payment_method = method
-                payment_method_found = True
-                break
+    # Special handling for the 'completed' status
+    if new_status == "completed":
+        payment_method_str = request.form.get("payment_method")
 
-        if not payment_method_found:
-            flash(f"Невірний метод оплати: {payment_method}", "danger")
-            return redirect(url_for("appointments.view", id=id))
+        # Special case: If amount_paid is 0, we can proceed without requiring payment_method
+        if appointment.amount_paid is not None and appointment.amount_paid == Decimal(
+            "0.00"
+        ):
+            # We can proceed without payment_method for unpaid appointments
+            # If payment_method was provided in the form, use it; otherwise keep the current one
+            if payment_method_str:
+                # Check if the payment method value is valid (matches one of the enum values)
+                valid_payment_method = False
+                method_to_set = None
+                for method in PaymentMethod:
+                    if method.value == payment_method_str:
+                        valid_payment_method = True
+                        method_to_set = method
+                        break
 
-    # Якщо змінюємо на статус, який не completed, скидаємо метод оплати
-    if status != "completed":
+                if valid_payment_method:
+                    appointment.payment_method = method_to_set
+        # Normal case - require payment_method if not already set
+        elif appointment.payment_method is None:
+            if not payment_method_str:
+                flash(
+                    "Будь ласка, виберіть тип оплати для завершення запису.", "warning"
+                )
+                return redirect(url_for("appointments.view", id=id))
+
+            # Check if the payment method value is valid (matches one of the enum values)
+            valid_payment_method = False
+            method_to_set = None
+            for method in PaymentMethod:
+                if method.value == payment_method_str:
+                    valid_payment_method = True
+                    method_to_set = method
+                    break
+
+            if not valid_payment_method:
+                flash(f"Невірний тип оплати: {payment_method_str}", "warning")
+                return redirect(url_for("appointments.view", id=id))
+
+            # Set the payment method
+            appointment.payment_method = method_to_set
+
+    # Change from completed to another status (reset payment method)
+    elif appointment.status == "completed" and new_status != "completed":
+        # When changing from completed to another status, clear payment method
+        print(
+            "DEBUG ROUTE CHANGE_STATUS: Changing from completed to another status, clearing payment_method"
+        )
         appointment.payment_method = None
 
-    # Оновлюємо статус
-    appointment.status = status
-    db.session.commit()
+    # For cancelled status, also reset payment method
+    elif new_status == "cancelled":
+        print(
+            "DEBUG ROUTE CHANGE_STATUS: Setting status to cancelled, clearing payment_method"
+        )
+        appointment.payment_method = None
 
-    flash(f"Статус запису змінено на '{status}'", "success")
+    # Update the status
+    old_status = appointment.status
+    print(
+        f"DEBUG ROUTE CHANGE_STATUS: Changing status from {old_status} to {new_status}"
+    )
+    appointment.status = new_status
+
+    # Update payment status
+    print(
+        f"DEBUG ROUTE CHANGE_STATUS: Before update_payment_status: status={appointment.status}, "
+        f"payment_status={appointment.payment_status}, payment_method={appointment.payment_method}"
+    )
+    appointment.update_payment_status()
+    print(
+        f"DEBUG ROUTE CHANGE_STATUS: After update_payment_status: status={appointment.status}, "
+        f"payment_status={appointment.payment_status}, payment_method={appointment.payment_method}"
+    )
+
+    # Додано логування перед commit
+    print(
+        f"DEBUG ROUTE: Before commit: appointment ID={appointment.id}, "
+        f"status={appointment.status}, "
+        f"is_detached={inspect(appointment).detached}, "
+        f"session_id={inspect(appointment).session_id}"
+    )
+    if appointment.master:
+        print(
+            f"DEBUG ROUTE: Before commit: master ID={appointment.master.id}, "
+            f"name={appointment.master.username}, "
+            f"is_detached={inspect(appointment.master).detached}, "
+            f"session_id={inspect(appointment.master).session_id}"
+        )
+
+    # Save changes
+    try:
+        db.session.commit()
+
+        # Додано логування після commit
+        print(
+            f"DEBUG ROUTE CHANGE_STATUS: After commit: appointment ID={appointment.id}, "
+            f"status={appointment.status}, payment_status={appointment.payment_status}, "
+            f"payment_method={appointment.payment_method}, amount_paid={appointment.amount_paid}, "
+            f"is_detached={inspect(appointment).detached}, "
+            f"session_id={inspect(appointment).session_id}"
+        )
+        if appointment.master:
+            print(
+                f"DEBUG ROUTE: After commit: master ID={appointment.master.id}, "
+                f"name={appointment.master.username}, "
+                f"is_detached={inspect(appointment.master).detached}, "
+                f"session_id={inspect(appointment.master).session_id}"
+            )
+
+        # Refresh the appointment to ensure all relationships are loaded
+        db.session.refresh(appointment)
+
+        # Додано логування після refresh
+        print(
+            f"DEBUG ROUTE CHANGE_STATUS: After refresh: appointment ID={appointment.id}, "
+            f"status={appointment.status}, payment_status={appointment.payment_status}, "
+            f"payment_method={appointment.payment_method}, amount_paid={appointment.amount_paid}, "
+            f"is_detached={inspect(appointment).detached}, "
+            f"session_id={inspect(appointment).session_id}"
+        )
+        if appointment.master:
+            print(
+                f"DEBUG ROUTE: After refresh: master ID={appointment.master.id}, "
+                f"name={appointment.master.username}, "
+                f"is_detached={inspect(appointment.master).detached}, "
+                f"session_id={inspect(appointment.master).session_id}"
+            )
+
+        flash(f"Статус запису змінено на '{new_status}'", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(f"DEBUG ROUTE: Error during commit: {str(e)}")
+        flash(f"Помилка при зміні статусу: {str(e)}", "danger")
+
+    # Додано логування перед redirect
+    print(
+        f"DEBUG ROUTE: Before redirect: appointment ID={appointment.id}, "
+        f"status={appointment.status}, "
+        f"is_detached={inspect(appointment).detached}, "
+        f"session_id={inspect(appointment).session_id}"
+    )
+    if appointment.master:
+        print(
+            f"DEBUG ROUTE: Before redirect: master ID={appointment.master.id}, "
+            f"name={appointment.master.username}, "
+            f"is_detached={inspect(appointment.master).detached}, "
+            f"session_id={inspect(appointment.master).session_id}"
+        )
+
     return redirect(url_for("appointments.view", id=id))
 
 
@@ -378,7 +862,20 @@ def change_status(id, status):
 @bp.route("/<int:id>/add_service", methods=["GET", "POST"])
 @login_required
 def add_service(id):
-    appointment = Appointment.query.get_or_404(id)
+    # Use eager loading to avoid detached objects
+    appointment = (
+        db.session.query(Appointment)
+        .options(
+            db.joinedload(Appointment.master),
+            db.joinedload(Appointment.client),
+            db.joinedload(Appointment.services).joinedload(AppointmentService.service),
+        )
+        .get(id)
+    )
+
+    if not appointment:
+        flash("Запис не знайдено", "danger")
+        return redirect(url_for("appointments.index"))
 
     if not current_user.is_admin and appointment.master_id != current_user.id:
         flash("У вас немає доступу", "danger")
@@ -417,8 +914,26 @@ def add_service(id):
 @bp.route("/<int:appointment_id>/remove_service/<int:service_id>", methods=["POST"])
 @login_required
 def remove_service(appointment_id, service_id):
-    appointment_service = AppointmentService.query.get_or_404(service_id)
-    appointment = Appointment.query.get_or_404(appointment_id)
+    # Use eager loading
+    appointment = (
+        db.session.query(Appointment)
+        .options(db.joinedload(Appointment.master), db.joinedload(Appointment.services))
+        .get(appointment_id)
+    )
+
+    if not appointment:
+        flash("Запис не знайдено", "danger")
+        return redirect(url_for("appointments.index"))
+
+    appointment_service = (
+        db.session.query(AppointmentService)
+        .options(db.joinedload(AppointmentService.service))
+        .get(service_id)
+    )
+
+    if not appointment_service:
+        flash("Послугу не знайдено", "danger")
+        return redirect(url_for("appointments.view", id=appointment_id))
 
     if not current_user.is_admin and appointment.master_id != current_user.id:
         flash("У вас немає доступу", "danger")
@@ -432,6 +947,9 @@ def remove_service(appointment_id, service_id):
     db.session.delete(appointment_service)
     db.session.commit()
 
+    # Refresh the appointment to keep it attached to the session
+    db.session.refresh(appointment)
+
     flash(f'Послугу "{service_name}" видалено!', "success")
     return redirect(url_for("appointments.view", id=appointment_id))
 
@@ -440,8 +958,26 @@ def remove_service(appointment_id, service_id):
 @bp.route("/<int:appointment_id>/edit_service/<int:service_id>", methods=["POST"])
 @login_required
 def edit_service_price(appointment_id, service_id):
-    appointment_service = AppointmentService.query.get_or_404(service_id)
-    appointment = Appointment.query.get_or_404(appointment_id)
+    # Use eager loading
+    appointment = (
+        db.session.query(Appointment)
+        .options(db.joinedload(Appointment.master), db.joinedload(Appointment.services))
+        .get(appointment_id)
+    )
+
+    if not appointment:
+        flash("Запис не знайдено", "danger")
+        return redirect(url_for("appointments.index"))
+
+    appointment_service = (
+        db.session.query(AppointmentService)
+        .options(db.joinedload(AppointmentService.service))
+        .get(service_id)
+    )
+
+    if not appointment_service:
+        flash("Послугу не знайдено", "danger")
+        return redirect(url_for("appointments.view", id=appointment_id))
 
     if not current_user.is_admin and appointment.master_id != current_user.id:
         flash("У вас немає доступу", "danger")
@@ -459,6 +995,9 @@ def edit_service_price(appointment_id, service_id):
     appointment_service.price = new_price
     db.session.commit()
 
+    # Refresh the appointment to keep it attached to the session
+    db.session.refresh(appointment)
+
     flash("Ціну послуги оновлено!", "success")
     return redirect(url_for("appointments.view", id=appointment_id))
 
@@ -472,7 +1011,11 @@ def api_appointments_by_date(date_str):
     except ValueError:
         return jsonify({"error": "Invalid date format"}), 400
 
-    query = Appointment.query.filter(Appointment.date == filter_date)
+    query = Appointment.query.options(
+        db.joinedload(Appointment.master),
+        db.joinedload(Appointment.client),
+        db.joinedload(Appointment.services),
+    ).filter(Appointment.date == filter_date)
 
     if not current_user.is_admin:
         query = query.filter(Appointment.master_id == current_user.id)

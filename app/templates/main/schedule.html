@@ -143,14 +143,16 @@
               data-time="{{ interval.main_time.strftime('%H:%M') }}"
             >
               {% if schedule_data[master.id][interval.main_time] and
-              schedule_data[master.id][interval.main_time]|length > 0 %} {% set
-              appointment = schedule_data[master.id][interval.main_time][0] %}
-              {% if appointment.client_id in multi_booking_client_ids %} {% set
-              extra_class = ' multi-booking' %} {% else %} {% set extra_class =
-              '' %} {% endif %} {% if appointment.start_time.strftime('%H:%M')
-              == interval.main_time.strftime('%H:%M') %}
+              schedule_data[master.id][interval.main_time]|length > 0 %} {#
+              Process the first appointment data item in the slot #} {% set
+              item_data = schedule_data[master.id][interval.main_time][0] %} {%
+              set appointment = item_data.appointment %} {% set finance_info =
+              item_data.finance_info %} {% set slot_css_class =
+              item_data.css_class %} {% if
+              appointment.start_time.strftime('%H:%M') ==
+              interval.main_time.strftime('%H:%M') %}
               <div
-                class="schedule-appointment status-{{ appointment.payment_status }}{{ extra_class }}"
+                class="schedule-appointment {{ slot_css_class }}"
                 onclick="window.location.href='{{ url_for('appointments.view', id=appointment.id) }}'"
               >
                 <strong>{{ appointment.client.name }}</strong><br />
@@ -161,15 +163,13 @@
                 {% if appointment.services %}
                 <br />
                 <small>
-                  {% for service in appointment.services[:1] %} {{
-                  service.service.name }} {% if loop.index <
+                  {% for service_assoc in appointment.services[:1] %} {{
+                  service_assoc.service.name }} {% if loop.index <
                   appointment.services|length %} ... {% endif %} {% endfor %}
                 </small>
-                {% endif %} {% if appointment.amount_paid %}
+                {% endif %} {% if finance_info %}
                 <br />
-                <small class="fw-bold"
-                  >{{ "%.2f"|format(appointment.amount_paid) }} грн</small
-                >
+                <small class="fw-bold">{{ finance_info }}</small>
                 {% endif %}
               </div>
               {% endif %} {% endif %}
@@ -194,14 +194,16 @@
               data-time="{{ sub_slot.strftime('%H:%M') }}"
             >
               {% if schedule_data[master.id][sub_slot] and
-              schedule_data[master.id][sub_slot]|length > 0 %} {% set
-              appointment = schedule_data[master.id][sub_slot][0] %} {% if
-              appointment.client_id in multi_booking_client_ids %} {% set
-              extra_class = ' multi-booking' %} {% else %} {% set extra_class =
-              '' %} {% endif %} {% if appointment.start_time.strftime('%H:%M')
-              == sub_slot.strftime('%H:%M') %}
+              schedule_data[master.id][sub_slot]|length > 0 %} {# Process the
+              first appointment data item in the sub-slot #} {% set item_data =
+              schedule_data[master.id][sub_slot][0] %} {% set appointment =
+              item_data.appointment %} {% set finance_info =
+              item_data.finance_info %} {% set slot_css_class =
+              item_data.css_class %} {% if
+              appointment.start_time.strftime('%H:%M') ==
+              sub_slot.strftime('%H:%M') %}
               <div
-                class="schedule-appointment status-{{ appointment.payment_status }}{{ extra_class }}"
+                class="schedule-appointment {{ slot_css_class }}"
                 onclick="window.location.href='{{ url_for('appointments.view', id=appointment.id) }}'"
               >
                 <strong>{{ appointment.client.name }}</strong><br />
@@ -212,15 +214,13 @@
                 {% if appointment.services %}
                 <br />
                 <small>
-                  {% for service in appointment.services[:1] %} {{
-                  service.service.name }} {% if loop.index <
+                  {% for service_assoc in appointment.services[:1] %} {{
+                  service_assoc.service.name }} {% if loop.index <
                   appointment.services|length %} ... {% endif %} {% endfor %}
                 </small>
-                {% endif %} {% if appointment.amount_paid %}
+                {% endif %} {% if finance_info %}
                 <br />
-                <small class="fw-bold"
-                  >{{ "%.2f"|format(appointment.amount_paid) }} грн</small
-                >
+                <small class="fw-bold">{{ finance_info }}</small>
                 {% endif %}
               </div>
               {% endif %} {% endif %}

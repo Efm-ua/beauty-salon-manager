@@ -92,6 +92,25 @@ body {
     border: 1px solid #ffecb5;
 }
 
+/* Нові стилі для розкладу на основі appointment.status та appointment.payment_status */
+.status-completed-paid {
+    background-color: #d1e7dd; /* зелений */
+    color: #0f5132;
+    border: 1px solid #a3cfbb;
+}
+
+.status-completed-debt {
+    background-color: #f8d7da; /* червоний */
+    color: #842029;
+    border: 1px solid #f5c2c7;
+}
+
+.status-scheduled-custom {
+    background-color: #fff3cd; /* жовтий */
+    color: #664d03;
+    border: 1px solid #ffecb5;
+}
+
 /* Стиль для клієнтів з кількома записами на день */
 .multi-booking {
     border: 2px solid #0dcaf0; /* блакитна рамка */

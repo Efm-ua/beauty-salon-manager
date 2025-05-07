@@ -81,8 +81,8 @@ class Appointment(db.Model):  # type: ignore
         db.String(20), nullable=False, default="scheduled"
     )  # scheduled, completed, cancelled
     payment_status = db.Column(
-        db.String(10), nullable=False, default="unpaid"
-    )  # paid, unpaid
+        db.String(20), nullable=False, default="unpaid"
+    )  # paid, unpaid, partially_paid
     amount_paid = db.Column(Numeric(10, 2), nullable=True)
     payment_method = db.Column(db.Enum(PaymentMethod), nullable=True)
     discount_percentage = db.Column(
@@ -100,10 +100,46 @@ class Appointment(db.Model):  # type: ignore
     def get_total_price(self):
         return sum(service.price for service in self.services)
 
-    def get_discounted_price(self):
+    def get_discounted_price(self) -> Decimal:
         total_price = self.get_total_price()
-        discount_factor = 1 - (self.discount_percentage / 100)
-        return total_price * discount_factor
+        discount_percentage = (
+            self.discount_percentage
+            if isinstance(self.discount_percentage, Decimal)
+            else Decimal(str(self.discount_percentage))
+        )
+        discount_factor = Decimal("1.0") - (discount_percentage / Decimal("100.0"))
+        decimal_total_price = (
+            total_price
+            if isinstance(total_price, Decimal)
+            else Decimal(str(total_price))
+        )
+        return decimal_total_price * discount_factor
+
+    def update_payment_status(self):
+        """
+        Updates the payment_status based on amount_paid and expected_price.
+        """
+        if self.status == "cancelled":
+            self.payment_status = "not_applicable"
+            return
+
+        expected_price = self.get_discounted_price()
+        expected_price = max(Decimal("0.00"), expected_price)
+
+        amount_paid_val = (
+            self.amount_paid if self.amount_paid is not None else Decimal("0.00")
+        )
+
+        if self.amount_paid is None:
+            self.payment_status = "unpaid"
+        elif expected_price == Decimal("0.00") and amount_paid_val == Decimal("0.00"):
+            self.payment_status = "paid"
+        elif amount_paid_val <= Decimal("0.00"):
+            self.payment_status = "unpaid"
+        elif amount_paid_val < expected_price:
+            self.payment_status = "partially_paid"
+        else:  # amount_paid_val >= expected_price
+            self.payment_status = "paid"
 
     def __repr__(self):
         return f"<Appointment {self.id} - {self.date} {self.start_time}>"

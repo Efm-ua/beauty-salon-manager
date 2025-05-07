@@ -172,7 +172,9 @@ def financial_report():
                 method_name = (
                     "Не вказано" if payment_method is None else payment_method.value
                 )
-                payment_breakdown.append((method_name, amount))
+                # Ensure amount is Decimal type for consistency
+                if amount is not None:
+                    payment_breakdown.append((method_name, amount))
 
             # Add any missing payment methods with zero values
             existing_methods = {item[0] for item in payment_breakdown}
@@ -181,7 +183,7 @@ def financial_report():
                     payment_breakdown.append((method.value, 0))
 
             # Add "Not specified" if it's not already included
-            if "Не вказано" not in existing_methods and None not in existing_methods:
+            if "Не вказано" not in existing_methods:
                 payment_breakdown.append(("Не вказано", 0))
 
             # Sort by payment method name

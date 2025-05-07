@@ -94,92 +94,61 @@
         </div>
         {% endif %}
 
-        <!-- Кнопки зміни статусу -->
-        <div class="d-flex gap-2 mt-3">
+        <!-- Зміна статусу -->
+        <div class="d-flex justify-content-center gap-2 mt-3">
           {% if appointment.status == 'scheduled' %}
-
-          <!-- Секція типів оплати -->
-          <div class="mb-3 w-100">
-            <h6>Тип оплати:</h6>
-            <div class="payment-methods-container mb-2">
-              <div class="form-check form-check-inline">
-                <input
-                  type="radio"
-                  class="form-check-input payment-checkbox"
-                  id="payment-cash"
-                  name="payment_method"
-                  value="Готівка"
-                />
-                <label class="form-check-label" for="payment-cash"
-                  >Готівка</label
-                >
-              </div>
-              <div class="form-check form-check-inline">
-                <input
-                  type="radio"
-                  class="form-check-input payment-checkbox"
-                  id="payment-malibu"
-                  name="payment_method"
-                  value="Малібу"
-                />
-                <label class="form-check-label" for="payment-malibu"
-                  >Малібу</label
-                >
-              </div>
-              <div class="form-check form-check-inline">
-                <input
-                  type="radio"
-                  class="form-check-input payment-checkbox"
-                  id="payment-fop"
-                  name="payment_method"
-                  value="ФОП"
-                />
-                <label class="form-check-label" for="payment-fop">ФОП</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input
-                  type="radio"
-                  class="form-check-input payment-checkbox"
-                  id="payment-privat"
-                  name="payment_method"
-                  value="Приват"
-                />
-                <label class="form-check-label" for="payment-privat"
-                  >Приват</label
-                >
-              </div>
-              <div class="form-check form-check-inline">
-                <input
-                  type="radio"
-                  class="form-check-input payment-checkbox"
-                  id="payment-mono"
-                  name="payment_method"
-                  value="MONO"
-                />
-                <label class="form-check-label" for="payment-mono">MONO</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input
-                  type="radio"
-                  class="form-check-input payment-checkbox"
-                  id="payment-debt"
-                  name="payment_method"
-                  value="Борг"
-                />
-                <label class="form-check-label" for="payment-debt">Борг</label>
-              </div>
+          <!-- Для завершення запису необхідно вибрати спосіб оплати -->
+          <div
+            class="payment-methods-container mb-2"
+            id="payment-methods-container"
+            style="{% if appointment.status != 'scheduled' %}display: none;{% endif %}"
+          >
+            <div class="form-check form-check-inline">
+              <input
+                type="radio"
+                class="form-check-input payment-checkbox"
+                id="payment-cash"
+                name="payment_method"
+                value="Готівка"
+              />
+              <label class="form-check-label" for="payment-cash">Готівка</label>
             </div>
-            <small class="text-muted"
-              >Виберіть тип оплати для завершення запису</small
-            >
+            <div class="form-check form-check-inline">
+              <input
+                type="radio"
+                class="form-check-input payment-checkbox"
+                id="payment-privat"
+                name="payment_method"
+                value="Приват"
+              />
+              <label class="form-check-label" for="payment-privat"
+                >Приват</label
+              >
+            </div>
+            <div class="form-check form-check-inline">
+              <input
+                type="radio"
+                class="form-check-input payment-checkbox"
+                id="payment-mono"
+                name="payment_method"
+                value="Mono"
+              />
+              <label class="form-check-label" for="payment-mono">Mono</label>
+            </div>
           </div>
 
           <form
             method="POST"
-            action="{{ url_for('appointments.change_status', id=appointment.id, status='completed') }}"
+            action="{{ url_for('appointments.change_status', id=appointment.id, new_status='completed') }}"
             id="complete-form"
           >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input
+              type="hidden"
+              name="payment_method"
+              id="selected_payment_method"
+              value=""
+            />
             <button
               type="submit"
               class="btn btn-success"
@@ -191,22 +160,31 @@
           </form>
           <form
             method="POST"
-            action="{{ url_for('appointments.change_status', id=appointment.id, status='cancelled') }}"
+            action="{{ url_for('appointments.change_status', id=appointment.id, new_status='cancelled') }}"
           >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="btn btn-danger">
-              <i class="fas fa-times me-2"></i>Скасувати
+              <i class="fas fa-times me-2"></i>Скасовано
             </button>
           </form>
-          {% elif appointment.status == 'completed' or appointment.status ==
-          'cancelled' %}
+          {% elif appointment.status == 'completed' %}
           <form
             method="POST"
-            action="{{ url_for('appointments.change_status', id=appointment.id, status='scheduled') }}"
+            action="{{ url_for('appointments.change_status', id=appointment.id, new_status='scheduled') }}"
           >
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button type="submit" class="btn btn-primary">
-              <i class="fas fa-redo me-2"></i>Повернути до запланованих
+            <button type="submit" class="btn btn-warning">
+              <i class="fas fa-undo me-2"></i>Повернути до запланованих
+            </button>
+          </form>
+          {% elif appointment.status == 'cancelled' %}
+          <form
+            method="POST"
+            action="{{ url_for('appointments.change_status', id=appointment.id, new_status='scheduled') }}"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="btn btn-warning">
+              <i class="fas fa-undo me-2"></i>Відновити запис
             </button>
           </form>
           {% endif %}
@@ -375,43 +353,43 @@
       });
     });
 
-    // Керування активацією кнопки "Виконано" на основі вибору типу оплати
+    // Handle payment method selection
     const paymentCheckboxes = document.querySelectorAll(".payment-checkbox");
     const completeButton = document.getElementById("complete-button");
-    const completeForm = document.getElementById("complete-form");
+    const paymentMethodInput = document.getElementById(
+      "selected_payment_method"
+    );
 
-    if (paymentCheckboxes.length > 0 && completeButton) {
-      // Обробка зміни стану чекбоксів
-      paymentCheckboxes.forEach(function (checkbox) {
-        checkbox.addEventListener("change", function () {
-          // Підрахунок кількості вибраних чекбоксів
-          const checkedCount = document.querySelectorAll(
-            ".payment-checkbox:checked"
-          ).length;
-
-          // Активувати кнопку тільки якщо вибрано рівно один чекбокс
-          completeButton.disabled = checkedCount !== 1;
+    paymentCheckboxes.forEach(function (checkbox) {
+      checkbox.addEventListener("change", function () {
+        // Uncheck other checkboxes
+        paymentCheckboxes.forEach(function (cb) {
+          if (cb !== checkbox) {
+            cb.checked = false;
+          }
         });
-      });
 
-      // Обробка відправлення форми
-      completeForm.addEventListener("submit", function (e) {
-        const checkedBoxes = document.querySelectorAll(
-          ".payment-checkbox:checked"
-        );
+        // Enable the complete button when a payment method is selected
+        completeButton.disabled = !checkbox.checked;
 
-        // Переносимо обрані чекбокси до форми перед відправкою
-        if (checkedBoxes.length === 1) {
-          const selectedCheckbox = checkedBoxes[0].cloneNode(true);
-          selectedCheckbox.style.display = "none";
-          completeForm.appendChild(selectedCheckbox);
+        // Store the selected payment method value
+        if (checkbox.checked) {
+          paymentMethodInput.value = checkbox.value;
         } else {
-          // Додаткова перевірка на випадок, якщо користувач знайде спосіб відправити форму
-          e.preventDefault();
-          alert("Будь ласка, виберіть рівно один тип оплати");
+          paymentMethodInput.value = "";
         }
       });
-    }
+    });
+
+    // Handle the form submission
+    document
+      .getElementById("complete-form")
+      .addEventListener("submit", function (e) {
+        if (!paymentMethodInput.value) {
+          e.preventDefault();
+          alert("Будь ласка, виберіть тип оплати для завершення запису");
+        }
+      });
   });
 </script>
 {% endblock %}

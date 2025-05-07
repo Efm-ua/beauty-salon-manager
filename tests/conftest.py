@@ -1,8 +1,10 @@
 import os
 import uuid
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 
 import pytest
+from flask_login import logout_user
 from werkzeug.security import generate_password_hash
 
 from app import create_app
@@ -20,7 +22,7 @@ class TestConfig(Config):
 
 
 # Створення тестового додатку Flask
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def app():
     """
     Створює тестовий додаток Flask з налаштуваннями для тестування.
@@ -47,49 +49,80 @@ def app():
 
 
 # Фікстура для доступу до об'єкта бази даних
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def db(app):
     """
     Надає доступ до об'єкта бази даних.
 
-    Створює всі таблиці в базі даних перед тестами
-    і видаляє їх після завершення всіх тестів.
+    Створює всі таблиці в базі даних перед кожним тестом
+    і підтримує ізоляцію тестів через транзакції.
     """
     with app.app_context():
-        _db.create_all()
-        yield _db
-        # Очищаємо таблиці в правильному порядку перед видаленням схеми
-        _db.session.query(AppointmentService).delete()
-        _db.session.query(Appointment).delete()
-        _db.session.query(User).delete()
-        _db.session.query(Client).delete()
-        _db.session.query(Service).delete()
-        _db.session.commit()
+        # Переконуємося, що всі попередні сесії закриті
         _db.session.remove()
+
+        # Видаляємо всі таблиці, якщо вони існують
+        _db.drop_all()
+
+        # Створюємо таблиці в контексті додатку для кожної функції
+        _db.create_all()
+
+        yield _db
+
+        # Завершуємо всі транзакції та очищуємо сесію
+        _db.session.remove()
+
+        # Явно видаляємо таблиці після завершення тесту
         _db.drop_all()
 
 
 # Фікстура для ізольованої сесії бази даних
 @pytest.fixture(scope="function")
-def session(db):
+def session(db):  # 'db' - це екземпляр Flask-SQLAlchemy
     """
-    Створює ізольовану сесію бази даних для кожного тесту.
-
-    Починає нову транзакцію перед кожним тестом і відкочує її після завершення,
-    забезпечуючи ізоляцію тестів один від одного.
+    Надає сесію бази даних для кожного тесту всередині транзакції,
+    яка відкочується після завершення тесту. Сесії налаштовані
+    з expire_on_commit=False для запобігання DetachedInstanceError.
     """
     connection = db.engine.connect()
     transaction = connection.begin()
 
-    session = db.session
-    session.bind = connection
+    configured_session_factory = db.sessionmaker(
+        bind=connection, expire_on_commit=False
+    )
 
-    yield session
+    original_factory = db.session.session_factory
+    db.session.session_factory = configured_session_factory
+    db.session.remove()
 
-    # Відкочення транзакції після тесту
+    # Створюємо та використовуємо конкретний екземпляр сесії
+    test_session_instance = db.session()
+
+    yield test_session_instance  # Надаємо екземпляр сесії, а не proxy
+
+    # Teardown
+    test_session_instance.close()  # Закриваємо конкретний екземпляр сесії
+    db.session.remove()  # Очищуємо scoped_session
+    db.session.session_factory = original_factory
     transaction.rollback()
     connection.close()
-    session.remove()
+
+
+@pytest.fixture(scope="function", autouse=True)
+def cleanup_flask_login_state(app):  # Додано 'app' як залежність для контексту
+    """
+    Очищує стан Flask-Login після кожного тесту
+    для запобігання використання відокремлених об'єктів.
+    """
+    yield
+    # Після завершення тесту
+    with app.app_context():  # Забезпечуємо наявність контексту додатку для logout_user
+        try:
+            logout_user()  # Очищує current_user зі стеку Flask-Login
+        except Exception as e:
+            # Ігноруємо помилки під час очищення стану логіну,
+            # які можуть статися, якщо таблиці бази даних вже видалені
+            pass
 
 
 # Фікстура для тестового клієнта Flask
@@ -137,6 +170,9 @@ def regular_user(session):
     )
     session.add(user)
     session.commit()
+
+    # Переконуємося, що об'єкт прив'язаний до сесії перед поверненням
+    session.refresh(user)
     return user
 
 
@@ -192,6 +228,11 @@ def test_appointment(session, test_client, regular_user, test_service):
     end_datetime = start_datetime + timedelta(minutes=test_service.duration)
     end_time = end_datetime.time()
 
+    # Переконуємося, що всі пов'язані об'єкти дійсні
+    session.refresh(test_client)
+    session.refresh(regular_user)
+    session.refresh(test_service)
+
     appointment = Appointment(
         client_id=test_client.id,
         master_id=regular_user.id,
@@ -205,7 +246,7 @@ def test_appointment(session, test_client, regular_user, test_service):
         notes="Test appointment",
     )
     session.add(appointment)
-    session.flush()
+    session.flush()  # Отримуємо ID
 
     # Додавання послуги до запису
     appointment_service = AppointmentService(
@@ -217,6 +258,12 @@ def test_appointment(session, test_client, regular_user, test_service):
     session.add(appointment_service)
     session.commit()
 
+    # Переконуємося, що всі об'єкти приєднані до сесії
+    session.refresh(appointment)
+
+    # Явно встановлюємо залежності для запобігання detached instance
+    appointment.client = test_client
+    appointment.master = regular_user
     return appointment
 
 
@@ -309,3 +356,23 @@ def test_db(session):
     Повертає сесію бази даних для використання в тестах.
     """
     return session
+
+
+@pytest.fixture(scope="function")
+def test_service_with_price(session):
+    """
+    Створює тестову послугу з додатковою властивістю price.
+    """
+    unique_id = uuid.uuid4().hex[:8]
+    service = Service(
+        name=f"Test Service For Pricing {unique_id}",
+        description="Test service specifically for testing pricing logic",
+        duration=60,  # 60 хвилин
+    )
+    session.add(service)
+    session.commit()
+
+    # Add price property for tests that expect it
+    service.price = Decimal("100.00")
+
+    return service
