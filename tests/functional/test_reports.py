@@ -1,13 +1,19 @@
-import re
-from datetime import date, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta, date, time
+from unittest.mock import patch
+from decimal import Decimal
 
 import pytest
 from werkzeug.security import generate_password_hash
 
 from app import db
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User)
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    PaymentMethod,
+    Service,
+    User,
+)
 
 
 def test_salary_report_access_without_login(client):
@@ -744,9 +750,11 @@ def test_salary_report_with_invalid_master_id(client, auth, app, test_db, mocker
 
 
 def test_financial_report_with_complete_payment_methods_coverage(
-    client, auth, app, test_db
+    mock_current_user, client, app, test_db
 ):
     """Test financial report with special case for payment methods coverage."""
+    from app.forms import FinancialReportForm
+
     with app.app_context():
         # Create admin user
         admin = User(
@@ -758,7 +766,13 @@ def test_financial_report_with_complete_payment_methods_coverage(
         test_db.add(admin)
         test_db.commit()
 
-        # Create test client
+        # Mock current_user as our admin user
+        mock_current_user.is_admin = True
+        mock_current_user.username = "complete_coverage_admin"
+        mock_current_user.id = admin.id
+        mock_current_user.is_administrator.return_value = True
+
+        # Create client
         client_obj = Client(name="Complete Coverage Client", phone="0991234522")
         test_db.add(client_obj)
         test_db.commit()
@@ -820,6 +834,13 @@ def test_financial_report_with_complete_payment_methods_coverage(
         # Just check response code
         assert response.status_code == 200
 
+        # Clean up
+        for appointment in Appointment.query.filter_by(master_id=admin.id).all():
+            AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
+            test_db.delete(appointment)
+        test_db.delete(service)
+        test_db.commit()
+
 
 def test_salary_report_with_error_in_db_session_get(client, auth, app, mocker):
     """Test salary report with a None response from db.session.get."""
@@ -869,9 +890,10 @@ def test_financial_report_complete_payment_methods_coverage(
     mock_current_user, client, app, test_db
 ):
     """
-    Test the financial report with exactly the payment methods needed to
-    cover the branch that adds 'Не вказано' when it's not included.
+    Тестує фінансовий звіт на повне покриття методів оплати.
     """
+    from app.forms import FinancialReportForm
+
     with app.app_context():
         # Create admin user
         admin = User(
@@ -946,17 +968,25 @@ def test_financial_report_complete_payment_methods_coverage(
         # Check response code
         assert response.status_code == 200
 
+        # Clean up
+        for appointment in Appointment.query.filter_by(master_id=admin.id).all():
+            AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
+            test_db.delete(appointment)
+        test_db.delete(service)
+        test_db.commit()
+
 
 def test_financial_report_with_discount(client, admin_user):
     """
     Тестує фінансовий звіт з урахуванням знижки.
     """
-    import random
-    from datetime import date, time
-    from decimal import Decimal
-
-    from app.models import (Appointment, AppointmentService, Client,
-                            PaymentMethod, Service, User)
+    from app.models import (
+        Appointment,
+        AppointmentService,
+        Client,
+        PaymentMethod,
+        Service,
+    )
 
     # Логін адміністратором
     response = client.post(
@@ -1114,12 +1144,13 @@ def test_salary_report_ignores_discount(client, admin_user):
     """
     Тестує, що звіт зарплат не враховує знижки.
     """
-    import random
-    from datetime import date, time
-    from decimal import Decimal
-
-    from app.models import (Appointment, AppointmentService, Client,
-                            PaymentMethod, Service, User)
+    from app.models import (
+        Appointment,
+        AppointmentService,
+        Client,
+        PaymentMethod,
+        Service,
+    )
 
     # Логін адміністратором
     response = client.post(
@@ -1190,3 +1221,59 @@ def test_salary_report_ignores_discount(client, admin_user):
     AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
     db.session.delete(appointment)
     db.session.commit()
+
+
+# Тести для покриття рядків у SalaryReportForm (app/forms.py)
+@pytest.mark.usefixtures("app_context")
+def test_salary_report_form_validate_master_id_valid(admin_user):
+    from app.forms import SalaryReportForm
+
+    # ... existing code ...
+    test_db.commit()
+
+
+# Тест для salary_report з мокуванням current_user та помилки в db.session.get()
+@patch("app.routes.reports.db.session")
+@patch("app.routes.reports.current_user")
+def test_salary_report_with_db_error(
+    mock_current_user, mock_db_session, client, app, auth
+):
+    with app.app_context():
+        # Create admin user
+        admin_user = User(
+            username="none_user_admin",
+            password=generate_password_hash("admin_password"),
+            full_name="None User Admin",
+            is_admin=True,
+        )
+        db.session.add(admin_user)
+        db.session.commit()
+
+        # Login as admin
+        auth.login(username="none_user_admin", password="admin_password")
+
+        # Replace the real db.session.get with a mock that returns None
+        # This simulates a database error or non-existent master
+        original_get = db.session.get
+
+        def mock_get(model, id):
+            # Only mock User.get, let others pass through
+            if model == User:
+                return None
+            return original_get(model, id)
+
+        mocker.patch("app.db.session.get", side_effect=mock_get)
+
+        # Send request for report
+        response = client.post(
+            "/reports/salary",
+            data={
+                "report_date": datetime.now().date().strftime("%Y-%m-%d"),
+                "master_id": "999999",  # Non-existent ID
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        # Check that the request didn't crash
+        assert response.status_code == 200

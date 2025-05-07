@@ -1,15 +1,19 @@
-import random
-import unittest.mock as mock
 import uuid
 from datetime import date, datetime, time, timedelta
-from unittest.mock import Mock
+from decimal import Decimal
 
 import pytest
-from flask import current_app, make_response, render_template
+from unittest.mock import patch
 
 from app import db
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User)
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    PaymentMethod,
+    Service,
+    User,
+)
 
 
 def test_appointment_complete_with_payment_method(
@@ -94,31 +98,13 @@ def test_create_appointment_as_non_admin_for_another_master_mock(
     db.session.commit()
 
     # Встановлюємо current_user.is_admin = False (імітація звичайного користувача)
-    from unittest.mock import patch
-
-    from app.routes.appointments import current_user
-
     with patch("app.routes.appointments.current_user") as mock_current_user:
         # Налаштовуємо макет current_user
         mock_current_user.is_admin = False
         mock_current_user.id = regular_user.id
 
-        # Створюємо запис для іншого майстра - має бути заборонено логікою програми
-        new_appointment = Appointment(
-            client_id=test_client.id,
-            master_id=another_master.id,  # Інший майстер
-            date=date.today(),
-            start_time=time(10, 0),
-            end_time=time(11, 0),
-            status="scheduled",
-            payment_status="unpaid",
-            notes="Test appointment by non-admin for another master",
-        )
-
         # Перевіряємо безпосередньо логіку обмеження доступу
         import flask
-
-        from app.routes.appointments import create
 
         with pytest.raises(Exception):
             # Імітуємо POST-запит з даними, де майстер - інший користувач
@@ -278,9 +264,6 @@ def test_edit_appointment_as_non_admin_change_master_mock(db):
     # Тестуємо безпосередньо логіку обмеження доступу
     from unittest.mock import patch
 
-    from app.routes.appointments import current_user
-
-    # Симулюємо спроту зміни майстра звичайним користувачем
     with patch("app.routes.appointments.current_user") as mock_current_user:
         # Налаштовуємо макет current_user
         mock_current_user.is_admin = False
@@ -443,7 +426,7 @@ def test_change_status_to_completed_with_multiple_payment_methods(
     original_status = test_appointment.status
 
     # За допомогою mock змінюємо поведінку, щоб розпакування списку payment_method спричиняло помилку
-    with mock.patch("app.routes.appointments.request") as mock_request:
+    with patch("app.routes.appointments.request") as mock_request:
         # Імітуємо поведінку, коли payment_method є списком, а не рядком
         mock_request.form.get.return_value = ["Готівка", "Приват"]
         mock_request.form.__contains__.return_value = True  # payment_method присутній
@@ -1384,12 +1367,128 @@ def test_edit_appointment_discount(client, admin_user, test_appointment):
         follow_redirects=True,
     )
     assert response.status_code == 200
+    # Check if the validation error message is NOT present
+    # If this assertion fails, the response text will show the validation errors.
+    assert (
+        "Помилка валідації форми:" not in response.text
+    ), f"Form validation failed! Response: {response.text}"
+    # If the above passes, it implies validation succeeded. Now check the DB.
 
-    # Перевіряємо, що знижку збережено
-    updated_appointment = Appointment.query.get(test_appointment.id)
-    assert float(updated_appointment.discount_percentage) == 10.0
+    # Fetch the updated appointment from the database
+    updated_appointment_db = Appointment.query.get(test_appointment.id)
+    assert float(updated_appointment_db.discount_percentage) == 10.0
 
     # Перевіряємо відображення знижки на сторінці перегляду
     response = client.get(f"/appointments/{test_appointment.id}")
     assert "Знижка:" in response.text
     assert "10.00%" in response.text
+
+
+def test_edit_appointment_start_time_persists_and_end_time_recalculates(
+    client, db, admin_user, test_client, regular_user, test_service
+):
+    """
+    Tests that editing an appointment's start_time correctly persists the new
+    start_time and recalculates and persists the end_time in the database.
+    """
+    # Login as admin
+    login_response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user["username"],
+            "password": admin_user["password"],
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert login_response.status_code == 200
+    assert "Вийти" in login_response.text or "Logout" in login_response.text
+
+    # Create a test appointment
+    appointment_data = {
+        "client_id": test_client.id,
+        "master_id": regular_user.id,  # Use regular_user as the master
+        "date": date.today(),
+        "start_time": time(10, 0),
+        "services_ids": [test_service.id],
+        "notes": "Initial appointment for time edit test",
+    }
+
+    # Calculate initial end_time based on service duration
+    initial_duration = test_service.duration
+    initial_start_datetime = datetime.combine(
+        appointment_data["date"], appointment_data["start_time"]
+    )
+    initial_end_datetime = initial_start_datetime + timedelta(minutes=initial_duration)
+    initial_end_time = initial_end_datetime.time()
+
+    appointment = Appointment(
+        client_id=appointment_data["client_id"],
+        master_id=appointment_data["master_id"],
+        date=appointment_data["date"],
+        start_time=appointment_data["start_time"],
+        end_time=initial_end_time,
+        status="scheduled",
+        payment_status="unpaid",
+        notes=appointment_data["notes"],
+    )
+    db.session.add(appointment)
+    db.session.flush()
+
+    # Create AppointmentService link
+    app_service = AppointmentService(
+        appointment_id=appointment.id,
+        service_id=test_service.id,
+        price=100.0,  # Example price for the service in this appointment
+    )
+    db.session.add(app_service)
+    db.session.commit()
+
+    # New time for the appointment
+    new_start_time_hour = 14
+    new_start_time_minute = 30
+    new_start_time_obj = time(new_start_time_hour, new_start_time_minute)
+
+    edit_form_data = {
+        "client_id": str(appointment.client_id),
+        "master_id": str(appointment.master_id),
+        "date": appointment.date.strftime("%Y-%m-%d"),
+        "start_time": new_start_time_obj.strftime("%H:%M"),
+        "services": [str(s.service_id) for s in appointment.services],
+        "notes": "Updated appointment time",
+        "discount_percentage": str(
+            appointment.discount_percentage
+            if appointment.discount_percentage is not None
+            else Decimal("0.0")
+        ),
+        # status and payment_status are not part of AppointmentForm, so removed.
+    }
+
+    edit_response = client.post(
+        f"/appointments/{appointment.id}/edit",
+        data=edit_form_data,
+        follow_redirects=True,
+    )
+    assert edit_response.status_code == 200
+    # Check for the actual success flash message
+    assert (
+        "Запис успішно оновлено!" in edit_response.text
+    ), f"Success message not found! Response: {edit_response.text}"
+
+    updated_appointment_db = Appointment.query.get(appointment.id)
+    assert updated_appointment_db is not None
+
+    assert (
+        updated_appointment_db.start_time == new_start_time_obj
+    ), f"Expected start_time {new_start_time_obj}, but got {updated_appointment_db.start_time}"
+
+    service_duration = timedelta(minutes=test_service.duration)
+    expected_end_datetime = (
+        datetime.combine(updated_appointment_db.date, new_start_time_obj)
+        + service_duration
+    )
+    expected_end_time = expected_end_datetime.time()
+
+    assert (
+        updated_appointment_db.end_time == expected_end_time
+    ), f"Expected end_time {expected_end_time}, but got {updated_appointment_db.end_time}"

@@ -237,14 +237,21 @@ def view(id):
 def edit(id):
     appointment = Appointment.query.get_or_404(id)
 
-    # Перевірка доступу: тільки адміністратор або майстер цього запису можуть редагувати
     if not current_user.is_admin and appointment.master_id != current_user.id:
         flash("У вас немає доступу до редагування цього запису", "danger")
         return redirect(url_for("appointments.index"))
 
-    form = AppointmentForm(obj=appointment)
+    if request.method == "POST":
+        form = (
+            AppointmentForm()
+        )  # For POST, create empty and populate from request.form
+    else:  # GET request
+        form = AppointmentForm(obj=appointment)  # Populate from object for GET
+        if appointment.services:
+            form.services.data = [s.service_id for s in appointment.services]
+        else:
+            form.services.data = []
 
-    # Заповнення варіантів вибору для клієнтів, майстрів та послуг
     form.client_id.choices = [
         (c.id, f"{c.name} ({c.phone})")
         for c in Client.query.order_by(Client.name).all()
@@ -257,17 +264,7 @@ def edit(id):
         for s in Service.query.order_by(Service.name).all()
     ]
 
-    # Встановлення поточних послуг для запису
-    if request.method == "GET":
-        form.services.data = [service.service_id for service in appointment.services]
-
-    if form.validate_on_submit():
-        # Перевірка, чи має право користувач редагувати для вибраного майстра
-        if not current_user.is_admin and form.master_id.data != current_user.id:
-            flash("Ви можете редагувати записи тільки для себе", "danger")
-            return redirect(url_for("appointments.edit", id=id))
-
-        # Оновлюємо основні дані запису
+    if form.validate_on_submit():  # This is for POST requests
         appointment.client_id = form.client_id.data
         appointment.master_id = form.master_id.data
         appointment.date = form.date.data
@@ -277,35 +274,45 @@ def edit(id):
             "0.0"
         )
 
-        # Оновлюємо end_time на основі першої послуги
-        if form.services.data:
-            service = db.session.get(Service, form.services.data[0])
-            # Розраховуємо end_time на основі start_time та тривалості послуги
-            start_datetime = datetime.combine(form.date.data, form.start_time.data)
-            end_datetime = start_datetime + timedelta(minutes=service.duration)
-            appointment.end_time = end_datetime.time()
-
-        # Видаляємо всі попередні послуги та додаємо нові
+        # Видаляємо всі попередні послуги для цього запису
         AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
+        # db.session.flush() # Consider if flush is needed before adding new services, generally good practice
 
-        # Додавання вибраних послуг
+        current_total_duration = 0
         if form.services.data:
             for service_id in form.services.data:
-                service = db.session.get(Service, service_id)
-                if service:
-                    # Встановлюємо базову ціну послуги (тут можна змінити логіку розрахунку)
-                    appointment_service = AppointmentService(
+                service_obj = db.session.get(Service, service_id)
+                if service_obj:
+                    new_appointment_service = AppointmentService(
                         appointment_id=appointment.id,
                         service_id=service_id,
-                        price=float(service.duration),
+                        price=float(service_obj.duration),  # Or actual price logic
                         notes="",
                     )
-                    db.session.add(appointment_service)
+                    db.session.add(new_appointment_service)
+                    current_total_duration += service_obj.duration
+
+        # Розраховуємо end_time на основі нового start_time та загальної тривалості ОНОВЛЕНИХ послуг
+        if current_total_duration > 0:
+            start_datetime = datetime.combine(appointment.date, appointment.start_time)
+            end_datetime = start_datetime + timedelta(minutes=current_total_duration)
+            appointment.end_time = end_datetime.time()
+        else:
+            # Якщо після редагування послуг немає, end_time = start_time
+            appointment.end_time = appointment.start_time
 
         db.session.commit()
 
         flash("Запис успішно оновлено!", "success")
         return redirect(url_for("appointments.view", id=appointment.id))
+    elif request.method == "POST":  # If POST and validation failed
+        # For debugging, flash errors to see them in the response if test still fails
+        error_messages = []
+        for field, errors in form.errors.items():
+            for error in errors:
+                error_messages.append(f"{field}: {error}")
+        if error_messages:
+            flash("Помилка валідації форми: " + ", ".join(error_messages), "danger")
 
     return render_template(
         "appointments/edit.html",

@@ -1,2 +1,2 @@
 # Цей файл потрібен для правильного імпорту маршрутів
-from . import appointments, auth, clients, main, services
+# from . import appointments, auth, clients, main, services

@@ -1,12 +1,20 @@
 from collections import Counter
 from datetime import datetime, time, timedelta
 
-from flask import (Blueprint, abort, current_app, flash, redirect,
-                   render_template, request, url_for)
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
-from app.models import Appointment, AppointmentService, Service, User, db
+from app.models import Appointment, AppointmentService, User, db
 
 # Створення Blueprint
 bp = Blueprint("main", __name__)

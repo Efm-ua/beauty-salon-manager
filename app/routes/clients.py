@@ -1,14 +1,10 @@
 from datetime import datetime
 
-from flask import (Blueprint, flash, jsonify, redirect, render_template,
-                   request, url_for)
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 from flask_wtf import FlaskForm
-from sqlalchemy import and_, func, or_, text
-from sqlalchemy.sql import text as sql_text
 from wtforms import StringField, SubmitField, TextAreaField
-from wtforms.validators import (DataRequired, Email, Length, Optional,
-                                ValidationError)
+from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError
 
 from app.models import Appointment, Client, db
 

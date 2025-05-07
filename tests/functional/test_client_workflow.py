@@ -1,7 +1,4 @@
-from datetime import date, datetime, time, timedelta
-
-import pytest
-from flask_login import login_user
+from datetime import date, datetime, timedelta
 
 
 def test_client_full_lifecycle(session, client, regular_user):

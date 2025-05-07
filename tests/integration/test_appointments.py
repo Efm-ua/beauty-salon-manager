@@ -44,8 +44,7 @@ import uuid
 from datetime import date, datetime, time, timedelta
 
 import pytest
-from flask import session, url_for
-from flask_login import current_user
+from flask import url_for
 from werkzeug.security import generate_password_hash
 
 from app.models import Appointment, AppointmentService, Client, Service, User
