@@ -105,7 +105,7 @@ def stats():
         .all()
     )
 
-    # Загальна сума за місяць
+    # Загальна сума за місяць це комент для апдейта
     total_month_revenue = sum(stats.total_revenue or 0 for stats in monthly_stats)
 
     return render_template(
