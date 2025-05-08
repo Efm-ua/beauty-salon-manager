@@ -95,11 +95,17 @@ def salary_report():
             .all()
         )
 
-        # Calculate total service cost - use the original price without discount
-        for appointment in appointments:
-            for service in appointment.services:
-                # Explicitly use helper function to ensure we're ignoring discounts
-                total_services_cost += calculate_salary_without_discount(service.price)
+        # Get appointment IDs for completed appointments
+        appointment_ids = [appointment.id for appointment in appointments]
+
+        # Calculate total service cost based ONLY on AppointmentService.price values
+        if appointment_ids:
+            # Get the sum of all service prices for these appointments using SQLAlchemy
+            service_sum_query = db.session.query(
+                func.sum(AppointmentService.price)
+            ).filter(AppointmentService.appointment_id.in_(appointment_ids))
+            service_sum_result = service_sum_query.scalar()
+            total_services_cost = float(service_sum_result or 0)
 
     return render_template(
         "reports/salary_report.html",
@@ -151,67 +157,65 @@ def financial_report():
             Appointment.date == selected_date, Appointment.status == "completed"
         ).all()
 
-        # Calculate total amount from all appointment services
-        appointment_ids = [appointment.id for appointment in completed_appointments]
+        # Initialize payment method totals
+        payment_method_totals = {pm.value: 0 for pm in PaymentMethod}
+        payment_method_totals["Не вказано"] = 0
 
-        if appointment_ids:
-            # Calculate total income for the day (now considering discount)
-            total_income_query = (
-                db.session.query(
-                    func.sum(
-                        AppointmentService.price
-                        * (1 - func.coalesce(Appointment.discount_percentage, 0) / 100)
-                    )
-                )
-                .join(Appointment, Appointment.id == AppointmentService.appointment_id)
-                .filter(AppointmentService.appointment_id.in_(appointment_ids))
-            )
+        # Process each completed appointment
+        for appointment in completed_appointments:
+            # Use amount_paid if available, otherwise calculate from services with discount
+            if (
+                appointment.amount_paid is not None
+                and float(appointment.amount_paid) > 0
+            ):
+                amount = float(appointment.amount_paid)
+                total_amount += amount
 
-            total_amount_result = total_income_query.scalar()
-            total_amount = float(
-                total_amount_result or 0
-            )  # Convert to float to ensure proper formatting
-
-            # Get breakdown by payment method (with discount)
-            payment_breakdown_query = (
-                db.session.query(
-                    Appointment.payment_method,
-                    func.sum(
-                        AppointmentService.price
-                        * (1 - func.coalesce(Appointment.discount_percentage, 0) / 100)
-                    ),
-                )
-                .join(
-                    AppointmentService,
-                    AppointmentService.appointment_id == Appointment.id,
-                )
-                .filter(Appointment.id.in_(appointment_ids))
-                .group_by(Appointment.payment_method)
-                .all()
-            )
-
-            # Format results for display
-            payment_breakdown = []
-            for payment_method, amount in payment_breakdown_query:
+                # Add to the appropriate payment method
                 method_name = (
-                    "Не вказано" if payment_method is None else payment_method.value
+                    "Не вказано"
+                    if appointment.payment_method is None
+                    else appointment.payment_method.value
                 )
-                # Ensure amount is Decimal type for consistency
-                if amount is not None:
-                    payment_breakdown.append((method_name, amount))
+                payment_method_totals[method_name] += amount
+            else:
+                # Calculate amount from services with discount
+                services_amount = sum(service.price for service in appointment.services)
+                if appointment.discount_percentage:
+                    discounted_amount = services_amount * (
+                        1 - float(appointment.discount_percentage) / 100
+                    )
+                else:
+                    discounted_amount = services_amount
 
-            # Add any missing payment methods with zero values
-            existing_methods = {item[0] for item in payment_breakdown}
-            for method in PaymentMethod:
-                if method.value not in existing_methods:
-                    payment_breakdown.append((method.value, 0))
+                total_amount += discounted_amount
 
-            # Add "Not specified" if it's not already included
-            if "Не вказано" not in existing_methods:
-                payment_breakdown.append(("Не вказано", 0))
+                # Add to the appropriate payment method
+                method_name = (
+                    "Не вказано"
+                    if appointment.payment_method is None
+                    else appointment.payment_method.value
+                )
+                payment_method_totals[method_name] += discounted_amount
 
-            # Sort by payment method name
-            payment_breakdown.sort(key=lambda x: x[0])
+        # Format results for display
+        payment_breakdown = [
+            (method, amount)
+            for method, amount in payment_method_totals.items()
+            if amount > 0
+        ]
+
+        # Add any missing payment methods with zero values if needed for display
+        for method in PaymentMethod:
+            if method.value not in [item[0] for item in payment_breakdown]:
+                payment_breakdown.append((method.value, 0))
+
+        # Add "Not specified" if not already included
+        if "Не вказано" not in [item[0] for item in payment_breakdown]:
+            payment_breakdown.append(("Не вказано", 0))
+
+        # Sort by payment method name
+        payment_breakdown.sort(key=lambda x: x[0])
 
     return render_template(
         "reports/financial_report.html",

@@ -22,6 +22,7 @@
             <th>Назва</th>
             <th>Опис</th>
             <th>Тривалість (хв)</th>
+            <th>Базова ціна (грн)</th>
             <th>Дії</th>
           </tr>
         </thead>
@@ -31,6 +32,10 @@
             <td>{{ service.name }}</td>
             <td>{{ service.description if service.description else "-" }}</td>
             <td>{{ service.duration }}</td>
+            <td>
+              {{ "%.2f"|format(service.base_price) if service.base_price else
+              "-" }}
+            </td>
             <td>
               {% if is_admin %}
               <div class="btn-group">

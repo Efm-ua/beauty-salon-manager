@@ -1,31 +1,18 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask import (Blueprint, flash, jsonify, redirect, render_template,
+                   request, url_for)
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import (
-    DateField,
-    DecimalField,
-    FloatField,
-    RadioField,
-    SelectField,
-    SelectMultipleField,
-    SubmitField,
-    TextAreaField,
-    TimeField,
-)
-from wtforms.validators import DataRequired, NumberRange, Optional, ValidationError
+from wtforms import (DateField, DecimalField, FloatField, RadioField,
+                     SelectField, SelectMultipleField, SubmitField,
+                     TextAreaField, TimeField)
+from wtforms.validators import (DataRequired, NumberRange, Optional,
+                                ValidationError)
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    PaymentMethod,
-    Service,
-    User,
-    db,
-)
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User, db)
 
 # Створення Blueprint
 bp = Blueprint("appointments", __name__, url_prefix="/appointments")
@@ -894,8 +881,15 @@ def daily_summary():
 
         appointment_count = len(master_appointments)
         for appointment in master_appointments:
-            for service in appointment.services:
-                master_sum += service.price
+            # Використовуємо amount_paid, якщо воно доступне, інакше обчислюємо з послуг
+            if (
+                appointment.amount_paid is not None
+                and float(appointment.amount_paid) > 0
+            ):
+                master_sum += float(appointment.amount_paid)
+            else:
+                for service in appointment.services:
+                    master_sum += service.price
 
         master_stats[master_id] = {
             "id": master_id,
@@ -911,9 +905,14 @@ def daily_summary():
         filter_master=None,
         appointments=appointments,
         total_sum=sum(
-            service.price
+            (
+                float(appointment.amount_paid)
+                if appointment.amount_paid is not None
+                and float(appointment.amount_paid) > 0
+                else sum(service.price for service in appointment.services)
+            )
             for appointment in appointments
-            for service in appointment.services
+            if appointment.status == "completed"
         ),
         masters=masters,
         master_stats=master_stats.values(),

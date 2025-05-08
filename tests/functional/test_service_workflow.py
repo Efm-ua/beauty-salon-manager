@@ -39,6 +39,7 @@ def test_service_full_lifecycle(session, client, admin_user):
     service_name = f"Test Service {unique_id}"
     service_description = "Service for functional testing"
     service_duration = 60
+    service_base_price = 150.50
 
     response = client.post(
         "/services/create",
@@ -46,6 +47,7 @@ def test_service_full_lifecycle(session, client, admin_user):
             "name": service_name,
             "description": service_description,
             "duration": service_duration,
+            "base_price": service_base_price,
         },
         follow_redirects=True,
     )
@@ -65,11 +67,13 @@ def test_service_full_lifecycle(session, client, admin_user):
     # Verify service details
     assert created_service.description == service_description
     assert created_service.duration == service_duration
+    assert created_service.base_price == service_base_price
 
     # Edit service information
     updated_name = f"Updated {service_name}"
     updated_description = "Updated service description"
     updated_duration = 90
+    updated_base_price = 200.00
 
     response = client.post(
         f"/services/{service_id}/edit",
@@ -77,6 +81,7 @@ def test_service_full_lifecycle(session, client, admin_user):
             "name": updated_name,
             "description": updated_description,
             "duration": updated_duration,
+            "base_price": updated_base_price,
         },
         follow_redirects=True,
     )
@@ -91,6 +96,7 @@ def test_service_full_lifecycle(session, client, admin_user):
     assert created_service.name == updated_name
     assert created_service.description == updated_description
     assert created_service.duration == updated_duration
+    assert created_service.base_price == updated_base_price
 
     # Delete the service
     response = client.post(
@@ -139,6 +145,7 @@ def test_service_with_appointments(session, client, admin_user, test_client):
             "name": service_name,
             "description": "Service for appointment testing",
             "duration": 45,
+            "base_price": 180.00,
         },
         follow_redirects=True,
     )

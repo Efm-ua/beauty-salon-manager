@@ -1,70 +1,66 @@
-{% extends "base.html" %}
-
-{% block content %}
+{% extends "base.html" %} {% block content %}
 <div class="row mb-3">
-    <div class="col">
-        <a href="{{ url_for('services.index') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-2"></i>Назад до списку послуг
-        </a>
-    </div>
+  <div class="col">
+    <a href="{{ url_for('services.index') }}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-2"></i>Назад до списку послуг
+    </a>
+  </div>
 </div>
 
 <div class="card">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="fas fa-plus me-2"></i>Додавання нової послуги</h5>
-    </div>
-    <div class="card-body">
-        <form method="POST" action="{{ url_for('services.create') }}">
-            {{ form.hidden_tag() }}
-            
-            <div class="mb-3">
-                {{ form.name.label(class="form-label") }}
-                {% if form.name.errors %}
-                    {{ form.name(class="form-control is-invalid") }}
-                    <div class="invalid-feedback">
-                        {% for error in form.name.errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    {{ form.name(class="form-control") }}
-                {% endif %}
-            </div>
-            
-            <div class="mb-3">
-                {{ form.duration.label(class="form-label") }}
-                {% if form.duration.errors %}
-                    {{ form.duration(class="form-control is-invalid") }}
-                    <div class="invalid-feedback">
-                        {% for error in form.duration.errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    {{ form.duration(class="form-control") }}
-                {% endif %}
-                <small class="form-text text-muted">Час у хвилинах</small>
-            </div>
-            
-            <div class="mb-3">
-                {{ form.description.label(class="form-label") }}
-                {% if form.description.errors %}
-                    {{ form.description(class="form-control is-invalid", rows=3) }}
-                    <div class="invalid-feedback">
-                        {% for error in form.description.errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    {{ form.description(class="form-control", rows=3) }}
-                {% endif %}
-                <small class="form-text text-muted">Необов'язкове поле</small>
-            </div>
-            
-            <div class="d-grid">
-                {{ form.submit(class="btn btn-primary") }}
-            </div>
-        </form>
-    </div>
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0">
+      <i class="fas fa-plus me-2"></i>Додавання нової послуги
+    </h5>
+  </div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('services.create') }}">
+      {{ form.hidden_tag() }}
+
+      <div class="mb-3">
+        {{ form.name.label(class="form-label") }} {% if form.name.errors %} {{
+        form.name(class="form-control is-invalid") }}
+        <div class="invalid-feedback">
+          {% for error in form.name.errors %} {{ error }} {% endfor %}
+        </div>
+        {% else %} {{ form.name(class="form-control") }} {% endif %}
+      </div>
+
+      <div class="mb-3">
+        {{ form.duration.label(class="form-label") }} {% if form.duration.errors
+        %} {{ form.duration(class="form-control is-invalid") }}
+        <div class="invalid-feedback">
+          {% for error in form.duration.errors %} {{ error }} {% endfor %}
+        </div>
+        {% else %} {{ form.duration(class="form-control") }} {% endif %}
+        <small class="form-text text-muted">Час у хвилинах</small>
+      </div>
+
+      <div class="mb-3">
+        {{ form.base_price.label(class="form-label") }} {% if
+        form.base_price.errors %} {{ form.base_price(class="form-control
+        is-invalid") }}
+        <div class="invalid-feedback">
+          {% for error in form.base_price.errors %} {{ error }} {% endfor %}
+        </div>
+        {% else %} {{ form.base_price(class="form-control") }} {% endif %}
+        <small class="form-text text-muted">Необов'язкове поле</small>
+      </div>
+
+      <div class="mb-3">
+        {{ form.description.label(class="form-label") }} {% if
+        form.description.errors %} {{ form.description(class="form-control
+        is-invalid", rows=3) }}
+        <div class="invalid-feedback">
+          {% for error in form.description.errors %} {{ error }} {% endfor %}
+        </div>
+        {% else %} {{ form.description(class="form-control", rows=3) }} {% endif
+        %}
+        <small class="form-text text-muted">Необов'язкове поле</small>
+      </div>
+
+      <div class="d-grid">{{ form.submit(class="btn btn-primary") }}</div>
+    </form>
+  </div>
 </div>
 {% endblock %}

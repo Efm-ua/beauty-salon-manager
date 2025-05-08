@@ -1,7 +1,8 @@
 from flask import Blueprint, flash, jsonify, redirect, render_template, url_for
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import IntegerField, StringField, SubmitField, TextAreaField
+from wtforms import (FloatField, IntegerField, StringField, SubmitField,
+                     TextAreaField)
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
 from app.models import AppointmentService, Service, db
@@ -16,6 +17,11 @@ class ServiceForm(FlaskForm):
     description = TextAreaField("Опис", validators=[Optional()])
     duration = IntegerField(
         "Тривалість (хв)", validators=[DataRequired(), NumberRange(min=5, max=480)]
+    )
+    base_price = FloatField(
+        "Базова ціна (грн)",
+        validators=[Optional(), NumberRange(min=0)],
+        render_kw={"placeholder": "0.00"},
     )
     submit = SubmitField("Зберегти")
 
@@ -50,6 +56,7 @@ def create():
             name=form.name.data,
             description=form.description.data,
             duration=form.duration.data,
+            base_price=form.base_price.data,
         )
         db.session.add(service)
         db.session.commit()
@@ -128,6 +135,7 @@ def api_service(id):
             "name": service.name,
             "description": service.description,
             "duration": service.duration,
+            "base_price": service.base_price,
         }
     )
 
@@ -141,7 +149,12 @@ def api_list():
     result = []
     for service in services:
         result.append(
-            {"id": service.id, "name": service.name, "duration": service.duration}
+            {
+                "id": service.id,
+                "name": service.name,
+                "duration": service.duration,
+                "base_price": service.base_price,
+            }
         )
 
     return jsonify(result)
