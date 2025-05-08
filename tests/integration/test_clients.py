@@ -63,7 +63,7 @@ def auth_client_for_clients(client, session):
             username="test_user_for_clients",
             password=generate_password_hash("test_password"),
             full_name="Test User For Clients",
-            is_admin=False,
+            is_admin=True,  # Змінено на True щоб створити адміністратора
         )
         session.add(test_user)
         session.commit()
@@ -79,7 +79,26 @@ def auth_client_for_clients(client, session):
         follow_redirects=True,
     )
 
-    assert response.status_code == 200
+    # Перевірка успішності автентифікації
+    assert (
+        response.status_code == 200
+    ), f"Login failed: status code {response.status_code}"
+
+    # Перевірка наявності ознак успішного входу в систему
+    # 1. Перевірка наявності елементу, який видно тільки після входу (посилання на вихід)
+    assert (
+        "/auth/logout" in response.text
+    ), "Login failed: Logout link not found in response"
+
+    # 2. Перевірка наявності імені користувача у відповіді
+    assert (
+        "Test User For Clients" in response.text
+    ), "Login failed: User name not found in response"
+
+    # 3. Перевірка наявності мітки "Адміністратор" у відповіді
+    assert (
+        "Адміністратор" in response.text
+    ), "Login failed: Admin label not found in response"
 
     yield client
 
@@ -233,6 +252,7 @@ def test_client_view_page_accessible(auth_client_for_clients, session):
     session.commit()
     client_id = test_client.id
 
+    # Використовуємо адміністратора для перевірки доступу до сторінки перегляду клієнта
     response = auth_client_for_clients.get(f"/clients/{client_id}")
     assert response.status_code == 200
     assert f"Test Client For View {unique_id}" in response.data.decode("utf-8")

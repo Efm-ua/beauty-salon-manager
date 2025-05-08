@@ -44,6 +44,14 @@
   .schedule-appointment:hover {
     background-color: #c5e0b4;
   }
+  /* Стиль для записів клієнтів з кількома бронюваннями */
+  .multi-booking {
+    background-color: #ffeb99; /* Жовтуватий колір для виділення */
+    border-left: 3px solid #ff9933; /* Помаранчева смуга зліва */
+  }
+  .multi-booking:hover {
+    background-color: #ffe066;
+  }
   .schedule-container {
     max-height: 80vh;
     overflow-y: auto;
@@ -146,30 +154,27 @@
               schedule_data[master.id][interval.main_time]|length > 0 %} {#
               Process the first appointment data item in the slot #} {% set
               item_data = schedule_data[master.id][interval.main_time][0] %} {%
-              set appointment = item_data.appointment %} {% set finance_info =
-              item_data.finance_info %} {% set slot_css_class =
-              item_data.css_class %} {% if
-              appointment.start_time.strftime('%H:%M') ==
-              interval.main_time.strftime('%H:%M') %}
+              set finance_info = item_data.finance_info %} {% set slot_css_class
+              = item_data.css_class %} {% if item_data.display_type == "full" %}
               <div
-                class="schedule-appointment {{ slot_css_class }}"
-                onclick="window.location.href='{{ url_for('appointments.view', id=appointment.id) }}'"
+                class="schedule-appointment {{ slot_css_class }} {% if item_data.multi_booking %}multi-booking{% endif %}"
+                onclick="window.location.href='{{ url_for('appointments.view', id=item_data.id) }}'"
               >
-                <strong>{{ appointment.client.name }}</strong><br />
-                <small
-                  >{{ appointment.start_time.strftime('%H:%M') }} - {{
-                  appointment.end_time.strftime('%H:%M') }}</small
-                >
-                {% if appointment.services %}
+                <strong>{{ item_data.client_name }}</strong><br />
+                <small>{{ interval.main_time.strftime('%H:%M') }}</small>
+                {% if item_data.services %}
                 <br />
                 <small>
-                  {% for service_assoc in appointment.services[:1] %} {{
-                  service_assoc.service.name }} {% if loop.index <
-                  appointment.services|length %} ... {% endif %} {% endfor %}
+                  {% for service_name in item_data.services[:1] %} {{
+                  service_name }} {% if loop.index < item_data.services|length
+                  %} ... {% endif %} {% endfor %}
                 </small>
                 {% endif %} {% if finance_info %}
                 <br />
                 <small class="fw-bold">{{ finance_info }}</small>
+                {% endif %} {% if item_data.completion_info %}
+                <br />
+                <small>{{ item_data.completion_info }}</small>
                 {% endif %}
               </div>
               {% endif %} {% endif %}
@@ -196,31 +201,28 @@
               {% if schedule_data[master.id][sub_slot] and
               schedule_data[master.id][sub_slot]|length > 0 %} {# Process the
               first appointment data item in the sub-slot #} {% set item_data =
-              schedule_data[master.id][sub_slot][0] %} {% set appointment =
-              item_data.appointment %} {% set finance_info =
+              schedule_data[master.id][sub_slot][0] %} {% set finance_info =
               item_data.finance_info %} {% set slot_css_class =
-              item_data.css_class %} {% if
-              appointment.start_time.strftime('%H:%M') ==
-              sub_slot.strftime('%H:%M') %}
+              item_data.css_class %} {% if item_data.display_type == "full" %}
               <div
-                class="schedule-appointment {{ slot_css_class }}"
-                onclick="window.location.href='{{ url_for('appointments.view', id=appointment.id) }}'"
+                class="schedule-appointment {{ slot_css_class }} {% if item_data.multi_booking %}multi-booking{% endif %}"
+                onclick="window.location.href='{{ url_for('appointments.view', id=item_data.id) }}'"
               >
-                <strong>{{ appointment.client.name }}</strong><br />
-                <small
-                  >{{ appointment.start_time.strftime('%H:%M') }} - {{
-                  appointment.end_time.strftime('%H:%M') }}</small
-                >
-                {% if appointment.services %}
+                <strong>{{ item_data.client_name }}</strong><br />
+                <small>{{ sub_slot.strftime('%H:%M') }}</small>
+                {% if item_data.services %}
                 <br />
                 <small>
-                  {% for service_assoc in appointment.services[:1] %} {{
-                  service_assoc.service.name }} {% if loop.index <
-                  appointment.services|length %} ... {% endif %} {% endfor %}
+                  {% for service_name in item_data.services[:1] %} {{
+                  service_name }} {% if loop.index < item_data.services|length
+                  %} ... {% endif %} {% endfor %}
                 </small>
                 {% endif %} {% if finance_info %}
                 <br />
                 <small class="fw-bold">{{ finance_info }}</small>
+                {% endif %} {% if item_data.completion_info %}
+                <br />
+                <small>{{ item_data.completion_info }}</small>
                 {% endif %}
               </div>
               {% endif %} {% endif %}

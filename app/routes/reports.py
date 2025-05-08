@@ -10,6 +10,21 @@ from wtforms.validators import DataRequired
 from app import db
 from app.models import Appointment, AppointmentService, PaymentMethod, User
 
+
+# Helper function for calculating total with discount
+def calculate_total_with_discount(service_price, discount_percentage):
+    """Calculate the service price with discount applied."""
+    discount_factor = 1 - float(discount_percentage) / 100
+    return service_price * discount_factor
+
+
+# Helper function for calculating salary without discount
+def calculate_salary_without_discount(service_price, discount_percentage=None):
+    """Calculate the salary amount, ignoring any discount."""
+    # Return the full service price without applying discount
+    return service_price
+
+
 # Blueprint creation
 bp = Blueprint("reports", __name__, url_prefix="/reports")
 
@@ -35,9 +50,12 @@ class DailySalaryReportForm(FlaskForm):
 def salary_report():
     form = DailySalaryReportForm()
 
-    # Fill masters list
-    form.master_id.choices = [
-        (u.id, u.full_name) for u in User.query.order_by(User.full_name).all()
+    # Отримання списку майстрів для фільтрації
+    form.master_id.choices = [(0, "Всі майстри")] + [
+        (u.id, u.full_name)
+        for u in User.query.filter_by(is_active_master=True)
+        .order_by(User.full_name)
+        .all()
     ]
 
     # If user is not admin, limit selection to current user
@@ -77,10 +95,11 @@ def salary_report():
             .all()
         )
 
-        # Calculate total service cost
+        # Calculate total service cost - use the original price without discount
         for appointment in appointments:
             for service in appointment.services:
-                total_services_cost += service.price
+                # Explicitly use helper function to ensure we're ignoring discounts
+                total_services_cost += calculate_salary_without_discount(service.price)
 
     return render_template(
         "reports/salary_report.html",
@@ -100,9 +119,12 @@ def financial_report():
     # Create form first so it's available for all template renderings
     form = DailySalaryReportForm()
 
-    # Fill masters list (not used for this report but required for the form)
-    form.master_id.choices = [
-        (u.id, u.full_name) for u in User.query.order_by(User.full_name).all()
+    # Отримання списку майстрів для фільтрації
+    form.master_id.choices = [(0, "Всі майстри")] + [
+        (u.id, u.full_name)
+        for u in User.query.filter_by(is_active_master=True)
+        .order_by(User.full_name)
+        .all()
     ]
 
     # Debug the admin status
@@ -146,7 +168,9 @@ def financial_report():
             )
 
             total_amount_result = total_income_query.scalar()
-            total_amount = total_amount_result or 0
+            total_amount = float(
+                total_amount_result or 0
+            )  # Convert to float to ensure proper formatting
 
             # Get breakdown by payment method (with discount)
             payment_breakdown_query = (

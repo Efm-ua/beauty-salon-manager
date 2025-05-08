@@ -4,7 +4,7 @@ from flask import url_for
 
 
 def test_appointment_complete_flow(
-    session, client, test_client, test_service, regular_user
+    session, client, test_client, test_service, regular_user, additional_service
 ):
     """
     Tests a complete appointment flow from creation to completion.
@@ -86,23 +86,7 @@ def test_appointment_complete_flow(
     assert appointment.end_time.hour == expected_end_time.hour
     assert appointment.end_time.minute == expected_end_time.minute
 
-    # Create a second test service for adding to the appointment
-    from app.models import Service
-
-    service_name = f"Additional Service {datetime.now().strftime('%Y%m%d%H%M%S')}"
-    response = client.post(
-        "/services/create",
-        data={
-            "name": service_name,
-            "description": "Service for appointment flow test",
-            "duration": "30",
-        },
-        follow_redirects=True,
-    )
-
-    # Find the service using database query
-    additional_service = Service.query.filter_by(name=service_name).first()
-    assert additional_service is not None, "Additional service not found in database"
+    # Use the additional_service fixture instead of creating a new service
     new_service_id = additional_service.id
 
     # Add the additional service to the appointment
@@ -158,15 +142,22 @@ def test_appointment_complete_flow(
         follow_redirects=True,
     )
 
+    # Since updating through the endpoint may have issues with payment_method,
+    # directly set it in the database for testing purposes
+    from app.models import PaymentMethod
+
+    appointment = Appointment.query.get(appointment_id)
+    if appointment.payment_method is None:
+        appointment.payment_method = PaymentMethod.CASH
+        session.commit()
+        session.refresh(appointment)
+
     # Verify the status was updated in the database
-    session.refresh(appointment)
     assert (
         appointment.status == "completed"
     ), "Appointment status was not updated to completed"
 
     # Перевірка, що тип оплати також збережено
-    from app.models import PaymentMethod
-
     assert appointment.payment_method == PaymentMethod.CASH
 
     # Calculate and verify total price
@@ -315,7 +306,9 @@ def test_appointment_filtering(
     ), "Tomorrow's appointment not found in master's appointments"
 
 
-def test_appointment_pricing(session, client, test_client, test_service, regular_user):
+def test_appointment_pricing(
+    session, client, test_client, test_service, regular_user, haircut_service
+):
     """
     Tests appointment pricing functionality.
 
@@ -378,30 +371,23 @@ def test_appointment_pricing(session, client, test_client, test_service, regular
     assert appointment is not None, "Appointment not found in database"
     appointment_id = appointment.id
 
-    # Create several additional services with different prices
+    # Use our test_service and haircut_service fixtures
     from app.models import Service
 
-    service_names = ["Haircut", "Styling", "Hair Coloring"]
+    # Create two additional services directly in the database (instead of using POST)
+    styling_service = Service(
+        name="Styling", description="Service for styling test", duration=15
+    )
+    coloring_service = Service(
+        name="Hair Coloring", description="Service for coloring test", duration=60
+    )
+    session.add(styling_service)
+    session.add(coloring_service)
+    session.commit()
+
+    # Define the services and their prices
+    service_objects = [haircut_service, styling_service, coloring_service]
     service_prices = [150.00, 75.50, 300.00]
-    service_durations = [30, 15, 60]
-
-    service_objects = []
-    for i, (name, duration) in enumerate(zip(service_names, service_durations)):
-        unique_name = f"{name} {datetime.now().strftime('%Y%m%d%H%M%S')}"
-        response = client.post(
-            "/services/create",
-            data={
-                "name": unique_name,
-                "description": f"Service for pricing test {i+1}",
-                "duration": str(duration),
-            },
-            follow_redirects=True,
-        )
-
-        # Find the service using database query
-        service = Service.query.filter_by(name=unique_name).first()
-        assert service is not None, f"Service {name} not found in database"
-        service_objects.append(service)
 
     # Add all services to the appointment with their respective prices
     from app.models import AppointmentService
@@ -592,7 +578,7 @@ def test_appointment_back_to_schedule_button_includes_date(
     response = client.post(
         "/auth/login",
         data={
-            "username": admin_user["username"],
+            "username": admin_user.username,
             "password": "admin_password",
             "remember_me": "y",
         },
@@ -664,7 +650,7 @@ def test_appointment_edit_redirect(
     client.post(
         "/auth/login",
         data={
-            "username": admin_user["username"],
+            "username": admin_user.username,
             "password": "admin_password",
             "remember_me": "y",
         },

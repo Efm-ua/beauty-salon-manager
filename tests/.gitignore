@@ -18,6 +18,9 @@ ENV/
 # Test databases
 *.db
 *.sqlite
+# Ігнорувати всі sqlite3-бази (наприклад db.sqlite3)
+*.sqlite3
+db.sqlite3
 
 # Test logs
 *.log

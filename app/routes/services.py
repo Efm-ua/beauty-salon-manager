@@ -1,5 +1,5 @@
 from flask import Blueprint, flash, jsonify, redirect, render_template, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from wtforms import IntegerField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
@@ -20,19 +20,29 @@ class ServiceForm(FlaskForm):
     submit = SubmitField("Зберегти")
 
 
-# Список всіх послуг
+# Список всіх послуг (доступно для всіх користувачів)
 @bp.route("/")
 @login_required
 def index():
     services = Service.query.order_by(Service.name).all()
 
-    return render_template("services/index.html", title="Послуги", services=services)
+    return render_template(
+        "services/index.html",
+        title="Послуги",
+        services=services,
+        is_admin=current_user.is_admin,
+    )
 
 
-# Створення нової послуги
+# Створення нової послуги (тільки для адміністраторів)
 @bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create():
+    # Перевірка прав доступу
+    if not current_user.is_admin:
+        flash("У вас немає прав для створення нових послуг", "danger")
+        return redirect(url_for("services.index"))
+
     form = ServiceForm()
 
     if form.validate_on_submit():
@@ -50,10 +60,15 @@ def create():
     return render_template("services/create.html", title="Нова послуга", form=form)
 
 
-# Редагування послуги
+# Редагування послуги (тільки для адміністраторів)
 @bp.route("/<int:id>/edit", methods=["GET", "POST"])
 @login_required
 def edit(id):
+    # Перевірка прав доступу
+    if not current_user.is_admin:
+        flash("У вас немає прав для редагування послуг", "danger")
+        return redirect(url_for("services.index"))
+
     service = Service.query.get_or_404(id)
     form = ServiceForm(obj=service)
 
@@ -72,10 +87,15 @@ def edit(id):
     )
 
 
-# Видалення послуги
+# Видалення послуги (тільки для адміністраторів)
 @bp.route("/<int:id>/delete", methods=["POST"])
 @login_required
 def delete(id):
+    # Перевірка прав доступу
+    if not current_user.is_admin:
+        flash("У вас немає прав для видалення послуг", "danger")
+        return redirect(url_for("services.index"))
+
     service = Service.query.get_or_404(id)
 
     # Перевірка, чи використовується послуга

@@ -1,0 +1,47 @@
+{% extends "base.html" %} {% block content %}
+<div class="row">
+  <div class="col-md-6 offset-md-3">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">{{ title }}</h5>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.full_name.label(class="form-label") }} {{
+            form.full_name(class="form-control") }} {% for error in
+            form.full_name.errors %}
+            <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3 form-check">
+            {{ form.is_admin(class="form-check-input") }} {{
+            form.is_admin.label(class="form-check-label") }} {% for error in
+            form.is_admin.errors %}
+            <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3 form-check">
+            {{ form.is_active_master(class="form-check-input") }} {{
+            form.is_active_master.label(class="form-check-label") }} {% for
+            error in form.is_active_master.errors %}
+            <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('auth.users') }}" class="btn btn-secondary"
+              >Скасувати</a
+            >
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

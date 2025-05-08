@@ -1,81 +1,81 @@
-{% extends "base.html" %}
-
-{% block content %}
+{% extends "base.html" %} {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="fas fa-user-plus me-2"></i>Реєстрація нового майстра</h5>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+          <i class="fas fa-user-plus me-2"></i>Реєстрація нового майстра
+        </h5>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('auth.register') }}">
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.username.label(class="form-label") }} {% if
+            form.username.errors %} {{ form.username(class="form-control
+            is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.username.errors %} {{ error }} {% endfor %}
             </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('auth.register') }}">
-                    {{ form.hidden_tag() }}
-                    
-                    <div class="mb-3">
-                        {{ form.username.label(class="form-label") }}
-                        {% if form.username.errors %}
-                            {{ form.username(class="form-control is-invalid") }}
-                            <div class="invalid-feedback">
-                                {% for error in form.username.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            {{ form.username(class="form-control") }}
-                        {% endif %}
-                        <small class="form-text text-muted">Логін для входу в систему (латинські літери)</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.full_name.label(class="form-label") }}
-                        {% if form.full_name.errors %}
-                            {{ form.full_name(class="form-control is-invalid") }}
-                            <div class="invalid-feedback">
-                                {% for error in form.full_name.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            {{ form.full_name(class="form-control") }}
-                        {% endif %}
-                        <small class="form-text text-muted">Повне ім'я майстра, яке буде відображатись в системі</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.password.label(class="form-label") }}
-                        {% if form.password.errors %}
-                            {{ form.password(class="form-control is-invalid") }}
-                            <div class="invalid-feedback">
-                                {% for error in form.password.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            {{ form.password(class="form-control") }}
-                        {% endif %}
-                        <small class="form-text text-muted">Мінімум 6 символів</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.password2.label(class="form-label") }}
-                        {% if form.password2.errors %}
-                            {{ form.password2(class="form-control is-invalid") }}
-                            <div class="invalid-feedback">
-                                {% for error in form.password2.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            {{ form.password2(class="form-control") }}
-                        {% endif %}
-                    </div>
-                    
-                    <div class="d-grid">
-                        {{ form.submit(class="btn btn-primary") }}
-                    </div>
-                </form>
+            {% else %} {{ form.username(class="form-control") }} {% endif %}
+            <small class="form-text text-muted"
+              >Логін для входу в систему (латинські літери)</small
+            >
+          </div>
+
+          <div class="mb-3">
+            {{ form.full_name.label(class="form-label") }} {% if
+            form.full_name.errors %} {{ form.full_name(class="form-control
+            is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.full_name.errors %} {{ error }} {% endfor %}
             </div>
-        </div>
+            {% else %} {{ form.full_name(class="form-control") }} {% endif %}
+            <small class="form-text text-muted"
+              >Повне ім'я майстра, яке буде відображатись в системі</small
+            >
+          </div>
+
+          <div class="mb-3">
+            {{ form.password.label(class="form-label") }} {% if
+            form.password.errors %} {{ form.password(class="form-control
+            is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.password.errors %} {{ error }} {% endfor %}
+            </div>
+            {% else %} {{ form.password(class="form-control") }} {% endif %}
+            <small class="form-text text-muted">Мінімум 6 символів</small>
+          </div>
+
+          <div class="mb-3">
+            {{ form.password2.label(class="form-label") }} {% if
+            form.password2.errors %} {{ form.password2(class="form-control
+            is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.password2.errors %} {{ error }} {% endfor %}
+            </div>
+            {% else %} {{ form.password2(class="form-control") }} {% endif %}
+          </div>
+
+          <div class="mb-3 form-check">
+            {{ form.is_admin(class="form-check-input") }} {{
+            form.is_admin.label(class="form-check-label") }}
+          </div>
+
+          <div class="mb-3 form-check">
+            {{ form.is_active_master(class="form-check-input") }} {{
+            form.is_active_master.label(class="form-check-label") }}
+            <small class="form-text text-muted d-block"
+              >Встановлюється автоматично (за замовчуванням) на основі ролі, але
+              може бути змінено</small
+            >
+          </div>
+
+          <div class="d-grid">{{ form.submit(class="btn btn-primary") }}</div>
+        </form>
+      </div>
     </div>
+  </div>
 </div>
 {% endblock %}

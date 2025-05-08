@@ -38,11 +38,11 @@ class TestUserModel:
 
     def test_user_admin_status(self, admin_user):
         """Тест перевірки адміністративного статусу"""
-        # Створюємо новий об'єкт User з даними з admin_user словника
+        # Створюємо новий об'єкт User з даними з admin_user об'єкта
         admin = User(
-            username=admin_user["username"],
-            password=admin_user["password"],
-            full_name=admin_user["full_name"],
+            username=admin_user.username,
+            password=admin_user.password,
+            full_name=admin_user.full_name,
             is_admin=True,
         )
 
@@ -67,6 +67,74 @@ class TestUserModel:
 
         # Відкат транзакції для інших тестів
         session.rollback()
+
+    def test_new_master_default_is_active(self, session):
+        """Перевірка, що при створенні нового користувача-майстра (is_admin=False)
+        поле is_active_master за замовчуванням True."""
+        # Створюємо нового користувача через функцію, яка має встановити значення is_active_master
+        username = f"testmaster_{uuid.uuid4().hex[:8]}"
+        user = User(
+            username=username,
+            password=generate_password_hash("password123"),
+            full_name="Test Master",
+            is_admin=False,
+        )
+        session.add(user)
+        session.commit()
+
+        # Перевіряємо, що is_active_master за замовчуванням True для майстра
+        saved_user = session.query(User).filter_by(username=username).first()
+        assert hasattr(
+            saved_user, "is_active_master"
+        ), "User model doesn't have is_active_master attribute"
+        assert saved_user.is_active_master is True
+
+    def test_new_admin_default_is_inactive(self, session):
+        """Перевірка, що при створенні нового користувача-адміністратора (is_admin=True)
+        поле is_active_master за замовчуванням False."""
+        # Створюємо нового адміністратора через функцію, яка має встановити значення is_active_master
+        username = f"testadmin_{uuid.uuid4().hex[:8]}"
+        user = User(
+            username=username,
+            password=generate_password_hash("password123"),
+            full_name="Test Admin",
+            is_admin=True,
+        )
+        session.add(user)
+        session.commit()
+
+        # Перевіряємо, що is_active_master за замовчуванням False для адміністратора
+        saved_user = session.query(User).filter_by(username=username).first()
+        assert hasattr(
+            saved_user, "is_active_master"
+        ), "User model doesn't have is_active_master attribute"
+        assert saved_user.is_active_master is False
+
+    def test_user_can_toggle_is_active_master(self, session):
+        """Перевірка можливості встановлення та отримання значення is_active_master."""
+        # Створюємо користувача з явним встановленням is_active_master=False
+        username = f"testuser_{uuid.uuid4().hex[:8]}"
+        user = User(
+            username=username,
+            password=generate_password_hash("password123"),
+            full_name="Test User",
+            is_admin=False,
+            is_active_master=False,  # Явно встановлюємо False
+        )
+        session.add(user)
+        session.commit()
+
+        # Перевіряємо початкове значення
+        saved_user = session.query(User).filter_by(username=username).first()
+        assert saved_user.is_active_master is False
+
+        # Змінюємо значення is_active_master на True
+        saved_user.is_active_master = True
+        session.commit()
+
+        # Перевіряємо оновлене значення
+        updated_user = session.query(User).filter_by(username=username).first()
+        assert updated_user.is_active_master is True
 
 
 class TestClientModel:

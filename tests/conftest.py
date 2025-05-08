@@ -1,15 +1,19 @@
 import os
 import uuid
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal
 
 import pytest
-from flask_login import logout_user
 from werkzeug.security import generate_password_hash
 
 from app import create_app
 from app.config import Config
-from app.models import Appointment, AppointmentService, Client, Service, User
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    Service,
+    User,
+)
 from app.models import db as _db
 
 
@@ -110,19 +114,21 @@ def session(db):  # 'db' - це екземпляр Flask-SQLAlchemy
 
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_flask_login_state(app):  # Додано 'app' як залежність для контексту
-    """
-    Очищує стан Flask-Login після кожного тесту
-    для запобігання використання відокремлених об'єктів.
-    """
-    yield
-    # Після завершення тесту
-    with app.app_context():  # Забезпечуємо наявність контексту додатку для logout_user
+    """Очищує стан flask-login між тестами"""
+    print("DEBUG: Cleaning up Flask-Login state")
+
+    # Ініціалізуємо контекст додатка, щоб очистити login_manager
+    with app.app_context():
         try:
-            logout_user()  # Очищує current_user зі стеку Flask-Login
-        except Exception as e:
-            # Ігноруємо помилки під час очищення стану логіну,
-            # які можуть статися, якщо таблиці бази даних вже видалені
-            pass
+            # Виконуємо очищення якщо ми не в контексті тесту
+            if not hasattr(app, "test_client"):
+                from flask_login import login_manager
+
+                login_manager._login_disabled = False
+                if hasattr(login_manager, "_user_callback"):
+                    login_manager._user_callback = None
+        except Exception:  # Fixed: not assigning to unused variable 'e'
+            pass  # Ігноруємо помилки, оскільки це лише очищення
 
 
 # Фікстура для тестового клієнта Flask
@@ -145,15 +151,14 @@ def admin_user(session):
         password=generate_password_hash("admin_password"),
         full_name="Admin Test",
         is_admin=True,
+        is_active_master=False,  # За замовчуванням адміністратор не є активним майстром
     )
     session.add(user)
     session.commit()
-    return {
-        "username": user.username,
-        "password": "admin_password",
-        "id": user.id,
-        "full_name": user.full_name,
-    }
+
+    # Переконуємося, що об'єкт прив'язаний до сесії перед поверненням
+    session.refresh(user)
+    return user
 
 
 # Фікстура для звичайного користувача
@@ -166,7 +171,8 @@ def regular_user(session):
         username=f"user_test_{uuid.uuid4().hex[:8]}",  # Унікальне ім'я користувача
         password=generate_password_hash("user_password"),
         full_name="User Test",
-        is_admin=False,
+        is_admin=False,  # Повернуто до оригінального значення
+        is_active_master=True,  # За замовчуванням майстер є активним
     )
     session.add(user)
     session.commit()
@@ -208,6 +214,41 @@ def test_service(session):
         name=f"Test Service {unique_id}",
         description="Test service description",
         duration=60,  # 60 хвилин
+        base_price=100.0,  # Add base_price
+    )
+    session.add(service)
+    session.commit()
+    return service
+
+
+# Фікстура для послуги "Haircut"
+@pytest.fixture(scope="function")
+def haircut_service(session):
+    """
+    Створює тестову послугу "Haircut" для тестів з цінами.
+    """
+    service = Service(
+        name="Haircut",
+        description="Basic haircut service",
+        duration=30,  # 30 хвилин
+        base_price=75.0,  # Add base_price
+    )
+    session.add(service)
+    session.commit()
+    return service
+
+
+# Фікстура для додаткової послуги
+@pytest.fixture(scope="function")
+def additional_service(session):
+    """
+    Створює тестову послугу "Additional Service" для тестів з записами.
+    """
+    service = Service(
+        name="Additional Service",
+        description="Additional service for appointment tests",
+        duration=30,  # 30 хвилин
+        base_price=75.5,  # Add base_price
     )
     session.add(service)
     session.commit()
@@ -276,11 +317,14 @@ def auth_client(client, regular_user):
     Виконує імітацію входу користувача та повертає клієнт
     із встановленою сесією для тестування захищених маршрутів.
     """
-    client.post(
-        "/login",
+    print(f"DEBUG auth_client: Trying to login as {regular_user.username}")
+    response = client.post(
+        "/auth/login",
         data={"username": regular_user.username, "password": "user_password"},
         follow_redirects=True,
     )
+    print(f"DEBUG auth_client: Login response status code: {response.status_code}")
+    print(f"DEBUG auth_client: Login response data: {response.data[:100]}")
 
     return client
 
@@ -294,11 +338,48 @@ def admin_auth_client(client, admin_user):
     Виконує імітацію входу адміністратора та повертає клієнт
     із встановленою сесією для тестування адміністративних маршрутів.
     """
-    client.post(
-        "/login",
-        data={"username": admin_user["username"], "password": admin_user["password"]},
+    print(f"DEBUG admin_auth_client: Trying to login as {admin_user.username}")
+    print(f"DEBUG admin_auth_client: Admin user data: {admin_user}")
+    response = client.post(
+        "/auth/login",
+        data={"username": admin_user.username, "password": "admin_password"},
         follow_redirects=True,
     )
+    print(
+        f"DEBUG admin_auth_client: Login response status code: {response.status_code}"
+    )
+    print(f"DEBUG admin_auth_client: Login response data: {response.data[:100]}")
+
+    # Додаємо перевірку GET-запиту до кореневого URL для визначення поточного користувача
+    test_response = client.get("/")
+    print(
+        f"DEBUG admin_auth_client: Test GET response status: {test_response.status_code}"
+    )
+    print(
+        f"DEBUG admin_auth_client: Is 'Вийти' in response: {'Вийти' in test_response.text}"
+    )
+
+    # Перевірка успішності автентифікації
+    assert (
+        response.status_code == 200
+    ), f"Login failed: status code {response.status_code}"
+
+    # Перевірка наявності ознак успішного входу в систему
+    # 1. Перевірка наявності елементу, який видно тільки після входу (посилання на вихід)
+    logout_path = "/auth/logout"
+    assert (
+        logout_path in response.text
+    ), f"Login failed: Logout link not found in response for {admin_user.username}"
+
+    # 2. Перевірка наявності імені адміністратора у відповіді
+    assert (
+        admin_user.full_name in response.text
+    ), f"Login failed: Admin name not found in response for {admin_user.username}"
+
+    # 3. Перевірка наявності мітки "Адміністратор" у відповіді
+    assert (
+        "Адміністратор" in response.text
+    ), f"Login failed: Admin label not found in response for {admin_user.username}"
 
     return client
 
@@ -314,15 +395,14 @@ def test_user(session):
         password=generate_password_hash("test_password"),
         full_name="Test User",
         is_admin=False,
+        is_active_master=True,  # За замовчуванням майстер є активним
     )
     session.add(user)
     session.commit()
-    return {
-        "username": user.username,
-        "password": "test_password",
-        "id": user.id,
-        "full_name": user.full_name,
-    }
+
+    # Переконуємося, що об'єкт прив'язаний до сесії перед поверненням
+    session.refresh(user)
+    return user
 
 
 # Фікстура для процесу авторизації
@@ -368,11 +448,50 @@ def test_service_with_price(session):
         name=f"Test Service For Pricing {unique_id}",
         description="Test service specifically for testing pricing logic",
         duration=60,  # 60 хвилин
+        base_price=100.00,  # Setting the base_price directly
     )
     session.add(service)
     session.commit()
 
-    # Add price property for tests that expect it
-    service.price = Decimal("100.00")
+    # We no longer need to set the price manually, as we now use base_price
+    # service.price = Decimal("100.00")
 
     return service
+
+
+# Фікстура для активного майстра
+@pytest.fixture(scope="function")
+def active_master(session):
+    """
+    Створює тестового майстра з is_active_master=True.
+    """
+    master = User(
+        username=f"active_master_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("master_password"),
+        full_name="Active Master",
+        is_admin=False,
+        is_active_master=True,
+    )
+    session.add(master)
+    session.commit()
+    session.refresh(master)
+    return master
+
+
+# Фікстура для неактивного майстра
+@pytest.fixture(scope="function")
+def inactive_master(session):
+    """
+    Створює тестового майстра з is_active_master=False.
+    """
+    master = User(
+        username=f"inactive_master_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("master_password"),
+        full_name="Inactive Master",
+        is_admin=False,
+        is_active_master=False,
+    )
+    session.add(master)
+    session.commit()
+    session.refresh(master)
+    return master

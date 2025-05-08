@@ -2,7 +2,7 @@ from datetime import datetime
 
 from flask import (Blueprint, flash, jsonify, redirect, render_template,
                    request, url_for)
-from flask_login import login_required
+from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, TextAreaField
 from wtforms.validators import (DataRequired, Email, Length, Optional,
@@ -53,11 +53,24 @@ def index():
     search = request.args.get("search", "")
     print(f"Searching for: {search}")
 
-    # Запит клієнтів
+    # Базовий запит клієнтів
+    if current_user.is_admin:
+        # Адміністратор може бачити всіх клієнтів
+        query = Client.query
+    else:
+        # Майстер може бачити тільки клієнтів з якими мав записи
+        client_ids = (
+            db.session.query(Appointment.client_id)
+            .filter(Appointment.master_id == current_user.id)
+            .distinct()
+        )
+        query = Client.query.filter(Client.id.in_(client_ids))
+
+    # Фільтрація за пошуковим запитом
     if search and search.strip():
-        # Get all clients and filter in Python
+        # Get all clients from the already filtered query and filter further in Python
         # This is a workaround for SQLite's case-sensitivity issues with Cyrillic
-        all_clients = Client.query.all()
+        all_clients = query.all()
 
         # Split search string into words and convert to lowercase for case-insensitive comparison
         search_words = [word.lower() for word in search.split()]
@@ -88,8 +101,8 @@ def index():
 
         print(f"Python filtering found {len(clients)} clients")
     else:
-        # Без пошуку просто повертаємо всіх клієнтів
-        clients = Client.query.order_by(Client.name).all()
+        # Без пошуку просто повертаємо відфільтрованих клієнтів
+        clients = query.order_by(Client.name).all()
 
     print(f"Total clients found: {len(clients)}")
     if clients:
@@ -97,7 +110,11 @@ def index():
             print(f"Client: {client.name}, ID: {client.id}")
 
     return render_template(
-        "clients/index.html", title="Клієнти", clients=clients, search=search
+        "clients/index.html",
+        title="Клієнти",
+        clients=clients,
+        search=search,
+        is_admin=current_user.is_admin,
     )
 
 
@@ -105,6 +122,11 @@ def index():
 @bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create():
+    # Перевірка прав доступу: тільки адміністратори можуть створювати клієнтів
+    if not current_user.is_admin:
+        flash("У вас немає прав для створення нових клієнтів", "danger")
+        return redirect(url_for("clients.index"))
+
     form = ClientForm()
 
     if form.validate_on_submit():
@@ -132,19 +154,40 @@ def create():
 def view(id):
     client = Client.query.get_or_404(id)
 
+    # Перевірка прав доступу: Майстер може переглядати тільки клієнтів з якими мав записи
+    if not current_user.is_admin:
+        appointment_count = Appointment.query.filter(
+            Appointment.client_id == client.id, Appointment.master_id == current_user.id
+        ).count()
+
+        if appointment_count == 0:
+            flash("У вас немає прав для перегляду цього клієнта", "danger")
+            return redirect(url_for("clients.index"))
+
     # Отримання останніх записів клієнта
-    appointments = (
-        Appointment.query.filter_by(client_id=client.id)
-        .order_by(Appointment.date.desc())
-        .limit(10)
-        .all()
-    )
+    if current_user.is_admin:
+        # Адміністратор бачить всі записи клієнта
+        appointments = (
+            Appointment.query.filter_by(client_id=client.id)
+            .order_by(Appointment.date.desc())
+            .limit(10)
+            .all()
+        )
+    else:
+        # Майстер бачить тільки свої записи з цим клієнтом
+        appointments = (
+            Appointment.query.filter_by(client_id=client.id, master_id=current_user.id)
+            .order_by(Appointment.date.desc())
+            .limit(10)
+            .all()
+        )
 
     return render_template(
         "clients/view.html",
         title=f"Клієнт: {client.name}",
         client=client,
         appointments=appointments,
+        is_admin=current_user.is_admin,
     )
 
 
@@ -152,6 +195,11 @@ def view(id):
 @bp.route("/<int:id>/edit", methods=["GET", "POST"])
 @login_required
 def edit(id):
+    # Перевірка прав доступу: тільки адміністратори можуть редагувати клієнтів
+    if not current_user.is_admin:
+        flash("У вас немає прав для редагування клієнтів", "danger")
+        return redirect(url_for("clients.index"))
+
     client = Client.query.get_or_404(id)
     form = ClientForm(obj=client)
     form.client_id = client.id
@@ -182,6 +230,11 @@ def edit(id):
 @bp.route("/<int:id>/delete", methods=["POST"])
 @login_required
 def delete(id):
+    # Перевірка прав доступу: тільки адміністратори можуть видаляти клієнтів
+    if not current_user.is_admin:
+        flash("У вас немає прав для видалення клієнтів", "danger")
+        return redirect(url_for("clients.index"))
+
     client = Client.query.get_or_404(id)
 
     # Перевірка, чи є запланові записи для цього клієнта
@@ -216,8 +269,22 @@ def api_search():
 
     print(f"API searching for: {query_string}")
 
-    # Get all clients and filter in Python
-    all_clients = Client.query.all()
+    # Базовий запит для отримання клієнтів
+    if current_user.is_admin:
+        # Адміністратор може бачити всіх клієнтів
+        all_clients = Client.query.all()
+    else:
+        # Майстер може бачити тільки клієнтів з якими мав записи
+        client_ids = (
+            db.session.query(Appointment.client_id)
+            .filter(Appointment.master_id == current_user.id)
+            .distinct()
+            .all()
+        )
+        client_ids = [client_id[0] for client_id in client_ids]
+        all_clients = (
+            Client.query.filter(Client.id.in_(client_ids)).all() if client_ids else []
+        )
 
     # Split query string into words and convert to lowercase for case-insensitive comparison
     query_words = [word.lower() for word in query_string.split()]
@@ -250,9 +317,28 @@ def api_search():
             )
             continue
 
-    # Limit to 10 results
-    clients = clients[:10]
+        # Check email
+        if contains_all_words(client.email, query_words):
+            clients.append(
+                {
+                    "id": client.id,
+                    "name": client.name,
+                    "phone": client.phone,
+                    "email": client.email,
+                }
+            )
+            continue
+
+        # Check notes
+        if contains_all_words(client.notes, query_words):
+            clients.append(
+                {
+                    "id": client.id,
+                    "name": client.name,
+                    "phone": client.phone,
+                    "email": client.email,
+                }
+            )
 
     print(f"API found {len(clients)} clients")
-
-    return jsonify(clients)
+    return jsonify(clients[:10])

@@ -26,12 +26,22 @@ class User(UserMixin, db.Model):  # type: ignore
     password = db.Column(db.String(120), nullable=False)
     full_name = db.Column(db.String(100), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    is_active_master = db.Column(db.Boolean, nullable=False, default=True)
     appointments = db.relationship(
         "Appointment", backref="master", lazy=True, cascade="all, delete-orphan"
     )
 
+    def __init__(self, **kwargs):
+        super(User, self).__init__(**kwargs)
+        # Якщо is_active_master не встановлено явно, встановлюємо значення залежно від is_admin
+        if "is_active_master" not in kwargs:
+            self.is_active_master = not kwargs.get("is_admin", False)
+
     def is_administrator(self):
         return self.is_admin
+
+    def is_master(self):
+        return not self.is_admin
 
     def __repr__(self):
         return f"<User {self.username}>"
@@ -61,6 +71,7 @@ class Service(db.Model):  # type: ignore
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     duration = db.Column(db.Integer, nullable=False)  # тривалість у хвилинах
+    base_price = db.Column(db.Float, nullable=True)  # базова ціна послуги
     appointment_services = db.relationship(
         "AppointmentService", backref="service", lazy=True
     )

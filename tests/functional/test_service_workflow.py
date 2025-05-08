@@ -5,7 +5,7 @@ import pytest
 from app.models import db
 
 
-def test_service_full_lifecycle(session, client, regular_user):
+def test_service_full_lifecycle(session, client, admin_user):
     """
     Tests the full service lifecycle: create, view, edit, delete.
 
@@ -23,8 +23,8 @@ def test_service_full_lifecycle(session, client, regular_user):
     response = client.post(
         "/auth/login",
         data={
-            "username": regular_user.username,
-            "password": "user_password",
+            "username": admin_user.username,
+            "password": "admin_password",
             "remember_me": "y",
         },
         follow_redirects=True,
@@ -109,11 +109,11 @@ def test_service_full_lifecycle(session, client, regular_user):
     assert deleted_service is None, "Service was not deleted from database"
 
 
-def test_service_with_appointments(session, client, regular_user, test_client):
+def test_service_with_appointments(session, client, admin_user, test_client):
     """
     Tests the service management with appointments:
     1. Create a new service
-    2. Create an appointment using the service
+    2. Create an appointment using the service directly in the database
     3. Verify service cannot be deleted when it has appointments
     4. Manually delete the appointment service association
     5. Delete the service after removing appointment associations
@@ -123,8 +123,8 @@ def test_service_with_appointments(session, client, regular_user, test_client):
     response = client.post(
         "/auth/login",
         data={
-            "username": regular_user.username,
-            "password": "user_password",
+            "username": admin_user.username,
+            "password": "admin_password",
             "remember_me": "y",
         },
         follow_redirects=True,
@@ -153,36 +153,43 @@ def test_service_with_appointments(session, client, regular_user, test_client):
     assert created_service is not None, "Service not found in database"
     service_id = created_service.id
 
-    # Create an appointment using this service
-    from datetime import date, timedelta
+    # Create an appointment directly in the database
+    from datetime import date, time, timedelta
+    from app.models import Appointment, AppointmentService
 
     tomorrow = date.today() + timedelta(days=1)
 
-    response = client.post(
-        "/appointments/create",
-        data={
-            "client_id": test_client.id,
-            "master_id": regular_user.id,
-            "date": tomorrow.strftime("%Y-%m-%d"),
-            "start_time": "14:00",
-            "end_time": "15:00",
-            "services": str(service_id),
-            "notes": "Service test appointment",
-        },
-        follow_redirects=True,
-    )
-    assert "Запис успішно створено!" in response.text
-
-    # Find the appointment using database query
-    from app.models import Appointment, AppointmentService
-
-    appointment = Appointment.query.filter_by(
+    # Create the appointment
+    appointment = Appointment(
         client_id=test_client.id,
-        master_id=regular_user.id,
+        master_id=admin_user.id,
+        date=tomorrow,
+        start_time=time(14, 0),
+        end_time=time(15, 0),
+        status="scheduled",
+        payment_status="unpaid",
+        notes="Service test appointment",
+    )
+    session.add(appointment)
+    session.flush()  # Flush to get the ID
+
+    # Add service to the appointment
+    appointment_service = AppointmentService(
+        appointment_id=appointment.id,
+        service_id=service_id,
+        price=100.0,
+    )
+    session.add(appointment_service)
+    session.commit()
+
+    # Verify appointment exists
+    appointment_exists = Appointment.query.filter_by(
+        client_id=test_client.id,
+        master_id=admin_user.id,
         notes="Service test appointment",
     ).first()
-    assert appointment is not None, "Appointment not found in database"
-    appointment_id = appointment.id
+    assert appointment_exists is not None, "Appointment not found in database"
+    appointment_id = appointment_exists.id
 
     # Try to delete the service while it has an appointment
     response = client.post(

@@ -1,379 +1,209 @@
 {% extends "base.html" %} {% block content %}
 <div class="row mb-3">
-  <div class="col">
-    <a href="{{ url_for('appointments.index') }}" class="btn btn-secondary">
-      <i class="fas fa-arrow-left me-2"></i>Назад до списку
-    </a>
-    <!-- Нова кнопка для повернення до розкладу -->
-    <a
-      href="{{ url_for('main.schedule', date=appointment.date.strftime('%Y-%m-%d')) }}"
-      class="btn btn-info ms-2"
-    >
-      <i class="fas fa-calendar-week me-2"></i>Назад до розкладу майстрів
-    </a>
-  </div>
   <div class="col text-end">
-    <a
-      href="{{ url_for('appointments.edit', id=appointment.id) }}"
-      class="btn btn-warning"
-    >
-      <i class="fas fa-edit me-2"></i>Редагувати запис
-    </a>
+    <div class="btn-group">
+      {% if is_admin or appointment.master_id == current_user.id %} {% if not
+      is_admin and appointment.status == 'completed' %}
+      <!-- Майстер не може редагувати/видаляти завершені записи -->
+      {% else %}
+      <a
+        href="{{ url_for('appointments.edit', id=appointment.id) }}"
+        class="btn btn-primary"
+      >
+        <i class="fas fa-edit me-1"></i>Редагувати
+      </a>
+      <button
+        type="button"
+        class="btn btn-danger"
+        data-bs-toggle="modal"
+        data-bs-target="#deleteModal"
+      >
+        <i class="fas fa-trash me-1"></i>Видалити
+      </button>
+      {% endif %} {% endif %} {% if from_schedule %}
+      <a
+        href="{{ url_for('main.schedule') }}?date={{ formatted_date }}"
+        class="btn btn-secondary"
+      >
+        <i class="fas fa-arrow-left me-1"></i>Назад до розкладу
+      </a>
+      {% else %}
+      <a href="{{ url_for('appointments.index') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-1"></i>Назад до списку
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Modal for delete confirmation -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Підтвердження видалення</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <p>Ви впевнені, що хочете видалити цей запис?</p>
+        <p class="text-danger">Ця дія не може бути скасована.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Скасувати
+        </button>
+        <form
+          action="{{ url_for('appointments.delete', id=appointment.id) }}"
+          method="post"
+        >
+          <button type="submit" class="btn btn-danger">Видалити</button>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 
 <div class="row">
-  <!-- Основні дані запису -->
-  <div class="col-md-7">
-    <div class="card mb-3">
-      <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">
-          <i class="fas fa-info-circle me-2"></i>Інформація про запис #{{
-          appointment.id }}
-        </h5>
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="card-title mb-0">Інформація про запис</h5>
       </div>
       <div class="card-body">
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <h6>Дата:</h6>
-            <p class="lead">{{ appointment.date.strftime('%d.%m.%Y') }}</p>
-          </div>
-          <div class="col-md-6">
-            <h6>Час:</h6>
-            <p class="lead">
-              {{ appointment.start_time.strftime('%H:%M') }} - {{
-              appointment.end_time.strftime('%H:%M') }}
-            </p>
-          </div>
-        </div>
+        <dl class="row">
+          <dt class="col-sm-4">Дата:</dt>
+          <dd class="col-sm-8">{{ appointment.date.strftime('%d.%m.%Y') }}</dd>
 
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <h6>Клієнт:</h6>
-            <p class="lead">
-              <a href="{{ url_for('clients.view', id=appointment.client.id) }}">
-                {{ appointment.client.name }}
-              </a>
-            </p>
-            <p>
-              <i class="fas fa-phone me-2"></i>{{ appointment.client.phone }}<br />
-              {% if appointment.client.email %}
-              <i class="fas fa-envelope me-2"></i>{{ appointment.client.email }}
-              {% endif %}
-            </p>
-          </div>
-          <div class="col-md-6">
-            <h6>Майстер:</h6>
-            <p class="lead">{{ appointment.master.full_name }}</p>
-          </div>
-        </div>
+          <dt class="col-sm-4">Час:</dt>
+          <dd class="col-sm-8">
+            {{ appointment.start_time.strftime('%H:%M') }} - {{
+            appointment.end_time.strftime('%H:%M') }}
+          </dd>
 
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <h6>Статус:</h6>
-            <p>
-              {% if appointment.status == 'scheduled' %}
-              <span class="badge bg-primary">Заплановано</span>
-              {% elif appointment.status == 'completed' %}
-              <span class="badge bg-success">Виконано</span>
-              {% elif appointment.status == 'cancelled' %}
-              <span class="badge bg-danger">Скасовано</span>
-              {% endif %}
-            </p>
-          </div>
-          <div class="col-md-6">
-            <h6>Створено:</h6>
-            <p>{{ appointment.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
-          </div>
-        </div>
-
-        {% if appointment.notes %}
-        <div class="mb-3">
-          <h6>Примітки:</h6>
-          <div class="border rounded p-3">{{ appointment.notes }}</div>
-        </div>
-        {% endif %}
-
-        <!-- Зміна статусу -->
-        <div class="d-flex justify-content-center gap-2 mt-3">
-          {% if appointment.status == 'scheduled' %}
-          <!-- Для завершення запису необхідно вибрати спосіб оплати -->
-          <div
-            class="payment-methods-container mb-2"
-            id="payment-methods-container"
-            style="{% if appointment.status != 'scheduled' %}display: none;{% endif %}"
-          >
-            {% for method in payment_methods %}
-            <div class="form-check form-check-inline">
-              <input
-                type="radio"
-                class="form-check-input payment-checkbox"
-                id="payment-{{ method.name.lower() }}"
-                name="payment_method"
-                value="{{ method.value }}"
-              />
-              <label
-                class="form-check-label"
-                for="payment-{{ method.name.lower() }}"
-                >{{ method.value }}</label
-              >
-            </div>
-            {% endfor %}
-          </div>
-
-          <form
-            method="POST"
-            action="{{ url_for('appointments.change_status', id=appointment.id, new_status='completed') }}"
-            id="complete-form"
-          >
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <input
-              type="hidden"
-              name="payment_method"
-              id="selected_payment_method"
-              value=""
-            />
-            <button
-              type="submit"
-              class="btn btn-success"
-              id="complete-button"
-              disabled
+          <dt class="col-sm-4">Статус:</dt>
+          <dd class="col-sm-8">
+            {% if appointment.status == 'scheduled' %}
+            <span class="badge bg-primary">Заплановано</span>
+            {% elif appointment.status == 'completed' %}
+            <span class="badge bg-success">Завершено</span>
+            {% elif appointment.status == 'cancelled' %}
+            <span class="badge bg-danger">Скасовано</span>
+            {% endif %} {% if is_admin or appointment.master_id ==
+            current_user.id %} {% if appointment.status != 'completed' %}
+            <a
+              href="{{ url_for('appointments.change_status', id=appointment.id, new_status='completed') }}"
+              class="btn btn-sm btn-success ms-2"
             >
-              <i class="fas fa-check me-2"></i>Виконано
-            </button>
-          </form>
-          <form
-            method="POST"
-            action="{{ url_for('appointments.change_status', id=appointment.id, new_status='cancelled') }}"
-          >
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button type="submit" class="btn btn-danger">
-              <i class="fas fa-times me-2"></i>Скасовано
-            </button>
-          </form>
-          {% elif appointment.status == 'completed' %}
-          <form
-            method="POST"
-            action="{{ url_for('appointments.change_status', id=appointment.id, new_status='scheduled') }}"
-          >
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button type="submit" class="btn btn-warning">
-              <i class="fas fa-undo me-2"></i>Повернути до запланованих
-            </button>
-          </form>
-          {% elif appointment.status == 'cancelled' %}
-          <form
-            method="POST"
-            action="{{ url_for('appointments.change_status', id=appointment.id, new_status='scheduled') }}"
-          >
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button type="submit" class="btn btn-warning">
-              <i class="fas fa-undo me-2"></i>Відновити запис
-            </button>
-          </form>
-          {% endif %}
-        </div>
-
-        <!-- Додаткова інформація про оплату для виконаних записів -->
-        {% if appointment.status == 'completed' and appointment.payment_method
-        %}
-        <div class="mt-3">
-          <h6>Інформація про оплату:</h6>
-          <p>
-            Тип оплати:
-            <span class="badge bg-info"
-              >{{ appointment.payment_method.value }}</span
+              Завершити
+            </a>
+            {% endif %} {% if appointment.status != 'cancelled' %}
+            <form
+              action="{{ url_for('appointments.change_status', id=appointment.id, new_status='cancelled') }}"
+              method="post"
+              class="d-inline"
             >
-          </p>
-        </div>
-        {% endif %}
+              <button type="submit" class="btn btn-sm btn-danger ms-2">
+                Скасувати
+              </button>
+            </form>
+            {% endif %} {% if appointment.status != 'scheduled' and
+            appointment.status != 'cancelled' %}
+            <form
+              action="{{ url_for('appointments.change_status', id=appointment.id, new_status='scheduled') }}"
+              method="post"
+              class="d-inline"
+            >
+              <button type="submit" class="btn btn-sm btn-primary ms-2">
+                Запланувати знову
+              </button>
+            </form>
+            {% endif %} {% endif %}
+          </dd>
+
+          <dt class="col-sm-4">Клієнт:</dt>
+          <dd class="col-sm-8">
+            {{ appointment.client.name }} ({{ appointment.client.phone }})
+          </dd>
+
+          <dt class="col-sm-4">Майстер:</dt>
+          <dd class="col-sm-8">{{ appointment.master.full_name }}</dd>
+
+          <dt class="col-sm-4">Примітки:</dt>
+          <dd class="col-sm-8">
+            {{ appointment.notes if appointment.notes else "-" }}
+          </dd>
+        </dl>
       </div>
     </div>
   </div>
 
-  <!-- Послуги -->
-  <div class="col-md-5">
-    <div class="card mb-3">
-      <div class="card-header bg-success text-white">
-        <h5 class="mb-0">
-          <i class="fas fa-list-alt me-2"></i>Послуги та оплата
-        </h5>
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="card-title mb-0">Послуги та оплата</h5>
       </div>
       <div class="card-body">
-        {% if services %}
-        <div class="table-responsive">
-          <table class="table table-hover">
-            <thead>
-              <tr>
-                <th>Послуга</th>
-                <th class="text-end">Ціна</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="services-table">
-              {% for service in services %}
-              <tr>
-                <td>{{ service.service.name }}</td>
-                <td class="text-end">
-                  <span id="price-display-{{ service.id }}"
-                    >{{ "%.2f"|format(service.price) }}</span
-                  >
-                  грн
-                  <form
-                    id="price-form-{{ service.id }}"
-                    method="POST"
-                    action="{{ url_for('appointments.edit_service_price', appointment_id=appointment.id, service_id=service.id) }}"
-                    class="d-none"
-                  >
-                    <input
-                      type="hidden"
-                      name="csrf_token"
-                      value="{{ csrf_token() }}"
-                    />
-                    <div class="input-group input-group-sm">
-                      <input
-                        type="number"
-                        name="price"
-                        class="form-control"
-                        value="{{ service.price }}"
-                        step="0.01"
-                        min="0"
-                      />
-                      <button type="submit" class="btn btn-primary">OK</button>
-                    </div>
-                  </form>
-                </td>
-                <td class="text-end">
-                  <div class="btn-group btn-group-sm">
-                    <button
-                      class="btn btn-sm btn-outline-primary edit-price-btn"
-                      data-service-id="{{ service.id }}"
-                    >
-                      <i class="fas fa-edit"></i>
-                    </button>
-                    <form
-                      method="POST"
-                      action="{{ url_for('appointments.remove_service', appointment_id=appointment.id, service_id=service.id) }}"
-                      class="d-inline"
-                    >
-                      <input
-                        type="hidden"
-                        name="csrf_token"
-                        value="{{ csrf_token() }}"
-                      />
-                      <button
-                        type="submit"
-                        class="btn btn-sm btn-outline-danger"
-                        onclick="return confirm('Ви впевнені, що хочете видалити цю послугу?')"
-                      >
-                        <i class="fas fa-trash"></i>
-                      </button>
-                    </form>
-                  </div>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-            <tfoot>
-              <tr>
-                <th>Всього:</th>
-                <th class="text-end">{{ total | format_currency }} грн</th>
-                <th></th>
-              </tr>
-              {% if appointment.discount_percentage and
-              appointment.discount_percentage > 0 %}
-              <tr>
-                <th>Знижка:</th>
-                <th class="text-end">
-                  {{ appointment.discount_percentage | format_percentage }}%
-                </th>
-                <th></th>
-              </tr>
-              <tr class="table-success">
-                <th>До сплати:</th>
-                <th class="text-end">
-                  {{ (total * (1 - (appointment.discount_percentage | float /
-                  100))) | format_currency }} грн
-                </th>
-                <th></th>
-              </tr>
-              {% endif %}
-            </tfoot>
-          </table>
-        </div>
-        {% else %}
-        <div class="alert alert-info">
-          <i class="fas fa-info-circle me-2"></i>Послуги ще не додані.
-        </div>
-        {% endif %}
-
-        <div class="d-grid mt-3">
-          <a
-            href="{{ url_for('appointments.add_service', id=appointment.id) }}"
-            class="btn btn-primary"
+        <h6>Послуги:</h6>
+        <ul class="list-group mb-3">
+          {% for service in appointment.services %}
+          <li
+            class="list-group-item d-flex justify-content-between align-items-center"
           >
-            <i class="fas fa-plus me-2"></i>Додати послугу
-          </a>
+            {{ service.service.name }}
+            <span class="badge bg-primary rounded-pill"
+              >{{ service.price }} грн</span
+            >
+          </li>
+          {% endfor %}
+        </ul>
+
+        <div
+          class="alert {% if appointment.payment_status == 'paid' %}alert-success{% elif appointment.payment_status == 'partially_paid' %}alert-warning{% else %}alert-info{% endif %}"
+        >
+          <div class="d-flex justify-content-between">
+            <div>
+              <div>
+                Загальна вартість: <strong>{{ total_price }}</strong> грн
+              </div>
+              {% if appointment.discount_percentage > 0 %}
+              <div>
+                Знижка: <strong>{{ appointment.discount_percentage }}</strong>%
+              </div>
+              <div>До сплати: <strong>{{ total_discounted }}</strong> грн</div>
+              {% endif %}
+              <div>
+                Статус оплати:
+                <strong>
+                  {% if appointment.payment_status == 'paid' %} Оплачено
+                  повністю {% elif appointment.payment_status ==
+                  'partially_paid' %} Оплачено частково {% else %} Не оплачено
+                  {% endif %}
+                </strong>
+              </div>
+              <div>
+                Сплачено:
+                <strong
+                  >{{ appointment.amount_paid if appointment.amount_paid else 0
+                  }}</strong
+                >
+                грн
+              </div>
+              {% if appointment.payment_method %}
+              <div>
+                Метод оплати:
+                <strong>{{ appointment.payment_method.value }}</strong>
+              </div>
+              {% endif %}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
-{% endblock %} {% block scripts %}
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    // Редагування ціни послуги
-    const editButtons = document.querySelectorAll(".edit-price-btn");
-    editButtons.forEach(function (button) {
-      button.addEventListener("click", function () {
-        const serviceId = this.getAttribute("data-service-id");
-        document
-          .getElementById(`price-display-${serviceId}`)
-          .classList.add("d-none");
-        document
-          .getElementById(`price-form-${serviceId}`)
-          .classList.remove("d-none");
-        this.classList.add("d-none");
-      });
-    });
-
-    // Handle payment method selection
-    const paymentCheckboxes = document.querySelectorAll(".payment-checkbox");
-    const completeButton = document.getElementById("complete-button");
-    const paymentMethodInput = document.getElementById(
-      "selected_payment_method"
-    );
-
-    paymentCheckboxes.forEach(function (checkbox) {
-      checkbox.addEventListener("change", function () {
-        // Uncheck other checkboxes
-        paymentCheckboxes.forEach(function (cb) {
-          if (cb !== checkbox) {
-            cb.checked = false;
-          }
-        });
-
-        // Enable the complete button when a payment method is selected
-        completeButton.disabled = !checkbox.checked;
-
-        // Store the selected payment method value
-        if (checkbox.checked) {
-          paymentMethodInput.value = checkbox.value;
-        } else {
-          paymentMethodInput.value = "";
-        }
-      });
-    });
-
-    // Handle the form submission
-    document
-      .getElementById("complete-form")
-      .addEventListener("submit", function (e) {
-        if (!paymentMethodInput.value) {
-          e.preventDefault();
-          alert("Будь ласка, виберіть тип оплати для завершення запису");
-        }
-      });
-  });
-</script>
 {% endblock %}
