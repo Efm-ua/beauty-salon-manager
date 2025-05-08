@@ -674,6 +674,46 @@ def test_edit_appointment_with_invalid_form_data(client, admin_user, test_appoin
     )
 
 
+def test_change_status_to_completed_without_payment_method(
+    client, regular_user, test_appointment
+):
+    """
+    Тестує спробу зміни статусу на 'completed' без надання payment_method.
+    Має бути відхилено.
+    """
+    # Логін звичайним користувачем
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": regular_user.username,
+            "password": "user_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Вийти" in response.text or "Logout" in response.text
+
+    # Запам'ятовуємо початковий статус
+    original_status = test_appointment.status
+
+    # Спроба змінити статус без вказання типу оплати
+    response = client.post(
+        f"/appointments/{test_appointment.id}/status/completed",
+        data={"payment_method": PaymentMethod.CASH.value},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо успішність HTTP-запиту
+    assert response.status_code == 200
+
+    # Перевіряємо, що статус не було змінено в базі даних
+    updated_appointment = Appointment.query.get(test_appointment.id)
+    assert (
+        updated_appointment.status == original_status
+    ), f"Status should not change from {original_status}, but was changed to {updated_appointment.status}"
+
+
 def test_change_status_to_completed_with_invalid_payment_method(
     client, regular_user, test_appointment
 ):
@@ -769,6 +809,52 @@ def test_change_status_to_completed_with_multiple_payment_methods(
     updated_appointment = Appointment.query.get(test_appointment.id)
     assert updated_appointment.status == "completed"
     assert updated_appointment.payment_method == PaymentMethod.CASH  # "Готівка"
+
+
+def test_change_status_to_cancelled(client, regular_user, test_appointment):
+    """
+    Тестує зміну статусу запису на "cancelled"
+    """
+    # Логін звичайним користувачем
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": regular_user.username,
+            "password": "user_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Вийти" in response.text or "Logout" in response.text
+
+    # Встановлюємо запис на цього майстра
+    test_appointment.master_id = regular_user.id
+    # Явно встановлюємо статус scheduled
+    test_appointment.status = "scheduled"
+    db.session.commit()
+
+    # Зберігаємо початкові дані
+    original_status = test_appointment.status
+    assert (
+        original_status == "scheduled"
+    ), f"Початковий статус має бути 'scheduled', але він '{original_status}'"
+
+    # Змінюємо статус на "cancelled"
+    response = client.post(
+        f"/appointments/{test_appointment.id}/status/cancelled",
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Оновлюємо об'єкт з бази даних
+    db.session.expire(test_appointment)
+    db.session.refresh(test_appointment)
+
+    # Перевіряємо оновлення в базі даних
+    assert (
+        test_appointment.status == "cancelled"
+    ), f"Статус повинен змінитися на 'cancelled', але залишився '{test_appointment.status}'"
 
 
 def test_add_service_to_appointment_fixed(
