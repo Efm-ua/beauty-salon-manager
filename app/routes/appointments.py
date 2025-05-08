@@ -566,7 +566,7 @@ def change_status(id, new_status):
     if new_status == "completed":
         form = AppointmentStatusPaymentForm()
 
-        print(f"DEBUG CHANGE_STATUS: Attempting to change status to completed")
+        print("DEBUG CHANGE_STATUS: Attempting to change status to completed")
         print(f"DEBUG CHANGE_STATUS: Request method: {request.method}")
 
         # GET запит - показуємо форму для вибору методу оплати
@@ -586,7 +586,7 @@ def change_status(id, new_status):
                 "appointments/complete_form.html", form=form, appointment=appointment
             )
 
-        print(f"DEBUG CHANGE_STATUS: Form validated successfully")
+        print("DEBUG CHANGE_STATUS: Form validated successfully")
 
         # Оновлення даних про оплату
         # Конвертуємо рядкове значення форми в об'єкт PaymentMethod enum
@@ -640,14 +640,14 @@ def change_status(id, new_status):
     if new_status == "cancelled":
         appointment.payment_method = None
         appointment.payment_status = "not_applicable"
-        print(f"DEBUG CHANGE_STATUS: Status set to cancelled, cleared payment method")
+        print("DEBUG CHANGE_STATUS: Status set to cancelled, cleared payment method")
 
     # Якщо змінюємо статус з 'completed' на 'scheduled', очищаємо payment_method
     if previous_status == "completed" and new_status == "scheduled":
         appointment.payment_method = None
         appointment.payment_status = "paid"
         print(
-            f"DEBUG CHANGE_STATUS: Changed from completed to scheduled, cleared payment method"
+            "DEBUG CHANGE_STATUS: Changed from completed to scheduled, cleared payment method"
         )
 
     # Оновлення статусу
@@ -655,7 +655,7 @@ def change_status(id, new_status):
     print(f"DEBUG CHANGE_STATUS: Set appointment status to: {appointment.status}")
 
     db.session.commit()
-    print(f"DEBUG CHANGE_STATUS: Committed changes to database")
+    print("DEBUG CHANGE_STATUS: Committed changes to database")
 
     # Double-check that the change was saved
     refreshed_appointment = db.session.get(Appointment, id)

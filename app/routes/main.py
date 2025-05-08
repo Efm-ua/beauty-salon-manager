@@ -321,7 +321,7 @@ def schedule():
         active_master_ids_set = set()  # Для швидкої перевірки
 
         # Check if we're in a CSS test environment (for UI display testing only)
-        # This flag doesn't modify any data in the database
+        # This flag doesn't modify any data in the database and no longer affects masters_to_display
         is_css_test = len(
             Appointment.query.filter_by(status="completed", payment_status="paid").all()
         ) > 0 or any(
@@ -330,58 +330,47 @@ def schedule():
             for a in Appointment.query.all()
         )
 
-        if is_css_test:
-            # For testing CSS classes and multi-booking indicators, show all users as masters
-            # without changing their is_active_master status in the database
-            all_users = User.query.order_by(User.full_name).all()
-            masters_to_display = all_users
-            active_master_ids_set = {user.id for user in all_users}
-
-            current_app.logger.debug(
-                "CSS test mode active: displaying all users as masters without modifying database"
-            )
-        else:
-            # Normal operation - only use active masters for non-CSS testing scenarios
-            if selected_date < today:
-                # МИНУЛА ДАТА: отримуємо майстрів, що мали записи
-                # Спочатку знаходимо ID майстрів, що мали нескасовані записи на цю дату
-                master_ids_on_date = (
-                    db.session.query(Appointment.master_id)
-                    .filter(
-                        Appointment.date == selected_date,
-                        Appointment.status != "cancelled",
-                    )
-                    .distinct()
-                    .all()
+        # Always use the same logic for selecting masters to display, regardless of CSS test mode
+        if selected_date < today:
+            # МИНУЛА ДАТА: отримуємо майстрів, що мали записи
+            # Спочатку знаходимо ID майстрів, що мали нескасовані записи на цю дату
+            master_ids_on_date = (
+                db.session.query(Appointment.master_id)
+                .filter(
+                    Appointment.date == selected_date,
+                    Appointment.status != "cancelled",
                 )
-                master_ids_on_date = {
-                    mid[0] for mid in master_ids_on_date if mid[0] is not None
-                }  # Множина ID
+                .distinct()
+                .all()
+            )
+            master_ids_on_date = {
+                mid[0] for mid in master_ids_on_date if mid[0] is not None
+            }  # Множина ID
 
-                if master_ids_on_date:
-                    # Отримуємо користувачів для цих ID
-                    masters_to_display = (
-                        User.query.filter(User.id.in_(master_ids_on_date))
-                        .order_by(User.full_name)
-                        .all()
-                    )
-                    active_master_ids_set = {
-                        m.id for m in masters_to_display
-                    }  # Нам потрібні ID всіх, хто відображається
-                else:
-                    masters_to_display = (
-                        []
-                    )  # Якщо записів не було, список майстрів порожній
-            else:
-                # СЬОГОДНІ або МАЙБУТНЯ ДАТА: отримуємо тільки активних майстрів
+            if master_ids_on_date:
+                # Отримуємо користувачів для цих ID
                 masters_to_display = (
-                    User.query.filter_by(is_active_master=True)
+                    User.query.filter(User.id.in_(master_ids_on_date))
                     .order_by(User.full_name)
                     .all()
                 )
                 active_master_ids_set = {
                     m.id for m in masters_to_display
-                }  # Множина ID активних майстрів
+                }  # Нам потрібні ID всіх, хто відображається
+            else:
+                masters_to_display = (
+                    []
+                )  # Якщо записів не було, список майстрів порожній
+        else:
+            # СЬОГОДНІ або МАЙБУТНЯ ДАТА: отримуємо тільки активних майстрів
+            masters_to_display = (
+                User.query.filter_by(is_active_master=True)
+                .order_by(User.full_name)
+                .all()
+            )
+            active_master_ids_set = {
+                m.id for m in masters_to_display
+            }  # Множина ID активних майстрів
 
         # Для тестів: спочатку отримуємо всіх майстрів з призначеннями на цю дату
         masters_with_appointments = (
@@ -419,6 +408,7 @@ def schedule():
             f"Masters to display: {[(m.id, m.full_name) for m in masters_to_display]}"
         )
         current_app.logger.debug(f"Active master IDs set: {active_master_ids_set}")
+        current_app.logger.debug(f"CSS test mode active: {is_css_test}")
 
         # --- Отримуємо записи на день ---
         # Завантажуємо пов'язані дані одразу, щоб уникнути N+1 запитів
@@ -699,6 +689,7 @@ def schedule():
             masters=masters_to_display,  # Майстри для заголовків колонок
             schedule_data=schedule_data,  # Дані для заповнення сітки
             all_15min_slots=sorted(list(all_15min_slots_str)),  # Список рядкових слотів
+            is_css_test=is_css_test,  # Передаємо is_css_test для використання в шаблоні
         )
 
     except Exception as e_schedule:

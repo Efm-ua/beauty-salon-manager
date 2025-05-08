@@ -6,15 +6,8 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import inspect
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    PaymentMethod,
-    Service,
-    User,
-    db,
-)
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User, db)
 
 
 def test_appointment_complete_with_payment_method(
