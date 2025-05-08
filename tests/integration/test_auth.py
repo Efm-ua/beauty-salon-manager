@@ -437,8 +437,8 @@ def test_login_redirect_to_next_page(app):
             308,
         ]  # Має відбутися перенаправлення на сторінку входу
 
-        # Перевіряємо URL перенаправлення
-        login_url = response.headers["Location"]
+        # Перевіряємо, що є перенаправлення на сторінку входу
+        assert "/auth/login" in response.headers["Location"]
 
         # Тепер входимо в систему
         login_response = client.post(
@@ -650,3 +650,31 @@ def test_login_remember_me(app):
         if user:
             db.session.delete(user)
             db.session.commit()
+
+
+def test_password_reset(client, regular_user):
+    """Test password change functionality."""
+    # First login as the user
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": regular_user.username,
+            "password": "user_password",
+            "remember_me": False,
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Now change the password
+    response = client.post(
+        "/auth/change_password",
+        data={
+            "current_password": "user_password",
+            "new_password": "new_password",
+            "new_password2": "new_password",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Ваш пароль успішно змінено" in response.data.decode("utf-8")

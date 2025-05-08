@@ -1,7 +1,7 @@
 from datetime import date, time, timedelta
 from decimal import Decimal
 
-from app.models import Appointment, AppointmentService, PaymentMethod, Service
+from app.models import Appointment, AppointmentService, PaymentMethod
 
 
 def test_schedule_payment_status_display(

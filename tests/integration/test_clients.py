@@ -29,7 +29,7 @@
    - test_client_search_cyrillic_case_insensitive: Пошук клієнтів за кириличним ім'ям з різним регістром
 
 6. Видалення клієнта:
-   - test_client_delete_with_appointments: Заборона видалення клієнта з майбутніми записами
+   - test_client_delete_with_appointments: Заборона видалення клієнта з існуючими записами
    - test_client_delete_success: Успішне видалення клієнта без записів
 
 7. API клієнтів:
@@ -42,7 +42,6 @@ import uuid
 from datetime import date, time, timedelta
 
 import pytest
-from flask import url_for
 from werkzeug.security import generate_password_hash
 
 from app.models import Appointment, Client, User, db
@@ -456,12 +455,10 @@ def test_client_search_by_phone(auth_client_for_clients, session):
 
 def test_client_delete_with_appointments(auth_client_for_clients, session):
     """
-    Тест заборони видалення клієнта з майбутніми записами.
-    Перевіряє відхилення запиту та повідомлення про помилку.
+    Тест заборони видалення клієнта з існуючими записами.
+    Перевіряє відхилення запиту на видалення та повідомлення про помилку.
     """
     # Створюємо тестового клієнта та запис
-    from datetime import datetime, timedelta
-
     unique_id = uuid.uuid4().hex[:8]
 
     # Створюємо користувача (майстра)

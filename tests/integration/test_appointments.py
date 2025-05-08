@@ -42,12 +42,13 @@
 
 import uuid
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 
 import pytest
-from flask import url_for
 from werkzeug.security import generate_password_hash
 
-from app.models import Appointment, AppointmentService, Client, Service, User
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User, db)
 
 
 @pytest.fixture
@@ -691,3 +692,12 @@ def test_daily_summary_shows_correct_total(
 
     # Перевіряємо тільки статус відповіді - це мінімальна перевірка успішності запиту
     assert response.status_code == 200
+
+
+def test_appointment_edit_with_import():
+    """Цей тест перевіряє, що імпорт функції edit не викликає помилок."""
+    # Import but don't use to avoid F401
+    from app.routes.appointments import edit  # noqa: F401
+
+    # Тест використовується для перевірки імпорту, самої функції ми не викликаємо
+    pass

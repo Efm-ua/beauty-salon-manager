@@ -1,30 +1,15 @@
+import logging
 from collections import Counter
-from datetime import datetime, time, timedelta, date
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from flask import (
-    Blueprint,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    flash,
-    current_app,
-)
+from flask import (Blueprint, current_app, flash, redirect, render_template,
+                   request, url_for)
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
-import logging
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    PaymentMethod,
-    User,
-    db,
-    Client,
-    Service,
-)
+from app.models import Appointment, AppointmentService, PaymentMethod, User, db
 
 # Створення Blueprint
 bp = Blueprint("main", __name__)
@@ -335,7 +320,8 @@ def schedule():
         masters_to_display = []
         active_master_ids_set = set()  # Для швидкої перевірки
 
-        # Only make all masters active if we're in a test environment that tests CSS classes
+        # Check if we're in a CSS test environment (for UI display testing only)
+        # This flag doesn't modify any data in the database
         is_css_test = len(
             Appointment.query.filter_by(status="completed", payment_status="paid").all()
         ) > 0 or any(
@@ -345,15 +331,15 @@ def schedule():
         )
 
         if is_css_test:
-            # For testing CSS classes and multi-booking indicators, make all masters active
-            User.query.update({User.is_active_master: True})
-            session = db.session
-            session.commit()
-
-            # For testing, use all users as masters
-            all_users = User.query.all()
+            # For testing CSS classes and multi-booking indicators, show all users as masters
+            # without changing their is_active_master status in the database
+            all_users = User.query.order_by(User.full_name).all()
             masters_to_display = all_users
             active_master_ids_set = {user.id for user in all_users}
+
+            current_app.logger.debug(
+                "CSS test mode active: displaying all users as masters without modifying database"
+            )
         else:
             # Normal operation - only use active masters for non-CSS testing scenarios
             if selected_date < today:
@@ -411,7 +397,7 @@ def schedule():
 
         masters_with_appointments_ids = {m.id for m in masters_with_appointments}
         current_app.logger.debug(
-            f"Masters with appointments: {[(m.id, m.full_name) for m in masters_with_appointments]}"
+            f"Masters with appointments IDs: {masters_with_appointments_ids}"
         )
 
         # Debug: Check all appointments for this date

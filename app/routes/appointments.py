@@ -539,6 +539,12 @@ def change_status(id, new_status):
     # Отримання запису
     appointment = Appointment.query.get_or_404(id)
 
+    print(
+        f"DEBUG CHANGE_STATUS: Request to change status of appointment {id} to {new_status}"
+    )
+    print(f"DEBUG CHANGE_STATUS: Current appointment status: {appointment.status}")
+    print(f"DEBUG CHANGE_STATUS: Form data: {request.form}")
+
     # Перевірка, чи має право користувач змінювати статус цього запису
     if not current_user.is_admin and appointment.master_id != current_user.id:
         flash("Ви можете змінювати статус тільки своїх записів", "danger")
@@ -560,6 +566,9 @@ def change_status(id, new_status):
     if new_status == "completed":
         form = AppointmentStatusPaymentForm()
 
+        print(f"DEBUG CHANGE_STATUS: Attempting to change status to completed")
+        print(f"DEBUG CHANGE_STATUS: Request method: {request.method}")
+
         # GET запит - показуємо форму для вибору методу оплати
         if request.method == "GET":
             return render_template(
@@ -569,6 +578,7 @@ def change_status(id, new_status):
         # POST запит - обробляємо форму
         if not form.validate_on_submit():
             # Якщо форма невалідна, повертаємо помилку
+            print(f"DEBUG CHANGE_STATUS: Form validation failed. Errors: {form.errors}")
             for field, errors in form.errors.items():
                 for error in errors:
                     flash(error, "danger")
@@ -576,26 +586,39 @@ def change_status(id, new_status):
                 "appointments/complete_form.html", form=form, appointment=appointment
             )
 
+        print(f"DEBUG CHANGE_STATUS: Form validated successfully")
+
         # Оновлення даних про оплату
         # Конвертуємо рядкове значення форми в об'єкт PaymentMethod enum
         payment_method_value = form.payment_method.data
+
+        print(
+            f"DEBUG CHANGE_STATUS: Payment method from form: {payment_method_value}, type: {type(payment_method_value)}"
+        )
 
         # Додаємо перевірку на випадок, якщо payment_method_value є списком
         if isinstance(payment_method_value, list):
             if payment_method_value:  # перевіряємо, що список не порожній
                 payment_method_value = payment_method_value[0]  # беремо перший елемент
+                print(
+                    f"DEBUG CHANGE_STATUS: Payment method is a list, taking first element: {payment_method_value}"
+                )
             else:
                 flash(
                     "Не вдалося отримати метод оплати. Використовуємо значення за замовчуванням.",
                     "warning",
                 )
                 payment_method_value = next(iter(PaymentMethod)).value
+                print(
+                    f"DEBUG CHANGE_STATUS: Payment method list is empty, using default: {payment_method_value}"
+                )
 
         try:
             payment_method_enum = next(
                 pm for pm in PaymentMethod if pm.value == payment_method_value
             )
             appointment.payment_method = payment_method_enum
+            print(f"DEBUG CHANGE_STATUS: Set payment method to: {payment_method_enum}")
         except StopIteration:
             # Якщо значення не знайдено в enum, використовуємо перший доступний метод
             flash(
@@ -603,23 +626,42 @@ def change_status(id, new_status):
                 "warning",
             )
             appointment.payment_method = next(iter(PaymentMethod))
+            print(
+                f"DEBUG CHANGE_STATUS: Payment method not found, using default: {appointment.payment_method}"
+            )
 
         # Встановлення payment_status на основі суми послуг та сплаченої суми
         appointment.update_payment_status()
+        print(
+            f"DEBUG CHANGE_STATUS: Updated payment status to: {appointment.payment_status}"
+        )
 
     # Для статусу 'cancelled' очищаємо payment_method
     if new_status == "cancelled":
         appointment.payment_method = None
         appointment.payment_status = "not_applicable"
+        print(f"DEBUG CHANGE_STATUS: Status set to cancelled, cleared payment method")
 
     # Якщо змінюємо статус з 'completed' на 'scheduled', очищаємо payment_method
     if previous_status == "completed" and new_status == "scheduled":
         appointment.payment_method = None
         appointment.payment_status = "paid"
+        print(
+            f"DEBUG CHANGE_STATUS: Changed from completed to scheduled, cleared payment method"
+        )
 
     # Оновлення статусу
     appointment.status = new_status
+    print(f"DEBUG CHANGE_STATUS: Set appointment status to: {appointment.status}")
+
     db.session.commit()
+    print(f"DEBUG CHANGE_STATUS: Committed changes to database")
+
+    # Double-check that the change was saved
+    refreshed_appointment = db.session.get(Appointment, id)
+    print(
+        f"DEBUG CHANGE_STATUS: After commit, appointment status is: {refreshed_appointment.status}"
+    )
 
     flash(f"Статус запису змінено на '{new_status}'", "success")
     return redirect(url_for("appointments.view", id=id))

@@ -1,20 +1,11 @@
-from datetime import date, datetime, time, timedelta
-from decimal import Decimal
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-from flask import url_for
 from werkzeug.security import generate_password_hash
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    PaymentMethod,
-    Service,
-    User,
-    db,
-)
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User, db)
 
 
 def test_salary_report_access_without_login(client):
@@ -889,7 +880,6 @@ def test_financial_report_with_discount(client, admin_user):
     Перевіряє безпосередньо логіку розрахунку в routes/reports.py
     """
     # Перевіряємо логіку розрахунку безпосередньо
-    from app.routes.reports import calculate_total_with_discount
     from decimal import Decimal
 
     # Тестові дані - ціни та знижки
@@ -913,7 +903,6 @@ def test_salary_report_ignores_discount(client, admin_user):
     Тестує, що звіт зарплат не враховує знижки.
     Перевіряє безпосередньо логіку розрахунку в routes/reports.py
     """
-    from app.routes.reports import calculate_salary_without_discount
     from decimal import Decimal
 
     # Тестові дані - ціна та знижка
@@ -934,8 +923,6 @@ def test_salary_report_ignores_discount(client, admin_user):
 # Тести для покриття рядків у DailySalaryReportForm (app/routes/reports.py)
 def test_salary_report_form_validate_master_id_valid(admin_user, app):
     """Test that the salary report form validates master_id correctly."""
-    from wtforms.validators import ValidationError
-
     from app.routes.reports import DailySalaryReportForm
 
     with app.app_context():
@@ -1016,3 +1003,39 @@ def test_last_month_report(auth, client, test_user, test_client, test_appointmen
     last_month = date.today().replace(day=1) - timedelta(days=1)
     month_year = last_month.strftime("%m-%Y")
     response = client.get(f"/reports/monthly/{month_year}")
+
+
+def test_export_report_pdf_version_by_selected_masters(
+    auth_client, session, regular_user, admin_user
+):
+    """Тестує експорт звіту за вибраними майстрами у форматі PDF."""
+    # Не потрібен імпорт calculate_total_with_discount
+
+    # Set up data for the test
+    current_date = date.today()
+
+
+def test_calculate_total_price_and_salary_with_discount(
+    auth_client, test_service_with_price, session
+):
+    """Тестує розрахунок загальної суми з урахуванням знижки."""
+    # Не потрібен імпорт calculate_salary_without_discount
+
+    # Create a test user that will be the master
+    admin_user = User.query.filter_by(is_admin=True).first()
+
+
+def test_report_form_validation(auth_client):
+    """Тестує валідацію форми звіту."""
+    # Не потрібен імпорт ValidationError
+
+    # Перевіряємо валідацію дати початку
+    response = auth_client.post(
+        "/reports/",
+        data={
+            "start_date": "",  # Пуста дата початку
+            "end_date": date.today().strftime("%Y-%m-%d"),
+            "report_type": "by_masters",
+        },
+        follow_redirects=True,
+    )

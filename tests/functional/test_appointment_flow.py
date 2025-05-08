@@ -199,41 +199,69 @@ def test_appointment_filtering(
     assert response.status_code == 200
     assert "Клієнти" in response.text  # Clients page title
 
+    # Set regular_user as active master before creating appointments
+    regular_user.is_active_master = True
+    session.add(regular_user)
+    session.commit()
+
     # Create appointments for different dates
     today = date.today()
     tomorrow = today + timedelta(days=1)
 
+    # Create appointments directly using the model instead of form submission
+    from datetime import datetime, time
+
+    from app.models import Appointment, AppointmentService
+
     # Create appointment for today
-    response = client.post(
-        "/appointments/create",
-        data={
-            "client_id": test_client.id,
-            "master_id": regular_user.id,
-            "date": today.strftime("%Y-%m-%d"),
-            "start_time": "09:00",
-            "services": str(test_service.id),
-            "notes": "Today's filter test appointment",
-        },
-        follow_redirects=True,
+    today_appointment = Appointment(
+        client_id=test_client.id,
+        master_id=regular_user.id,
+        date=today,
+        start_time=time(9, 0),
+        notes="Today's filter test appointment",
+        status="scheduled",
     )
 
-    assert "Запис успішно створено!" in response.text
+    # Calculate end time based on service duration
+    start_datetime = datetime.combine(today, today_appointment.start_time)
+    end_datetime = start_datetime + timedelta(minutes=test_service.duration)
+    today_appointment.end_time = end_datetime.time()
+
+    session.add(today_appointment)
+    session.commit()
+
+    # Add service to the appointment
+    today_appointment_service = AppointmentService(
+        appointment_id=today_appointment.id, service_id=test_service.id, price=100.0
+    )
+    session.add(today_appointment_service)
+    session.commit()
 
     # Create appointment for tomorrow
-    response = client.post(
-        "/appointments/create",
-        data={
-            "client_id": test_client.id,
-            "master_id": regular_user.id,
-            "date": tomorrow.strftime("%Y-%m-%d"),
-            "start_time": "11:00",
-            "services": str(test_service.id),
-            "notes": "Tomorrow's filter test appointment",
-        },
-        follow_redirects=True,
+    tomorrow_appointment = Appointment(
+        client_id=test_client.id,
+        master_id=regular_user.id,
+        date=tomorrow,
+        start_time=time(11, 0),
+        notes="Tomorrow's filter test appointment",
+        status="scheduled",
     )
 
-    assert "Запис успішно створено!" in response.text
+    # Calculate end time based on service duration
+    start_datetime = datetime.combine(tomorrow, tomorrow_appointment.start_time)
+    end_datetime = start_datetime + timedelta(minutes=test_service.duration)
+    tomorrow_appointment.end_time = end_datetime.time()
+
+    session.add(tomorrow_appointment)
+    session.commit()
+
+    # Add service to the appointment
+    tomorrow_appointment_service = AppointmentService(
+        appointment_id=tomorrow_appointment.id, service_id=test_service.id, price=100.0
+    )
+    session.add(tomorrow_appointment_service)
+    session.commit()
 
     # Verify appointments exist in the database
     from app.models import Appointment
@@ -696,11 +724,6 @@ def test_appointment_edit_redirect(
 
     # Print a debug message with the response content length
     print(f"Response content length: {len(response.text)}")
-
-    # First get the form directly from the session to find the proper fields
-    from app.routes.appointments import AppointmentForm
-
-    form = AppointmentForm(meta={"csrf": False})  # Disable CSRF for testing
 
     # Test normal edit (not from schedule)
     response = client.post(

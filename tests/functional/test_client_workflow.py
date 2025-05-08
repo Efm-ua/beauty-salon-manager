@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import datetime
 
 
 def test_client_full_lifecycle(session, client, admin_user):

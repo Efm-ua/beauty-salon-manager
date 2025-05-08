@@ -7,13 +7,7 @@ from werkzeug.security import generate_password_hash
 
 from app import create_app
 from app.config import Config
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    Service,
-    User,
-)
+from app.models import Appointment, AppointmentService, Client, Service, User
 from app.models import db as _db
 
 

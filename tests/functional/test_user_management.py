@@ -2,7 +2,6 @@
 Tests for the user management functionality.
 """
 
-import pytest
 from flask import url_for
 
 from app.models import User

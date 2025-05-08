@@ -2,7 +2,6 @@ import unittest.mock
 import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
-import json
 
 from flask import url_for
 from flask_login import current_user
@@ -537,3 +536,106 @@ def test_main_page_only_shows_active_masters(
     # verify active masters are shown and inactive masters are not
     if active_master.full_name in response.text:
         assert inactive_master.full_name not in response.text
+
+
+def test_schedule_doesnt_modify_is_active_master(
+    session, client, admin_user, regular_user
+):
+    """
+    Test that viewing the schedule doesn't modify the is_active_master status of users.
+
+    This test verifies that:
+    1. An inactive user remains inactive in the database after viewing the schedule
+    2. Active CSS test condition doesn't change database values
+    """
+    # Setup: Ensure the user is not an active master
+    regular_user.is_active_master = False
+    session.add(regular_user)
+    session.commit()
+
+    # Create conditions to trigger is_css_test=True
+    # Add a completed and paid appointment
+    test_client = Client(
+        name="Test Client for CSS Test",
+        phone="+380991234567",
+        email="css_test@example.com",
+    )
+    session.add(test_client)
+    session.flush()
+
+    today = date.today()
+    test_service = Service(
+        name="Test Service CSS",
+        description="Test service for CSS testing",
+        duration=60,
+    )
+    session.add(test_service)
+    session.flush()
+
+    # Create a completed and paid appointment (to trigger is_css_test=True)
+    test_appointment = Appointment(
+        client_id=test_client.id,
+        master_id=admin_user.id,
+        date=today,
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status="completed",
+        payment_status="paid",
+        amount_paid=Decimal("100.00"),
+    )
+    session.add(test_appointment)
+    session.flush()
+
+    appointment_service = AppointmentService(
+        appointment_id=test_appointment.id,
+        service_id=test_service.id,
+        price=100.0,
+    )
+    session.add(appointment_service)
+    session.commit()
+
+    # Login as admin
+    client.post(
+        "/auth/login",
+        data={
+            "username": admin_user.username,
+            "password": "admin_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+
+    # Access the schedule page (which should have is_css_test=True)
+    response = client.get("/schedule")
+    assert response.status_code == 200
+
+    # Verify that the user's is_active_master status is still False
+    session.refresh(regular_user)
+    assert (
+        not regular_user.is_active_master
+    ), "is_active_master was incorrectly modified by viewing the schedule"
+
+    # Create another user and verify it's also not affected
+    another_user = User(
+        username="another_test_user",
+        password="test_password",
+        full_name="Another Test User",
+        is_admin=False,
+        is_active_master=False,
+    )
+    session.add(another_user)
+    session.commit()
+
+    # Access the schedule page again
+    response = client.get("/schedule")
+    assert response.status_code == 200
+
+    # Verify that neither user's is_active_master status was changed
+    session.refresh(regular_user)
+    session.refresh(another_user)
+    assert (
+        not regular_user.is_active_master
+    ), "is_active_master of regular_user was incorrectly modified"
+    assert (
+        not another_user.is_active_master
+    ), "is_active_master of another_user was incorrectly modified"

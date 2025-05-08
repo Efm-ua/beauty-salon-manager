@@ -1,7 +1,5 @@
 from datetime import datetime
 
-import pytest
-
 from app.models import db
 
 
@@ -155,6 +153,7 @@ def test_service_with_appointments(session, client, admin_user, test_client):
 
     # Create an appointment directly in the database
     from datetime import date, time, timedelta
+
     from app.models import Appointment, AppointmentService
 
     tomorrow = date.today() + timedelta(days=1)
