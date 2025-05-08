@@ -26,11 +26,24 @@
           </div>
 
           <div class="mb-3 form-check">
-            {{ form.is_active_master(class="form-check-input") }} {{
+            {{ form.is_active_master(class="form-check-input",
+            id="is_active_master_checkbox") }} {{
             form.is_active_master.label(class="form-check-label") }} {% for
             error in form.is_active_master.errors %}
             <div class="text-danger">{{ error }}</div>
             {% endfor %}
+          </div>
+
+          <div class="mb-3" id="schedule_display_order_container">
+            {{ form.schedule_display_order.label(class="form-label") }} {{
+            form.schedule_display_order(class="form-control") }} {% for error in
+            form.schedule_display_order.errors %}
+            <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+            <small class="form-text text-muted"
+              >Обов'язкове поле для активних майстрів. Визначає порядок
+              відображення майстрів на сторінці розкладу.</small
+            >
           </div>
 
           <div class="mb-3">
@@ -44,4 +57,34 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Отримуємо елементи
+    const isActiveMasterCheckbox = document.getElementById(
+      "is_active_master_checkbox"
+    );
+    const scheduleDisplayOrderContainer = document.getElementById(
+      "schedule_display_order_container"
+    );
+
+    // Функція перевірки видимості поля порядку відображення
+    function toggleScheduleDisplayOrderVisibility() {
+      if (isActiveMasterCheckbox.checked) {
+        scheduleDisplayOrderContainer.style.display = "block";
+      } else {
+        scheduleDisplayOrderContainer.style.display = "none";
+      }
+    }
+
+    // Встановлюємо початкову видимість
+    toggleScheduleDisplayOrderVisibility();
+
+    // Додаємо обробник подій для зміни checkbox
+    isActiveMasterCheckbox.addEventListener(
+      "change",
+      toggleScheduleDisplayOrderVisibility
+    );
+  });
+</script>
 {% endblock %}

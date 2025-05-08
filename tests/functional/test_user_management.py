@@ -290,3 +290,147 @@ def test_user_creation_form_sets_is_active_master_correctly_for_new_admin(
     assert new_user is not None
     assert new_user.is_admin  # Should be an admin
     assert new_user.is_active_master is False  # Should not be active master by default
+
+
+# Tests for schedule_display_order functionality
+def test_admin_can_set_schedule_display_order(admin_auth_client, regular_user, session):
+    """Test that an admin can set schedule_display_order for a user."""
+    # Ensure the user is an active master
+    response = admin_auth_client.post(
+        url_for("auth.edit_user", id=regular_user.id),
+        data={
+            "full_name": regular_user.full_name,
+            "is_admin": "",  # Not checked, remains a master
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 5,  # Set display order
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert (
+        f"Користувач {regular_user.full_name} успішно оновлений!"
+        in response.get_data(as_text=True)
+    )
+
+    # Verify user was updated with the correct schedule_display_order
+    updated_user = User.query.get(regular_user.id)
+    assert updated_user.schedule_display_order == 5
+    assert updated_user.is_active_master is True
+
+
+def test_schedule_display_order_reset_when_not_active_master(
+    admin_auth_client, regular_user, session
+):
+    """Test that schedule_display_order is reset to None when a user is not an active master."""
+    # First set the schedule_display_order
+    regular_user.is_active_master = True
+    regular_user.schedule_display_order = 10
+    session.commit()
+
+    # Then make the user inactive and verify schedule_display_order is reset
+    response = admin_auth_client.post(
+        url_for("auth.edit_user", id=regular_user.id),
+        data={
+            "full_name": regular_user.full_name,
+            "is_admin": "",  # Not checked, remains a master
+            "is_active_master": "",  # Not active master
+            "schedule_display_order": 10,  # This should be ignored and set to None
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Verify user was updated with schedule_display_order set to None
+    updated_user = User.query.get(regular_user.id)
+    assert updated_user.schedule_display_order is None
+    assert updated_user.is_active_master is False
+
+
+def test_schedule_display_order_uniqueness_validation(admin_auth_client, session):
+    """Test that schedule_display_order must be unique among active masters."""
+    # Create a user with schedule_display_order = 7
+    user1 = User(
+        username="display_order_test1",
+        full_name="Display Order Test User 1",
+        password="password",
+        is_admin=False,
+        is_active_master=True,
+        schedule_display_order=7,
+    )
+    session.add(user1)
+    session.commit()
+
+    # Try to create another user with the same schedule_display_order
+    response = admin_auth_client.post(
+        url_for("auth.register"),
+        data={
+            "username": "display_order_test2",
+            "full_name": "Display Order Test User 2",
+            "password": "password123",
+            "password2": "password123",
+            "is_admin": "",  # Not checked, so it will be a master
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 7,  # Same as user1
+        },
+        follow_redirects=True,
+    )
+
+    # Should fail with validation error
+    assert response.status_code == 200
+    assert "вже використовується іншим активним майстром" in response.get_data(
+        as_text=True
+    )
+
+    # No new user should be created
+    assert User.query.filter_by(username="display_order_test2").first() is None
+
+
+def test_schedule_display_order_in_register_form(admin_auth_client, session):
+    """Test that schedule_display_order is saved when registering a new user."""
+    response = admin_auth_client.post(
+        url_for("auth.register"),
+        data={
+            "username": "display_order_new",
+            "full_name": "Display Order New User",
+            "password": "password123",
+            "password2": "password123",
+            "is_admin": "",  # Not checked, so it will be a master
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 15,  # Set display order
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert (
+        "Користувач Display Order New User успішно зареєстрований!"
+        in response.get_data(as_text=True)
+    )
+
+    # Verify the user was created with correct schedule_display_order
+    new_user = User.query.filter_by(username="display_order_new").first()
+    assert new_user is not None
+    assert new_user.schedule_display_order == 15
+    assert new_user.is_active_master is True
+
+
+def test_toggle_admin_resets_schedule_display_order(
+    admin_auth_client, regular_user, session
+):
+    """Test that toggling a user to admin resets their schedule_display_order."""
+    # Set up an active master with schedule_display_order
+    regular_user.is_active_master = True
+    regular_user.schedule_display_order = 20
+    session.commit()
+
+    # Toggle to admin
+    response = admin_auth_client.post(
+        url_for("auth.toggle_admin", id=regular_user.id),
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Verify user was updated to admin and schedule_display_order is reset
+    updated_user = User.query.get(regular_user.id)
+    assert updated_user.is_admin is True
+    assert updated_user.is_active_master is False
+    assert updated_user.schedule_display_order is None

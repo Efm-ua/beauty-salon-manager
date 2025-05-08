@@ -64,11 +64,28 @@
           </div>
 
           <div class="mb-3 form-check">
-            {{ form.is_active_master(class="form-check-input") }} {{
+            {{ form.is_active_master(class="form-check-input",
+            id="is_active_master_checkbox") }} {{
             form.is_active_master.label(class="form-check-label") }}
             <small class="form-text text-muted d-block"
               >Встановлюється автоматично (за замовчуванням) на основі ролі, але
               може бути змінено</small
+            >
+          </div>
+
+          <div class="mb-3" id="schedule_display_order_container">
+            {{ form.schedule_display_order.label(class="form-label") }} {% if
+            form.schedule_display_order.errors %} {{
+            form.schedule_display_order(class="form-control is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.schedule_display_order.errors %} {{ error }}
+              {% endfor %}
+            </div>
+            {% else %} {{ form.schedule_display_order(class="form-control") }}
+            {% endif %}
+            <small class="form-text text-muted"
+              >Обов'язкове поле для активних майстрів. Визначає порядок
+              відображення майстрів на сторінці розкладу.</small
             >
           </div>
 
@@ -78,4 +95,46 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Отримуємо елементи
+    const isActiveMasterCheckbox = document.getElementById(
+      "is_active_master_checkbox"
+    );
+    const scheduleDisplayOrderContainer = document.getElementById(
+      "schedule_display_order_container"
+    );
+    const isAdminCheckbox = document.querySelector('input[name="is_admin"]');
+
+    // Функція перевірки видимості поля порядку відображення
+    function toggleScheduleDisplayOrderVisibility() {
+      if (isActiveMasterCheckbox.checked) {
+        scheduleDisplayOrderContainer.style.display = "block";
+      } else {
+        scheduleDisplayOrderContainer.style.display = "none";
+      }
+    }
+
+    // Автоматичне встановлення is_active_master на основі is_admin
+    function updateIsActiveMaster() {
+      if (isAdminCheckbox.checked) {
+        isActiveMasterCheckbox.checked = false;
+      } else {
+        isActiveMasterCheckbox.checked = true;
+      }
+      toggleScheduleDisplayOrderVisibility();
+    }
+
+    // Встановлюємо початкову видимість
+    toggleScheduleDisplayOrderVisibility();
+
+    // Додаємо обробник подій для зміни checkbox
+    isActiveMasterCheckbox.addEventListener(
+      "change",
+      toggleScheduleDisplayOrderVisibility
+    );
+    isAdminCheckbox.addEventListener("change", updateIsActiveMaster);
+  });
+</script>
 {% endblock %}

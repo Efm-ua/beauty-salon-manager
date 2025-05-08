@@ -27,6 +27,9 @@ class User(UserMixin, db.Model):  # type: ignore
     full_name = db.Column(db.String(100), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     is_active_master = db.Column(db.Boolean, nullable=False, default=True)
+    schedule_display_order = db.Column(
+        db.Integer, nullable=True, default=999, index=True
+    )
     appointments = db.relationship(
         "Appointment", backref="master", lazy=True, cascade="all, delete-orphan"
     )

@@ -1,7 +1,9 @@
 from datetime import date, time, timedelta
 from decimal import Decimal
 
-from app.models import Appointment, AppointmentService, PaymentMethod
+from werkzeug.security import generate_password_hash
+
+from app.models import Appointment, AppointmentService, PaymentMethod, User
 
 
 def test_schedule_payment_status_display(
@@ -350,3 +352,143 @@ def test_schedule_new_appointment_button_date_parameter(
         f'href="/appointments/create?date={formatted_date}"' in response.text
         or f"href='/appointments/create?date={formatted_date}'" in response.text
     )
+
+
+def test_masters_sorted_by_schedule_display_order(session, client):
+    """Test that masters are sorted by schedule_display_order in the schedule view."""
+    # Create admin user for login
+    admin = User(
+        username="sort_test_admin",
+        password=generate_password_hash("password"),
+        full_name="Sort Test Admin",
+        is_admin=True,
+        is_active_master=False,
+    )
+    session.add(admin)
+
+    # Create masters with different schedule_display_order
+    master1 = User(
+        username="master_c",  # Name would sort this third alphabetically
+        password=generate_password_hash("password"),
+        full_name="Master C",
+        is_admin=False,
+        is_active_master=True,
+        schedule_display_order=1,  # Should appear first due to display order
+    )
+    master2 = User(
+        username="master_a",  # Name would sort this first alphabetically
+        password=generate_password_hash("password"),
+        full_name="Master A",
+        is_admin=False,
+        is_active_master=True,
+        schedule_display_order=3,  # Should appear third due to display order
+    )
+    master3 = User(
+        username="master_b",  # Name would sort this second alphabetically
+        password=generate_password_hash("password"),
+        full_name="Master B",
+        is_admin=False,
+        is_active_master=True,
+        schedule_display_order=2,  # Should appear second due to display order
+    )
+    session.add_all([master1, master2, master3])
+    session.commit()
+
+    # Login as admin
+    login_response = client.post(
+        "/auth/login",
+        data={
+            "username": "sort_test_admin",
+            "password": "password",
+            "remember_me": False,
+        },
+        follow_redirects=True,
+    )
+    assert login_response.status_code == 200
+
+    # Access the schedule page
+    response = client.get("/schedule")
+    assert response.status_code == 200
+
+    # Check the order of masters in the response
+    response_text = response.get_data(as_text=True)
+
+    # Find positions of each master's name in the HTML
+    pos_master_c = response_text.find("Master C")
+    pos_master_b = response_text.find("Master B")
+    pos_master_a = response_text.find("Master A")
+
+    # Verify masters appear in the correct order by schedule_display_order
+    assert (
+        pos_master_c < pos_master_b < pos_master_a
+    ), "Masters should be ordered by schedule_display_order"
+
+
+def test_masters_with_same_display_order_sorted_alphabetically(session, client):
+    """Test that masters with the same schedule_display_order are sorted alphabetically."""
+    # Create admin user for login
+    admin = User(
+        username="same_order_admin",
+        password=generate_password_hash("password"),
+        full_name="Same Order Admin",
+        is_admin=True,
+        is_active_master=False,
+    )
+    session.add(admin)
+
+    # Create masters with the same schedule_display_order
+    master1 = User(
+        username="same_order_c",
+        password=generate_password_hash("password"),
+        full_name="Master C Same Order",
+        is_admin=False,
+        is_active_master=True,
+        schedule_display_order=5,  # Same display order
+    )
+    master2 = User(
+        username="same_order_a",
+        password=generate_password_hash("password"),
+        full_name="Master A Same Order",
+        is_admin=False,
+        is_active_master=True,
+        schedule_display_order=5,  # Same display order
+    )
+    master3 = User(
+        username="same_order_b",
+        password=generate_password_hash("password"),
+        full_name="Master B Same Order",
+        is_admin=False,
+        is_active_master=True,
+        schedule_display_order=5,  # Same display order
+    )
+    session.add_all([master1, master2, master3])
+    session.commit()
+
+    # Login as admin
+    login_response = client.post(
+        "/auth/login",
+        data={
+            "username": "same_order_admin",
+            "password": "password",
+            "remember_me": False,
+        },
+        follow_redirects=True,
+    )
+    assert login_response.status_code == 200
+
+    # Access the schedule page
+    response = client.get("/schedule")
+    assert response.status_code == 200
+
+    # Check the order of masters in the response
+    response_text = response.get_data(as_text=True)
+
+    # Find positions of each master's name in the HTML
+    pos_master_a = response_text.find("Master A Same Order")
+    pos_master_b = response_text.find("Master B Same Order")
+    pos_master_c = response_text.find("Master C Same Order")
+
+    # Verify masters appear in alphabetical order when they have the same schedule_display_order
+    assert (
+        pos_master_a < pos_master_b < pos_master_c
+    ), "Masters with same schedule_display_order should be ordered alphabetically"

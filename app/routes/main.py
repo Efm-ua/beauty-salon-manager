@@ -351,7 +351,7 @@ def schedule():
                 # Отримуємо користувачів для цих ID
                 masters_to_display = (
                     User.query.filter(User.id.in_(master_ids_on_date))
-                    .order_by(User.full_name)
+                    .order_by(User.schedule_display_order, User.full_name)
                     .all()
                 )
                 active_master_ids_set = {
@@ -365,7 +365,7 @@ def schedule():
             # СЬОГОДНІ або МАЙБУТНЯ ДАТА: отримуємо тільки активних майстрів
             masters_to_display = (
                 User.query.filter_by(is_active_master=True)
-                .order_by(User.full_name)
+                .order_by(User.schedule_display_order, User.full_name)
                 .all()
             )
             active_master_ids_set = {

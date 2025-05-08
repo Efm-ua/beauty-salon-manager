@@ -5,7 +5,7 @@ from flask import url_for
 
 
 def test_appointment_complete_flow(
-    session, client, test_client, test_service, regular_user, additional_service
+    session, client, test_client, test_service, regular_user, additional_service, db
 ):
     """
     Tests a complete appointment flow from creation to completion.
@@ -212,7 +212,7 @@ def test_appointment_complete_flow(
 
 
 def test_appointment_filtering(
-    session, client, test_client, test_service, regular_user
+    session, client, test_client, test_service, regular_user, db
 ):
     """
     Tests appointment filtering functionality.
@@ -378,7 +378,7 @@ def test_appointment_filtering(
 
 
 def test_appointment_pricing(
-    session, client, test_client, test_service, regular_user, haircut_service
+    session, client, test_client, test_service, regular_user, haircut_service, db
 ):
     """
     Tests appointment pricing functionality.
@@ -411,14 +411,15 @@ def test_appointment_pricing(
 
     # Create a new appointment
     today = date.today()
+    future_date = today + timedelta(days=7)  # Use a date 7 days in the future
     response = client.post(
         "/appointments/create",
         data={
             "client_id": test_client.id,
             "master_id": regular_user.id,
-            "date": today.strftime("%Y-%m-%d"),
+            "date": future_date.strftime("%Y-%m-%d"),
             "start_time": "15:00",
-            "services": str(test_service.id),
+            "services": [str(test_service.id)],
             "notes": "Pricing test appointment",
         },
         follow_redirects=True,
@@ -518,7 +519,7 @@ def test_appointment_pricing(
 
 
 def test_appointment_redirect_to_schedule_date(
-    session, client, test_client, regular_user, test_service
+    session, client, test_client, regular_user, test_service, db
 ):
     """
     Tests that appointments created from the schedule view redirect back to the schedule view
@@ -547,7 +548,7 @@ def test_appointment_redirect_to_schedule_date(
             "date": future_date,
             "start_time": "14:00",
             "notes": "Appointment with redirect test",
-            "services": str(test_service.id),  # Services are required now
+            "services": [str(test_service.id)],  # Services are required now
         },
         follow_redirects=False,
     )
@@ -559,7 +560,7 @@ def test_appointment_redirect_to_schedule_date(
 
 
 def test_appointment_form_uses_date_parameter(
-    session, client, test_client, regular_user, test_service
+    session, client, test_client, regular_user, test_service, db
 ):
     """
     Tests that the appointment creation form uses the date parameter from the URL.
@@ -605,7 +606,7 @@ def test_appointment_form_uses_date_parameter(
             "master_id": regular_user.id,
             "date": formatted_date,
             "start_time": "10:00",
-            "services": str(test_service.id),  # Services are required now
+            "services": [str(test_service.id)],  # Services are required now
             "notes": "Test appointment with date parameter",
         },
         follow_redirects=True,
@@ -633,7 +634,7 @@ def test_appointment_form_uses_date_parameter(
 
 
 def test_appointment_back_to_schedule_button_includes_date(
-    session, client, test_client, regular_user, admin_user, test_service
+    session, client, test_client, regular_user, admin_user, test_service, db
 ):
     """
     Tests that the "Back to schedule" button on the appointment details page
@@ -670,7 +671,7 @@ def test_appointment_back_to_schedule_button_includes_date(
             "date": formatted_date,
             "start_time": "14:00",
             "notes": "Test appointment for back button",
-            "services": str(test_service.id),  # Services are required now
+            "services": [str(test_service.id)],  # Services are required now
         },
         follow_redirects=True,
     )
@@ -711,7 +712,7 @@ def test_appointment_back_to_schedule_button_includes_date(
 
 
 def test_appointment_edit_redirect(
-    session, client, test_client, regular_user, admin_user, test_service
+    session, client, test_client, regular_user, admin_user, test_service, db
 ):
     """
     Tests that appointment edit works correctly and redirects to the appropriate page.
@@ -741,7 +742,7 @@ def test_appointment_edit_redirect(
             "date": formatted_date,
             "start_time": "14:00",
             "notes": "Edit redirect test appointment",
-            "services": str(test_service.id),
+            "services": [str(test_service.id)],
         },
         follow_redirects=True,
     )
@@ -777,7 +778,7 @@ def test_appointment_edit_redirect(
             "date": formatted_date,
             "start_time": "15:00",  # Change time
             "notes": "Updated notes",
-            "services": str(test_service.id),
+            "services": [str(test_service.id)],
             "discount_percentage": "0.0",
             "amount_paid": "0.00",
         },
@@ -811,7 +812,7 @@ def test_appointment_edit_redirect(
             "date": formatted_date,
             "start_time": "16:00",  # Change time again
             "notes": "Updated again",
-            "services": str(test_service.id),
+            "services": [str(test_service.id)],
             "discount_percentage": "0.0",
             "amount_paid": "0.00",
             "from_schedule": "1",  # Додаємо from_schedule як поле форми

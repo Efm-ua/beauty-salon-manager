@@ -36,7 +36,7 @@ from werkzeug.security import generate_password_hash
 from app.models import User, db
 
 
-def test_login_success(client, regular_user):
+def test_login_success(client, regular_user, db):
     """
     Тест успішного входу в систему з коректними обліковими даними.
     Перевіряє статус відповіді та перенаправлення на головну сторінку.
@@ -59,7 +59,7 @@ def test_login_success(client, regular_user):
     assert "Салон краси" in response.data.decode("utf-8")
 
 
-def test_login_invalid_password(client, regular_user):
+def test_login_invalid_password(client, regular_user, db):
     """
     Тест невдалого входу в систему з неправильним паролем.
     Перевіряє статус відповіді та перенаправлення на сторінку входу.
@@ -76,7 +76,7 @@ def test_login_invalid_password(client, regular_user):
     assert response.status_code == 200
 
 
-def test_login_nonexistent_user(client):
+def test_login_nonexistent_user(client, db):
     """
     Тест невдалого входу в систему з неіснуючим користувачем.
     Перевіряє статус відповіді та перенаправлення на сторінку входу.
@@ -93,7 +93,7 @@ def test_login_nonexistent_user(client):
     assert response.status_code == 200
 
 
-def test_logout_success(app, client):
+def test_logout_success(app, client, db):
     """
     Тест успішного виходу з системи.
     Перевіряє статус відповіді та відсутність сесійного кукі.
@@ -138,7 +138,7 @@ def test_logout_success(app, client):
             db.session.commit()
 
 
-def test_register_page_access_admin(app):
+def test_register_page_access_admin(app, db):
     """
     Тест доступності сторінки реєстрації для адміністратора.
     Перевіряє статус відповіді та наявність форми реєстрації.
@@ -180,7 +180,7 @@ def test_register_page_access_admin(app):
             db.session.commit()
 
 
-def test_register_page_access_unauthorized(client):
+def test_register_page_access_unauthorized(client, db):
     """
     Тест заборони доступу до сторінки реєстрації для неавторизованих користувачів.
     Перевіряє перенаправлення на сторінку входу.
@@ -194,7 +194,7 @@ def test_register_page_access_unauthorized(client):
     assert response.status_code == 200
 
 
-def test_register_page_access_regular_user(app):
+def test_register_page_access_regular_user(app, db):
     """
     Тест заборони доступу до сторінки реєстрації для звичайних користувачів.
     Перевіряє перенаправлення на головну сторінку.
@@ -236,7 +236,7 @@ def test_register_page_access_regular_user(app):
             db.session.commit()
 
 
-def test_register_user_success(app):
+def test_register_user_success(app, db):
     """
     Тест успішної реєстрації нового користувача адміністратором.
     Перевіряє створення нового запису користувача в базі даних.
@@ -297,7 +297,7 @@ def test_register_user_success(app):
         db.session.commit()
 
 
-def test_register_duplicate_username(app, regular_user):
+def test_register_duplicate_username(app, regular_user, db):
     """
     Тест невдалої реєстрації з дублікатом імені користувача.
     Перевіряє відхилення реєстрації.
@@ -355,7 +355,7 @@ def test_register_duplicate_username(app, regular_user):
             db.session.commit()
 
 
-def test_initialize_access_no_users(client, app):
+def test_initialize_access_no_users(client, app, db):
     """
     Тест доступності сторінки ініціалізації при відсутності користувачів.
     Перевіряє статус відповіді та наявність форми ініціалізації.
@@ -370,7 +370,7 @@ def test_initialize_access_no_users(client, app):
     assert "Створення адміністратора" in response.data.decode("utf-8")
 
 
-def test_initialize_blocked_with_users(client, regular_user):
+def test_initialize_blocked_with_users(client, regular_user, db):
     """
     Тест блокування ініціалізації, якщо є користувачі.
     Перевіряє перенаправлення на головну сторінку.
@@ -380,7 +380,7 @@ def test_initialize_blocked_with_users(client, regular_user):
     assert "Салон краси" in response.data.decode("utf-8")
 
 
-def test_initialize_success(app, client):
+def test_initialize_success(app, client, db):
     """
     Тест успішної ініціалізації системи (створення адміністратора).
     Перевіряє створення нового адміністратора в базі даних.
@@ -412,7 +412,7 @@ def test_initialize_success(app, client):
         db.session.commit()
 
 
-def test_login_redirect_to_next_page(app):
+def test_login_redirect_to_next_page(app, db):
     """
     Тест перенаправлення користувача на сторінку, яку він намагався відвідати перед входом.
     Перевіряє перенаправлення на сторінку, вказану в параметрі 'next'.
@@ -464,7 +464,7 @@ def test_login_redirect_to_next_page(app):
             db.session.commit()
 
 
-def test_register_password_mismatch(app):
+def test_register_password_mismatch(app, db):
     """
     Тест перевірки невідповідності паролів при реєстрації.
     Перевіряє, що користувач не створюється при невідповідності паролів.
@@ -519,7 +519,7 @@ def test_register_password_mismatch(app):
             db.session.commit()
 
 
-def test_login_session_variables(app, regular_user):
+def test_login_session_variables(app, regular_user, db):
     """
     Тест перевірки правильності входу користувача в систему.
     Перевіряє доступність захищених маршрутів після входу.
@@ -549,7 +549,7 @@ def test_login_session_variables(app, regular_user):
     assert auth_response.status_code == 200  # Сторінка доступна після входу
 
 
-def test_register_short_password(app):
+def test_register_short_password(app, db):
     """
     Тест перевірки вимоги до мінімальної довжини пароля при реєстрації.
     Перевіряє, що користувач не створюється при паролі менше мінімальної довжини.
@@ -604,7 +604,7 @@ def test_register_short_password(app):
             db.session.commit()
 
 
-def test_login_remember_me(app):
+def test_login_remember_me(app, db):
     """
     Тест функції "запам'ятати мене" при вході в систему.
     Перевіряє наявність успішного входу з опцією "запам'ятати мене".
@@ -652,7 +652,7 @@ def test_login_remember_me(app):
             db.session.commit()
 
 
-def test_password_reset(client, regular_user):
+def test_password_reset(client, regular_user, db):
     """Test password change functionality."""
     # First login as the user
     response = client.post(

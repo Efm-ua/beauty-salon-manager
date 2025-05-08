@@ -2,8 +2,15 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_wtf import FlaskForm
 from werkzeug.security import check_password_hash, generate_password_hash
-from wtforms import BooleanField, PasswordField, StringField, SubmitField
-from wtforms.validators import DataRequired, EqualTo, Length, ValidationError
+from wtforms import BooleanField, IntegerField, PasswordField, StringField, SubmitField
+from wtforms.validators import (
+    DataRequired,
+    EqualTo,
+    Length,
+    NumberRange,
+    Optional,
+    ValidationError,
+)
 
 from app.models import User, db
 
@@ -29,6 +36,15 @@ class RegistrationForm(FlaskForm):
     )
     is_admin = BooleanField("Адміністратор")
     is_active_master = BooleanField("Активний майстер")
+    schedule_display_order = IntegerField(
+        "Порядок відображення у розкладі",
+        validators=[
+            Optional(),
+            NumberRange(
+                min=1, message="Порядок відображення повинен бути позитивним числом"
+            ),
+        ],
+    )
     submit = SubmitField("Зареєструватися")
 
     def validate_username(self, username):
@@ -36,13 +52,59 @@ class RegistrationForm(FlaskForm):
         if user is not None:
             raise ValidationError("Цей логін вже використовується. Виберіть інший.")
 
+    def validate_schedule_display_order(self, field):
+        if self.is_active_master.data:
+            # Порядок відображення обов'язковий для активного майстра
+            if field.data is None:
+                raise ValidationError(
+                    "Порядок відображення обов'язковий для активного майстра"
+                )
+
+            # Перевірка на унікальність порядку відображення серед активних майстрів
+            exists = User.query.filter(
+                User.schedule_display_order == field.data, User.is_active_master == True
+            ).first()
+            if exists:
+                raise ValidationError(
+                    f"Порядок відображення {field.data} вже використовується іншим активним майстром"
+                )
+
 
 # Форма для редагування користувача
 class UserEditForm(FlaskForm):
     full_name = StringField("Повне ім'я", validators=[DataRequired(), Length(max=100)])
     is_admin = BooleanField("Адміністратор")
     is_active_master = BooleanField("Активний майстер")
+    schedule_display_order = IntegerField(
+        "Порядок відображення у розкладі",
+        validators=[
+            Optional(),
+            NumberRange(
+                min=1, message="Порядок відображення повинен бути позитивним числом"
+            ),
+        ],
+    )
     submit = SubmitField("Зберегти")
+
+    def validate_schedule_display_order(self, field):
+        if self.is_active_master.data:
+            # Порядок відображення обов'язковий для активного майстра
+            if field.data is None:
+                raise ValidationError(
+                    "Порядок відображення обов'язковий для активного майстра"
+                )
+
+            # Перевірка на унікальність порядку відображення серед активних майстрів
+            user_id = request.view_args.get("id")  # ID поточного користувача
+            exists = User.query.filter(
+                User.schedule_display_order == field.data,
+                User.is_active_master == True,
+                User.id != user_id,
+            ).first()
+            if exists:
+                raise ValidationError(
+                    f"Порядок відображення {field.data} вже використовується іншим активним майстром"
+                )
 
 
 # Форма для зміни пароля
@@ -111,12 +173,18 @@ def register():
             # якщо користувач є адміном, то він не є активним майстром
             is_active_master = not is_admin
 
+        # Визначаємо значення schedule_display_order
+        schedule_display_order = None
+        if is_active_master and form.schedule_display_order.data:
+            schedule_display_order = form.schedule_display_order.data
+
         user = User(
             username=form.username.data,
             full_name=form.full_name.data,
             password=generate_password_hash(form.password.data),
             is_admin=is_admin,
             is_active_master=is_active_master,
+            schedule_display_order=schedule_display_order,
         )
         db.session.add(user)
         db.session.commit()
@@ -182,6 +250,14 @@ def edit_user(id):
         user.full_name = form.full_name.data
         user.is_admin = form.is_admin.data
         user.is_active_master = form.is_active_master.data
+
+        # Встановлюємо schedule_display_order
+        if form.is_active_master.data:
+            user.schedule_display_order = form.schedule_display_order.data
+        else:
+            # Якщо користувач не є активним майстром, встановлюємо None
+            user.schedule_display_order = None
+
         db.session.commit()
         flash(f"Користувач {user.full_name} успішно оновлений!", "success")
         return redirect(url_for("auth.users"))
@@ -214,6 +290,8 @@ def toggle_admin(id):
     if user.is_admin:
         # Якщо користувач став адміном, він не є активним майстром
         user.is_active_master = False
+        # Скидаємо порядок відображення
+        user.schedule_display_order = None
     else:
         # Якщо користувач став майстром (не адміном), робимо його активним майстром
         user.is_active_master = True

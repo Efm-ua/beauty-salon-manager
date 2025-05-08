@@ -8,7 +8,7 @@ from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
                         Service, User, db)
 
 
-def test_salary_report_access_without_login(client):
+def test_salary_report_access_without_login(client, db):
     """Check that unauthorized user is redirected to login page."""
     # First, make sure we're logged out
     client.get("/auth/logout", follow_redirects=True)
@@ -46,7 +46,7 @@ def test_salary_report_access_without_login(client):
     )
 
 
-def test_salary_report_page_access(client, auth, test_user):
+def test_salary_report_page_access(client, auth, test_user, db):
     """Check that authorized user can access salary report."""
     auth.login(username=test_user.username, password="test_password")
     response = client.get("/reports/salary")
@@ -57,7 +57,7 @@ def test_salary_report_page_access(client, auth, test_user):
     assert b"Master" in response.data
 
 
-def test_salary_report_form_submission(client, auth, test_user, app):
+def test_salary_report_form_submission(client, auth, test_user, app, db):
     """Check salary report form submission."""
     # This test only checks that the form submission works without errors
     auth.login(username=test_user.username, password="test_password")
@@ -85,7 +85,7 @@ def test_salary_report_form_submission(client, auth, test_user, app):
         # Don't assert specific content, just that the page loads without error
 
 
-def test_salary_report_with_completed_appointments(client, auth, app, test_db):
+def test_salary_report_with_completed_appointments(client, auth, app, test_db, db):
     """Check salary report generation with completed appointment data."""
     with app.app_context():
         # Create a test user for login
@@ -164,7 +164,7 @@ def test_salary_report_with_completed_appointments(client, auth, app, test_db):
         assert "100.00" in html_content or "Report Parameters" in html_content
 
 
-def test_salary_report_with_no_appointments(client, auth, app, test_db):
+def test_salary_report_with_no_appointments(client, auth, app, test_db, db):
     """Check salary report when there are no appointments for the selected date."""
     with app.app_context():
         # Create a test user for login
@@ -208,7 +208,7 @@ def test_salary_report_with_no_appointments(client, auth, app, test_db):
         assert response.status_code == 200
 
 
-def test_admin_can_view_any_master_report(client, auth, app, admin_user):
+def test_admin_can_view_any_master_report(client, auth, app, admin_user, db):
     """Check that admin can view reports for any master."""
     with app.app_context():
         # Login as admin
@@ -228,7 +228,7 @@ def test_admin_can_view_any_master_report(client, auth, app, admin_user):
         assert b'disabled="disabled"' not in response.data
 
 
-def test_master_can_view_only_own_report(client, auth, app, test_user):
+def test_master_can_view_only_own_report(client, auth, app, test_user, db):
     """Check that regular master can view only their own reports."""
     with app.app_context():
         # Login as regular master
@@ -247,7 +247,7 @@ def test_master_can_view_only_own_report(client, auth, app, test_user):
         assert b'disabled="disabled"' in response.data
 
 
-def test_master_cannot_view_other_master_report(client, auth, app, test_db):
+def test_master_cannot_view_other_master_report(client, auth, app, test_db, db):
     """Check that a regular master cannot view another master's salary report."""
     with app.app_context():
         # Create two test users
@@ -289,7 +289,7 @@ def test_master_cannot_view_other_master_report(client, auth, app, test_db):
         assert response.status_code == 200
 
 
-def test_financial_report_access_without_login(client):
+def test_financial_report_access_without_login(client, db):
     """Check that unauthorized user is redirected to login page."""
     # First, make sure we're logged out
     client.get("/auth/logout", follow_redirects=True)
@@ -315,7 +315,7 @@ def test_financial_report_access_without_login(client):
     )
 
 
-def test_financial_report_non_admin_access(client, auth, test_user):
+def test_financial_report_non_admin_access(client, auth, test_user, db):
     """Check that non-admin user cannot access the financial report."""
     auth.login(username=test_user.username, password="test_password")
     response = client.get("/reports/financial")
@@ -326,7 +326,7 @@ def test_financial_report_non_admin_access(client, auth, test_user):
     assert "Тільки адміністратори мають доступ до цього звіту" in html_content
 
 
-def test_financial_report_admin_access(client, auth, admin_user):
+def test_financial_report_admin_access(client, auth, admin_user, db):
     """Check that admin user can access the financial report."""
     # Login with admin user
     auth.login(username=admin_user.username, password="admin_password")
@@ -341,7 +341,9 @@ def test_financial_report_admin_access(client, auth, admin_user):
     assert '<form method="post">' in html_content
 
 
-def test_financial_report_with_different_payment_methods(client, auth, app, test_db):
+def test_financial_report_with_different_payment_methods(
+    client, auth, app, test_db, db
+):
     """Check financial report with different payment methods."""
     with app.app_context():
         # Create admin user
@@ -427,7 +429,7 @@ def test_financial_report_with_different_payment_methods(client, auth, app, test
         assert response.status_code == 200
 
 
-def test_financial_report_with_no_appointments(client, auth, app, test_db):
+def test_financial_report_with_no_appointments(client, auth, app, test_db, db):
     """Check financial report when there are no appointments for the selected date."""
     with app.app_context():
         # Create admin user
@@ -466,7 +468,7 @@ def test_financial_report_with_no_appointments(client, auth, app, test_db):
 
 
 def test_financial_report_with_only_uncompleted_appointments(
-    client, auth, app, test_db
+    client, auth, app, test_db, db
 ):
     """Check financial report with only uncompleted appointments."""
     with app.app_context():
@@ -537,7 +539,7 @@ def test_financial_report_with_only_uncompleted_appointments(
         assert response.status_code == 200
 
 
-def test_financial_report_invalid_date_format(client, auth, app, admin_user):
+def test_financial_report_invalid_date_format(client, auth, app, admin_user, db):
     """Check handling of invalid date format in financial report."""
     with app.app_context():
         # Login as admin
@@ -562,7 +564,7 @@ def test_financial_report_invalid_date_format(client, auth, app, admin_user):
         assert response.status_code == 200
 
 
-def test_financial_report_with_no_payment_methods(client, auth, app, test_db):
+def test_financial_report_with_no_payment_methods(client, auth, app, test_db, db):
     """Test financial report with appointments that don't have payment methods."""
     with app.app_context():
         # Create admin user
@@ -632,7 +634,7 @@ def test_financial_report_with_no_payment_methods(client, auth, app, test_db):
         assert response.status_code == 200
 
 
-def test_financial_report_all_payment_methods_present(client, auth, app, test_db):
+def test_financial_report_all_payment_methods_present(client, auth, app, test_db, db):
     """Test financial report with missing payment methods (should be added with zero values)."""
     with app.app_context():
         # Create admin user
@@ -702,7 +704,7 @@ def test_financial_report_all_payment_methods_present(client, auth, app, test_db
         assert response.status_code == 200
 
 
-def test_salary_report_with_invalid_master_id(client, auth, app, test_db, mocker):
+def test_salary_report_with_invalid_master_id(client, auth, app, test_db, mocker, db):
     """Test salary report when master_id doesn't exist in the database."""
     with app.app_context():
         # Create a test user for login
@@ -740,7 +742,7 @@ def test_salary_report_with_invalid_master_id(client, auth, app, test_db, mocker
 
 
 def test_financial_report_with_complete_payment_methods_coverage(
-    mocker, client, app, test_db
+    mocker, client, app, test_db, db
 ):
     """
     Тестує фінансовий звіт на повне покриття методів оплати.
@@ -832,7 +834,7 @@ def test_financial_report_with_complete_payment_methods_coverage(
         test_db.commit()
 
 
-def test_salary_report_with_error_in_db_session_get(client, auth, app, mocker):
+def test_salary_report_with_error_in_db_session_get(client, auth, app, mocker, db):
     """Test salary report with a None response from db.session.get."""
     with app.app_context():
         # Create admin user
@@ -874,7 +876,7 @@ def test_salary_report_with_error_in_db_session_get(client, auth, app, mocker):
             assert response.status_code == 200
 
 
-def test_financial_report_with_discount(client, admin_user):
+def test_financial_report_with_discount(client, admin_user, db):
     """
     Тестує фінансовий звіт з урахуванням знижки.
     Перевіряє безпосередньо логіку розрахунку в routes/reports.py
@@ -898,7 +900,7 @@ def test_financial_report_with_discount(client, admin_user):
     assert round(total, 2) == 260.00
 
 
-def test_salary_report_ignores_discount(client, admin_user):
+def test_salary_report_ignores_discount(client, admin_user, db):
     """
     Тестує, що звіт зарплат не враховує знижки.
     Перевіряє безпосередньо логіку розрахунку в routes/reports.py
@@ -921,7 +923,7 @@ def test_salary_report_ignores_discount(client, admin_user):
 
 
 # Тести для покриття рядків у DailySalaryReportForm (app/routes/reports.py)
-def test_salary_report_form_validate_master_id_valid(admin_user, app):
+def test_salary_report_form_validate_master_id_valid(admin_user, app, db):
     """Test that the salary report form validates master_id correctly."""
     from app.routes.reports import DailySalaryReportForm
 
@@ -945,7 +947,7 @@ def test_salary_report_form_validate_master_id_valid(admin_user, app):
 @patch("app.routes.reports.db.session")
 @patch("app.routes.reports.current_user")
 def test_salary_report_with_db_error(
-    mock_current_user, mock_db_session, client, app, auth
+    mock_current_user, mock_db_session, client, app, auth, db
 ):
     """Test salary report with a None response from db.session.get."""
     with app.app_context():
@@ -992,7 +994,7 @@ def test_salary_report_with_db_error(
             assert response.status_code == 200
 
 
-def test_last_month_report(auth, client, test_user, test_client, test_appointment):
+def test_last_month_report(auth, client, test_user, test_client, test_appointment, db):
     """
     Test viewing last month's report.
     """
@@ -1006,7 +1008,7 @@ def test_last_month_report(auth, client, test_user, test_client, test_appointmen
 
 
 def test_export_report_pdf_version_by_selected_masters(
-    auth_client, session, regular_user, admin_user
+    auth_client, session, regular_user, admin_user, db
 ):
     """Тестує експорт звіту за вибраними майстрами у форматі PDF."""
     # Не потрібен імпорт calculate_total_with_discount
@@ -1016,7 +1018,7 @@ def test_export_report_pdf_version_by_selected_masters(
 
 
 def test_calculate_total_price_and_salary_with_discount(
-    auth_client, test_service_with_price, session
+    auth_client, test_service_with_price, session, db
 ):
     """Тестує розрахунок загальної суми з урахуванням знижки."""
     # Не потрібен імпорт calculate_salary_without_discount
@@ -1025,7 +1027,7 @@ def test_calculate_total_price_and_salary_with_discount(
     admin_user = User.query.filter_by(is_admin=True).first()
 
 
-def test_report_form_validation(auth_client):
+def test_report_form_validation(auth_client, db):
     """Тестує валідацію форми звіту."""
     # Не потрібен імпорт ValidationError
 

@@ -1,11 +1,10 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from flask import Flask
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
-from sqlalchemy import text
 
 # Завантаження змінних із .env файлу
 load_dotenv()
@@ -68,15 +67,10 @@ def create_app(test_config=None):
     app.register_blueprint(services.bp)
     app.register_blueprint(reports.bp)
 
-    # Створення бази даних при першому запуску
-    with app.app_context():
-        db.create_all()
+    # Register CLI commands
+    from . import commands
 
-        # Налаштування SQLite для регістронезалежного пошуку
-        if db.engine.name == "sqlite":
-            # Встановлюємо прагму для стандартного пошуку
-            db.session.execute(text("PRAGMA case_sensitive_like=OFF"))
-            db.session.commit()
+    commands.init_app(app)
 
     @app.route("/ping")
     def ping():
@@ -89,24 +83,6 @@ def create_app(test_config=None):
 
     @app.context_processor
     def inject_now():
-        return {"now": datetime.utcnow()}
-
-    # Create first admin user if no users exist
-    with app.app_context():
-        from werkzeug.security import generate_password_hash
-
-        if User.query.count() == 0:
-            admin_username = app.config.get("ADMIN_USERNAME", "admin")
-            admin_password = app.config.get("ADMIN_PASSWORD", "admin")
-            admin_full_name = app.config.get("ADMIN_FULL_NAME", "Administrator")
-
-            admin = User(
-                username=admin_username,
-                password=generate_password_hash(admin_password),
-                full_name=admin_full_name,
-                is_admin=True,
-            )
-            db.session.add(admin)
-            db.session.commit()
+        return {"now": datetime.now(timezone.utc)}
 
     return app
