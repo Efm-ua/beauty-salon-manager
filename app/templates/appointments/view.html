@@ -61,6 +61,7 @@
           action="{{ url_for('appointments.delete', id=appointment.id) }}"
           method="post"
         >
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <button type="submit" class="btn btn-danger">Видалити</button>
         </form>
       </div>
@@ -95,18 +96,31 @@
             <span class="badge bg-danger">Скасовано</span>
             {% endif %} {% if is_admin or appointment.master_id ==
             current_user.id %} {% if appointment.status != 'completed' %}
-            <a
-              href="{{ url_for('appointments.change_status', id=appointment.id, new_status='completed') }}"
-              class="btn btn-sm btn-success ms-2"
+            <form
+              action="{{ url_for('appointments.change_status', id=appointment.id, new_status='completed') }}"
+              method="post"
+              class="d-inline"
             >
-              Завершити
-            </a>
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+              />
+              <button type="submit" class="btn btn-sm btn-success ms-2">
+                Завершити
+              </button>
+            </form>
             {% endif %} {% if appointment.status != 'cancelled' %}
             <form
               action="{{ url_for('appointments.change_status', id=appointment.id, new_status='cancelled') }}"
               method="post"
               class="d-inline"
             >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+              />
               <button type="submit" class="btn btn-sm btn-danger ms-2">
                 Скасувати
               </button>
@@ -118,6 +132,11 @@
               method="post"
               class="d-inline"
             >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+              />
               <button type="submit" class="btn btn-sm btn-primary ms-2">
                 Запланувати знову
               </button>
