@@ -164,7 +164,18 @@
   <div class="col-md-6">
     <div class="card mb-4">
       <div class="card-header">
-        <h5 class="card-title mb-0">Послуги та оплата</h5>
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Послуги та оплата</h5>
+          {% if (is_admin or appointment.master_id == current_user.id) and
+          appointment.status == 'scheduled' %}
+          <a
+            href="{{ url_for('appointments.add_service', id=appointment.id) }}"
+            class="btn btn-sm btn-success"
+          >
+            <i class="fas fa-plus me-1"></i>Додати послугу
+          </a>
+          {% endif %}
+        </div>
       </div>
       <div class="card-body">
         <h6>Послуги:</h6>
@@ -174,9 +185,25 @@
             class="list-group-item d-flex justify-content-between align-items-center"
           >
             {{ service.service.name }}
-            <span class="badge bg-primary rounded-pill"
-              >{{ service.price }} грн</span
-            >
+            <div>
+              <span class="badge bg-primary rounded-pill me-2"
+                >{{ service.price }} грн</span
+              >
+              {% if (is_admin or appointment.master_id == current_user.id) and
+              appointment.status == 'scheduled' %}
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-primary edit-price-btn"
+                data-service-id="{{ service.id }}"
+                data-service-name="{{ service.service.name }}"
+                data-current-price="{{ service.price }}"
+                data-bs-toggle="modal"
+                data-bs-target="#editPriceModal"
+              >
+                <i class="fas fa-pencil-alt"></i>
+              </button>
+              {% endif %}
+            </div>
           </li>
           {% endfor %}
         </ul>
@@ -225,4 +252,83 @@
     </div>
   </div>
 </div>
+
+<!-- Modal for editing service price -->
+<div class="modal fade" id="editPriceModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Редагування ціни послуги</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Редагування ціни послуги: <strong id="serviceNameDisplay"></strong>
+        </p>
+        <form id="editPriceForm" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <div class="mb-3">
+            <label for="priceInput" class="form-label">Нова ціна:</label>
+            <input
+              type="number"
+              class="form-control"
+              id="priceInput"
+              name="price"
+              min="0"
+              step="0.01"
+              required
+            />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Скасувати
+        </button>
+        <button type="button" class="btn btn-primary" id="savePrice">
+          Зберегти
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Обробка кнопок редагування ціни
+    const editButtons = document.querySelectorAll(".edit-price-btn");
+    const serviceNameDisplay = document.getElementById("serviceNameDisplay");
+    const priceInput = document.getElementById("priceInput");
+    const editPriceForm = document.getElementById("editPriceForm");
+    const saveButton = document.getElementById("savePrice");
+
+    editButtons.forEach((button) => {
+      button.addEventListener("click", function () {
+        const serviceId = this.getAttribute("data-service-id");
+        const serviceName = this.getAttribute("data-service-name");
+        const currentPrice = this.getAttribute("data-current-price");
+
+        serviceNameDisplay.textContent = serviceName;
+        priceInput.value = currentPrice;
+
+        // Оновлюємо форму з правильним URL
+        editPriceForm.action =
+          `{{ url_for('appointments.edit_service_price', appointment_id=appointment.id, service_id=0) }}`.replace(
+            "/0",
+            `/${serviceId}`
+          );
+
+        // Обробка кнопки збереження
+        saveButton.onclick = function () {
+          editPriceForm.submit();
+        };
+      });
+    });
+  });
+</script>
 {% endblock %}

@@ -1,18 +1,31 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from flask import (Blueprint, flash, jsonify, redirect, render_template,
-                   request, url_for)
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import (DateField, DecimalField, FloatField, RadioField,
-                     SelectField, SelectMultipleField, SubmitField,
-                     TextAreaField, TimeField)
-from wtforms.validators import (DataRequired, NumberRange, Optional,
-                                ValidationError)
+from wtforms import (
+    DateField,
+    DecimalField,
+    FloatField,
+    RadioField,
+    SelectField,
+    SelectMultipleField,
+    SubmitField,
+    TextAreaField,
+    TimeField,
+)
+from wtforms.validators import DataRequired, NumberRange, Optional, ValidationError
 
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User, db)
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    PaymentMethod,
+    Service,
+    User,
+    db,
+)
 
 # Створення Blueprint
 bp = Blueprint("appointments", __name__, url_prefix="/appointments")
@@ -606,6 +619,24 @@ def change_status(id, new_status):
             )
             appointment.payment_method = payment_method_enum
             print(f"DEBUG CHANGE_STATUS: Set payment method to: {payment_method_enum}")
+
+            # Виправлення логіки оплати
+            # Встановлюємо amount_paid на основі методу оплати
+            from decimal import Decimal
+
+            if payment_method_enum == PaymentMethod.DEBT:
+                # Якщо метод оплати "Борг", встановлюємо amount_paid = 0
+                appointment.amount_paid = Decimal("0.00")
+                print(
+                    "DEBUG CHANGE_STATUS: Set amount_paid to 0.00 (DEBT payment method)"
+                )
+            else:
+                # Для всіх інших методів оплати, встановлюємо amount_paid = повна вартість з урахуванням знижки
+                appointment.amount_paid = appointment.get_discounted_price()
+                print(
+                    f"DEBUG CHANGE_STATUS: Set amount_paid to {appointment.amount_paid} (full discounted price)"
+                )
+
         except StopIteration:
             # Якщо значення не знайдено в enum, використовуємо перший доступний метод
             flash(
@@ -754,10 +785,13 @@ def remove_service(appointment_id, service_id):
 @bp.route("/<int:appointment_id>/edit_service/<int:service_id>", methods=["POST"])
 @login_required
 def edit_service_price(appointment_id, service_id):
-    # Use eager loading
+    # Use eager loading for appointment and services
     appointment = (
         db.session.query(Appointment)
-        .options(db.joinedload(Appointment.master), db.joinedload(Appointment.services))
+        .options(
+            db.joinedload(Appointment.master),
+            db.joinedload(Appointment.services).joinedload(AppointmentService.service),
+        )
         .get(appointment_id)
     )
 
@@ -779,6 +813,11 @@ def edit_service_price(appointment_id, service_id):
         flash("У вас немає доступу", "danger")
         return redirect(url_for("appointments.index"))
 
+    # Check appointment status - allow only for 'scheduled' appointments
+    if appointment.status != "scheduled":
+        flash("Редагування ціни можливе тільки для запланованих записів", "danger")
+        return redirect(url_for("appointments.view", id=appointment_id))
+
     if appointment_service.appointment_id != appointment_id:
         flash("Неправильний запит!", "danger")
         return redirect(url_for("appointments.view", id=appointment_id))
@@ -788,11 +827,24 @@ def edit_service_price(appointment_id, service_id):
         flash("Невірна ціна!", "danger")
         return redirect(url_for("appointments.view", id=appointment_id))
 
+    # Store the old price for verification
+    old_price = appointment_service.price
     appointment_service.price = new_price
+
+    # Update payment status based on the new price
+    appointment.update_payment_status()
+
+    # Commit changes to the database
     db.session.commit()
 
     # Refresh the appointment to keep it attached to the session
     db.session.refresh(appointment)
+
+    # Log price change (for debugging or audit)
+    print(
+        f"Price changed for service {appointment_service.service.name} "
+        f"from {old_price} to {new_price}"
+    )
 
     flash("Ціну послуги оновлено!", "success")
     return redirect(url_for("appointments.view", id=appointment_id))

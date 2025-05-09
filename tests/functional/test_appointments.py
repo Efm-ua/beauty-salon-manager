@@ -6,8 +6,15 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import inspect
 
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User, db)
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    PaymentMethod,
+    Service,
+    User,
+    db,
+)
 
 
 def test_appointment_complete_with_payment_method(
@@ -746,8 +753,8 @@ def test_change_appointment_status_completed_with_debt_payment(
     client, regular_user, test_appointment, test_service
 ):
     """
-    Тестує зміну статусу запису на 'completed' з частковою оплатою (борг).
-    Перевіряє, що payment_status встановлюється в 'partially_paid'.
+    Тестує зміну статусу запису на 'completed' з методом оплати "Борг".
+    Перевіряє, що amount_paid встановлюється в 0, а payment_status в 'unpaid'.
     """
     service_price = Decimal("120.00")
 
@@ -771,59 +778,12 @@ def test_change_appointment_status_completed_with_debt_payment(
         follow_redirects=True,
     )
 
-    test_appointment.amount_paid = service_price / 2
+    # Ініціалізуємо значення перед зміною статусу
+    test_appointment.amount_paid = service_price / 2  # Раніше була часткова оплата
     test_appointment.payment_method = PaymentMethod.CASH
     db.session.add(test_appointment)
     db.session.commit()
 
-    response = client.post(
-        f"/appointments/{test_appointment.id}/status/completed",
-        data={"payment_method": PaymentMethod.CASH.value},
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-
-    updated_appointment = db.session.get(Appointment, test_appointment.id)
-    assert updated_appointment.status == "completed"
-    assert updated_appointment.amount_paid == service_price / 2
-    assert updated_appointment.payment_status == "partially_paid"
-    assert updated_appointment.payment_method == PaymentMethod.CASH
-
-
-def test_change_appointment_status_completed_unpaid(
-    client, regular_user, test_appointment, test_service
-):
-    """
-    Тестує зміну статусу запису на 'completed' без оплати.
-    Перевіряє, що payment_status встановлюється в 'unpaid'.
-    """
-    service_price = Decimal("80.00")
-    for aps in list(test_appointment.services):
-        db.session.delete(aps)
-    db.session.commit()
-    test_appointment.services.clear()
-
-    app_service = AppointmentService(
-        appointment_id=test_appointment.id,
-        service_id=test_service.id,
-        price=service_price,
-    )
-    db.session.add(app_service)
-    test_appointment.services.append(app_service)
-    db.session.commit()
-
-    client.post(
-        "/auth/login",
-        data={"username": regular_user.username, "password": "user_password"},
-        follow_redirects=True,
-    )
-
-    test_appointment.amount_paid = Decimal("0.00")
-    test_appointment.payment_method = None
-    db.session.add(test_appointment)
-    db.session.commit()
-
-    # Need to provide payment_method even for unpaid appointments
     response = client.post(
         f"/appointments/{test_appointment.id}/status/completed",
         data={"payment_method": PaymentMethod.DEBT.value},
@@ -833,6 +793,7 @@ def test_change_appointment_status_completed_unpaid(
 
     updated_appointment = db.session.get(Appointment, test_appointment.id)
     assert updated_appointment.status == "completed"
+    # При методі оплати "Борг", amount_paid має бути 0
     assert updated_appointment.amount_paid == Decimal("0.00")
     assert updated_appointment.payment_status == "unpaid"
     assert updated_appointment.payment_method == PaymentMethod.DEBT
@@ -887,8 +848,9 @@ def test_change_status_completed_partially_paid(
     client, session, regular_user, test_appointment
 ):
     """
-    Tests changing appointment status to 'completed' when amount_paid is less than total_cost.
-    Payment status should become 'partially_paid'.
+    Tests changing appointment status to 'completed' when selecting a non-debt payment method.
+    With our new logic, the payment_status should be 'paid' when completing with a non-debt
+    payment method, regardless of previous amount_paid.
     """
     # Log in
     client.post(
@@ -897,7 +859,7 @@ def test_change_status_completed_partially_paid(
         follow_redirects=True,
     )
 
-    # Set amount_paid to be less than total_cost (100.0)
+    # Set amount_paid to be less than total_cost (100.0) initially
     test_appointment.amount_paid = Decimal("50.00")
     session.add(test_appointment)
     session.commit()
@@ -912,7 +874,9 @@ def test_change_status_completed_partially_paid(
 
     updated_appointment = session.get(Appointment, test_appointment.id)
     assert updated_appointment.status == "completed"
-    assert updated_appointment.payment_status == "partially_paid"
+    # With the new logic, amount_paid should be set to the full amount when a non-debt payment method is selected
+    assert updated_appointment.amount_paid == updated_appointment.get_discounted_price()
+    assert updated_appointment.payment_status == "paid"
     assert updated_appointment.payment_method == PaymentMethod.PRIVAT
 
 
@@ -920,8 +884,10 @@ def test_change_status_completed_not_paid(
     client, session, regular_user, test_appointment
 ):
     """
-    Tests changing appointment status to 'completed' when amount_paid is zero or None.
-    Payment status should become 'unpaid'.
+    Tests changing appointment status to 'completed' with a non-debt payment method
+    when amount_paid was previously zero.
+    With our new logic, payment_status should become 'paid' as the full amount is assumed
+    to be paid when using non-debt payment methods.
     """
     client.post(
         "/auth/login",
@@ -929,12 +895,12 @@ def test_change_status_completed_not_paid(
         follow_redirects=True,
     )
 
-    # Ensure amount_paid is None (or 0)
+    # Ensure amount_paid is 0 initially
     test_appointment.amount_paid = Decimal("0.00")
     session.add(test_appointment)
     session.commit()
 
-    # Change status to completed
+    # Change status to completed with non-debt payment method
     response = client.post(
         f"/appointments/{test_appointment.id}/status/completed",
         data={"payment_method": PaymentMethod.CASH.value},
@@ -944,7 +910,9 @@ def test_change_status_completed_not_paid(
 
     updated_appointment = session.get(Appointment, test_appointment.id)
     assert updated_appointment.status == "completed"
-    assert updated_appointment.payment_status == "unpaid"
+    # With new logic, amount_paid should be the full discounted price for non-debt payment methods
+    assert updated_appointment.amount_paid == updated_appointment.get_discounted_price()
+    assert updated_appointment.payment_status == "paid"
     assert updated_appointment.payment_method == PaymentMethod.CASH
 
 

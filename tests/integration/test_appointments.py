@@ -47,8 +47,15 @@ from decimal import Decimal
 import pytest
 from werkzeug.security import generate_password_hash
 
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User, db)
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    PaymentMethod,
+    Service,
+    User,
+    db,
+)
 
 
 @pytest.fixture
@@ -701,3 +708,458 @@ def test_appointment_edit_with_import():
 
     # Тест використовується для перевірки імпорту, самої функції ми не викликаємо
     pass
+
+
+# Тести для редагування ціни послуги в записі
+def test_edit_service_price_success(
+    appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест успішного редагування ціни послуги в записі.
+    Перевіряє статус відповіді, наявність повідомлення про успіх,
+    і оновлення ціни в базі даних.
+    """
+    # Початкові дані
+    appointment_id = appointment_test_data["appointment_id"]
+    service_id = appointment_test_data["appointment_service_id"]
+    new_price = 750.0
+
+    # Отримуємо поточну ціну для порівняння
+    appointment_service = db.session.get(AppointmentService, service_id)
+    old_price = appointment_service.price
+
+    # Запит на оновлення ціни
+    response = appointments_auth_client.post(
+        f"/appointments/{appointment_id}/edit_service/{service_id}",
+        data={"price": new_price},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо успішну відповідь
+    assert response.status_code == 200
+    assert "Ціну послуги оновлено!" in response.data.decode("utf-8")
+
+    # Оновлюємо об'єкт з бази даних
+    db.session.refresh(appointment_service)
+
+    # Перевіряємо, що ціна оновилася
+    assert appointment_service.price == new_price
+    assert appointment_service.price != old_price
+
+    # Перевіряємо, що загальна вартість запису оновилася
+    appointment = db.session.get(Appointment, appointment_id)
+    db.session.refresh(appointment)
+    assert appointment.get_total_price() == new_price
+
+
+def test_edit_service_price_unauthorized(client, appointment_test_data):
+    """
+    Тест спроби редагування ціни послуги неавторизованим користувачем.
+    Перевіряє перенаправлення на сторінку логіну.
+    """
+    appointment_id = appointment_test_data["appointment_id"]
+    service_id = appointment_test_data["appointment_service_id"]
+
+    # Спроба без авторизації
+    response = client.post(
+        f"/appointments/{appointment_id}/edit_service/{service_id}",
+        data={"price": 800.0},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо перенаправлення на логін
+    assert response.status_code == 200
+    assert "Вхід" in response.data.decode("utf-8")
+    assert "Логін" in response.data.decode("utf-8")
+
+
+def test_edit_service_price_wrong_master(client, appointment_test_data, session):
+    """
+    Тест спроби редагування ціни послуги майстром, якому не належить запис.
+    Перевіряє відмову доступу.
+    """
+    appointment_id = appointment_test_data["appointment_id"]
+    service_id = appointment_test_data["appointment_service_id"]
+
+    # Створюємо іншого майстра та логінимось під ним
+    another_master = User(
+        username=f"another_master_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("password"),
+        full_name="Another Master",
+        is_admin=False,
+        is_active_master=True,
+    )
+    session.add(another_master)
+    session.commit()
+
+    # Логін від імені цього майстра
+    client.post(
+        "/auth/login",
+        data={
+            "username": another_master.username,
+            "password": "password",
+            "remember_me": "y",
+        },
+    )
+
+    # Спроба редагування послуги в записі іншого майстра
+    response = client.post(
+        f"/appointments/{appointment_id}/edit_service/{service_id}",
+        data={"price": 800.0},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо відмову в доступі
+    assert response.status_code == 200
+    assert "У вас немає доступу" in response.data.decode("utf-8")
+
+
+def test_edit_service_price_non_scheduled_status(
+    appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест спроби редагування ціни послуги в записі не в статусі 'scheduled'.
+    Перевіряє відмову в редагуванні.
+    """
+    appointment_id = appointment_test_data["appointment_id"]
+    service_id = appointment_test_data["appointment_service_id"]
+
+    # Змінюємо статус запису на "completed"
+    appointment = db.session.get(Appointment, appointment_id)
+    appointment.status = "completed"
+    session.commit()
+
+    # Спроба редагування ціни
+    response = appointments_auth_client.post(
+        f"/appointments/{appointment_id}/edit_service/{service_id}",
+        data={"price": 800.0},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо відмову в редагуванні через статус
+    assert response.status_code == 200
+    assert (
+        "Редагування ціни можливе тільки для запланованих записів"
+        in response.data.decode("utf-8")
+    )
+
+
+def test_edit_service_price_invalid_input(
+    appointments_auth_client, appointment_test_data
+):
+    """
+    Тест спроби редагування ціни послуги з невалідними даними.
+    Перевіряє валідацію введеної ціни.
+    """
+    appointment_id = appointment_test_data["appointment_id"]
+    service_id = appointment_test_data["appointment_service_id"]
+
+    # Спроба з від'ємною ціною
+    response = appointments_auth_client.post(
+        f"/appointments/{appointment_id}/edit_service/{service_id}",
+        data={"price": -100.0},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо помилку валідації
+    assert response.status_code == 200
+    assert "Невірна ціна!" in response.data.decode("utf-8")
+
+    # Спроба з невалідним значенням
+    response = appointments_auth_client.post(
+        f"/appointments/{appointment_id}/edit_service/{service_id}",
+        data={"price": "не число"},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо помилку валідації
+    assert response.status_code == 200
+    assert "Невірна ціна!" in response.data.decode("utf-8")
+
+
+def test_edit_service_price_updates_total_price(appointments_auth_client, session):
+    """
+    Тест перевірки оновлення загальної вартості запису після
+    редагування ціни послуги.
+    """
+    # Створюємо клієнта, майстра та послуги
+    client_entity = Client(
+        name=f"Client Total Price Test {uuid.uuid4().hex[:8]}",
+        phone=f"+380991234{uuid.uuid4().hex[:4]}",
+    )
+    master = User(
+        username=f"master_price_test_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("password"),
+        full_name="Price Test Master",
+        is_admin=False,
+        is_active_master=True,
+    )
+    service1 = Service(
+        name=f"Service Price Test 1 {uuid.uuid4().hex[:8]}",
+        duration=30,
+        base_price=100.0,
+    )
+    service2 = Service(
+        name=f"Service Price Test 2 {uuid.uuid4().hex[:8]}",
+        duration=60,
+        base_price=200.0,
+    )
+    session.add_all([client_entity, master, service1, service2])
+    session.commit()
+
+    # Створюємо запис з послугами
+    appointment = Appointment(
+        client_id=client_entity.id,
+        master_id=master.id,
+        date=date.today() + timedelta(days=1),
+        start_time=time(10, 0),
+        end_time=time(11, 30),
+        status="scheduled",
+    )
+    session.add(appointment)
+    session.commit()
+
+    # Додаємо послуги до запису
+    appointment_service1 = AppointmentService(
+        appointment_id=appointment.id, service_id=service1.id, price=service1.base_price
+    )
+    appointment_service2 = AppointmentService(
+        appointment_id=appointment.id, service_id=service2.id, price=service2.base_price
+    )
+    session.add_all([appointment_service1, appointment_service2])
+    session.commit()
+
+    # Отримуємо початкову загальну вартість
+    initial_total = appointment.get_total_price()
+    assert initial_total == service1.base_price + service2.base_price
+
+    # Оновлюємо ціну першої послуги
+    new_price1 = 150.0
+    response = appointments_auth_client.post(
+        f"/appointments/{appointment.id}/edit_service/{appointment_service1.id}",
+        data={"price": new_price1},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо успішність запиту
+    assert response.status_code == 200
+    assert "Ціну послуги оновлено!" in response.data.decode("utf-8")
+
+    # Оновлюємо об'єкт з БД
+    session.refresh(appointment)
+
+    # Перевіряємо, що загальна вартість правильно оновилася
+    expected_total = new_price1 + service2.base_price
+    assert appointment.get_total_price() == expected_total
+
+
+# Test payment logic when completing an appointment
+def test_appointment_completion_payment_methods(
+    app, appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест обробки оплати при завершенні запису з різними методами оплати.
+    Перевіряє коректність встановлення amount_paid та payment_status.
+    """
+    from decimal import Decimal
+    from app.models import PaymentMethod, Appointment
+
+    # Створення нового запису для тестування завершення
+    with app.app_context():
+        # Встановлення знижки для перевірки discounted_price
+        appointment = appointment_test_data["appointment"]
+        appointment.discount_percentage = Decimal("10.0")  # 10% знижка
+
+        # Зберігаємо базову ціну для перевірок
+        base_price = appointment.get_total_price()
+        expected_discounted_price = appointment.get_discounted_price()
+
+        session.commit()
+
+        appointment_id = appointment.id
+
+    # Тест 1: Завершення запису з методом оплати "Готівка"
+    cash_data = {"payment_method": PaymentMethod.CASH.value, "submit": "Зберегти"}
+
+    response = appointments_auth_client.post(
+        f"/appointments/{appointment_id}/status/completed",
+        data=cash_data,
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+
+    # Перевіряємо, що запис оновлено правильно
+    with app.app_context():
+        refreshed_appointment = Appointment.query.get(appointment_id)
+
+        # Перевірка методу оплати, суми оплати та статусу оплати
+        assert refreshed_appointment.payment_method == PaymentMethod.CASH
+        # Використовуємо Decimal для порівняння
+        assert refreshed_appointment.amount_paid == expected_discounted_price
+        assert refreshed_appointment.payment_status == "paid"
+
+        # Змінимо статус назад на scheduled для наступного тесту
+        refreshed_appointment.status = "scheduled"
+        refreshed_appointment.payment_method = None
+        refreshed_appointment.amount_paid = None
+        session.commit()
+
+    # Тест 2: Завершення запису з методом оплати "Борг"
+    debt_data = {"payment_method": PaymentMethod.DEBT.value, "submit": "Зберегти"}
+
+    response = appointments_auth_client.post(
+        f"/appointments/{appointment_id}/status/completed",
+        data=debt_data,
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+
+    # Перевіряємо, що запис оновлено правильно
+    with app.app_context():
+        refreshed_appointment = Appointment.query.get(appointment_id)
+
+        # Перевірка методу оплати, суми оплати та статусу оплати
+        assert refreshed_appointment.payment_method == PaymentMethod.DEBT
+        assert refreshed_appointment.amount_paid == Decimal("0.00")
+        assert refreshed_appointment.payment_status == "unpaid"
+
+
+def test_edit_service_price_updates_payment_status(appointments_auth_client, session):
+    """
+    Тест перевірки оновлення статусу оплати після редагування ціни послуги.
+    """
+    # Створюємо клієнта, майстра та послугу
+    client_entity = Client(
+        name=f"Client Payment Status Test {uuid.uuid4().hex[:8]}",
+        phone=f"+380991234{uuid.uuid4().hex[:4]}",
+    )
+    master = User(
+        username=f"master_payment_test_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("password"),
+        full_name="Payment Test Master",
+        is_admin=False,
+        is_active_master=True,
+    )
+    service = Service(
+        name=f"Service Payment Test {uuid.uuid4().hex[:8]}",
+        duration=30,
+        base_price=100.0,
+    )
+    session.add_all([client_entity, master, service])
+    session.commit()
+
+    # Створюємо запис з частково оплаченою послугою
+    appointment = Appointment(
+        client_id=client_entity.id,
+        master_id=master.id,
+        date=date.today() + timedelta(days=1),
+        start_time=time(10, 0),
+        end_time=time(10, 30),
+        status="scheduled",
+        amount_paid=50.0,  # Частково оплачено
+    )
+    session.add(appointment)
+    session.commit()
+
+    # Додаємо послугу до запису
+    appointment_service = AppointmentService(
+        appointment_id=appointment.id, service_id=service.id, price=service.base_price
+    )
+    session.add(appointment_service)
+    session.commit()
+
+    # Переконаємось, що статус оплати - "partially_paid"
+    appointment.update_payment_status()
+    session.commit()
+    session.refresh(appointment)
+    assert appointment.payment_status == "partially_paid"
+
+    # Змінюємо ціну послуги на меншу, щоб amount_paid перевищував загальну ціну
+    new_price = 40.0  # Менше, ніж amount_paid
+    response = appointments_auth_client.post(
+        f"/appointments/{appointment.id}/edit_service/{appointment_service.id}",
+        data={"price": new_price},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо успішну відповідь
+    assert response.status_code == 200
+    assert "Ціну послуги оновлено!" in response.data.decode("utf-8")
+
+    # Перевіряємо, що статус оплати змінився на "paid"
+    session.refresh(appointment)
+    assert appointment.payment_status == "paid"
+
+
+def test_edit_service_price_handles_zero_price(appointments_auth_client, session):
+    """
+    Тест перевірки коректної обробки нульової ціни послуги.
+    """
+    # Створюємо клієнта, майстра та послугу
+    client_entity = Client(
+        name=f"Client Zero Price Test {uuid.uuid4().hex[:8]}",
+        phone=f"+380991234{uuid.uuid4().hex[:4]}",
+    )
+    master = User(
+        username=f"master_zero_price_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("password"),
+        full_name="Zero Price Master",
+        is_admin=False,
+        is_active_master=True,
+    )
+    service = Service(
+        name=f"Service Zero Price {uuid.uuid4().hex[:8]}",
+        duration=30,
+        base_price=50.0,
+    )
+    session.add_all([client_entity, master, service])
+    session.commit()
+
+    # Створюємо запис з послугою
+    appointment = Appointment(
+        client_id=client_entity.id,
+        master_id=master.id,
+        date=date.today() + timedelta(days=1),
+        start_time=time(10, 0),
+        end_time=time(10, 30),
+        status="scheduled",
+    )
+    session.add(appointment)
+    session.commit()
+
+    # Додаємо послугу до запису
+    appointment_service = AppointmentService(
+        appointment_id=appointment.id, service_id=service.id, price=service.base_price
+    )
+    session.add(appointment_service)
+    session.commit()
+
+    # Змінюємо ціну послуги на нуль
+    response = appointments_auth_client.post(
+        f"/appointments/{appointment.id}/edit_service/{appointment_service.id}",
+        data={"price": 0.0},
+        follow_redirects=True,
+    )
+
+    # Перевіряємо успішну відповідь
+    assert response.status_code == 200
+    assert "Ціну послуги оновлено!" in response.data.decode("utf-8")
+
+    # Перевіряємо, що ціна оновилася на нуль
+    session.refresh(appointment_service)
+    assert appointment_service.price == 0.0
+
+    # Перевіряємо, що загальна вартість запису стала нульовою
+    session.refresh(appointment)
+    assert appointment.get_total_price() == 0.0
+
+    # Якщо amount_paid не встановлено, статус має бути "unpaid"
+    assert appointment.payment_status == "unpaid"
+
+    # Встановлюємо amount_paid = 0 і перевіряємо, що статус стає "paid"
+    appointment.amount_paid = 0.0
+    appointment.update_payment_status()
+    session.commit()
+    assert appointment.payment_status == "paid"

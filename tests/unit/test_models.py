@@ -1,13 +1,20 @@
 import uuid
 from datetime import date, datetime, time
 from unittest.mock import MagicMock
+from decimal import Decimal
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User)
+from app.models import (
+    Appointment,
+    AppointmentService,
+    Client,
+    PaymentMethod,
+    Service,
+    User,
+)
 
 
 class TestUserModel:
@@ -457,6 +464,75 @@ class TestAppointmentModel:
         assert (
             appointment.payment_status == "unpaid"
         )  # Based on Appointment.update_payment_status logic
+
+    def test_get_total_price_with_custom_service_prices(self, session):
+        """Тест методу get_total_price для запису з індивідуальними цінами послуг"""
+        # Створюємо послуги з певними базовими цінами
+        service1 = Service(name="Service Custom 1", duration=30, base_price=100.0)
+        service2 = Service(name="Service Custom 2", duration=60, base_price=200.0)
+        session.add_all([service1, service2])
+
+        # Створюємо клієнта та майстра для запису
+        client = Client(name="Client Custom Price", phone="+380991234567")
+        master = User(
+            username="master_custom",
+            password="password",
+            full_name="Master Custom",
+            is_admin=False,
+            is_active_master=True,
+        )
+        session.add_all([client, master])
+        session.commit()
+
+        # Створюємо запис
+        appointment = Appointment(
+            client_id=client.id,
+            master_id=master.id,
+            date=date.today(),
+            start_time=time(13, 0),
+            end_time=time(14, 30),
+            status="scheduled",
+        )
+        session.add(appointment)
+        session.commit()
+
+        # Додаємо послуги з ІНДИВІДУАЛЬНИМИ цінами, відмінними від базових
+        custom_price1 = 125.0  # Відрізняється від базової ціни service1
+        custom_price2 = 185.0  # Відрізняється від базової ціни service2
+
+        appointment_service1 = AppointmentService(
+            appointment_id=appointment.id, service_id=service1.id, price=custom_price1
+        )
+        appointment_service2 = AppointmentService(
+            appointment_id=appointment.id, service_id=service2.id, price=custom_price2
+        )
+        session.add_all([appointment_service1, appointment_service2])
+        session.commit()
+
+        # Оновлюємо об'єкт запису з БД
+        session.refresh(appointment)
+
+        # Перевіряємо, що total_price використовує індивідуальні ціни, а не базові ціни послуг
+        expected_total = custom_price1 + custom_price2
+        actual_total = appointment.get_total_price()
+        assert actual_total == expected_total
+        assert actual_total != (service1.base_price + service2.base_price)
+
+        # Перевіряємо, що знижка коректно застосовується з урахуванням індивідуальних цін
+        discount_percentage = Decimal("10.0")
+        appointment.discount_percentage = discount_percentage
+        session.commit()
+        session.refresh(appointment)
+
+        expected_discounted = (
+            Decimal(str(expected_total))
+            * (Decimal("100") - discount_percentage)
+            / Decimal("100")
+        )
+        actual_discounted = appointment.get_discounted_price()
+
+        # Порівнюємо з невеликою похибкою через перетворення float в Decimal
+        assert abs(actual_discounted - expected_discounted) < Decimal("0.01")
 
 
 class TestAppointmentServiceModel:
