@@ -1,20 +1,14 @@
 import uuid
 from datetime import date, datetime, time
-from unittest.mock import MagicMock
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    PaymentMethod,
-    Service,
-    User,
-)
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User)
 
 
 class TestUserModel:

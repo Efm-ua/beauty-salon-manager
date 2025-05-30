@@ -1,14 +1,14 @@
 import click
-from flask import current_app
+from flask import Flask, current_app
 from flask.cli import with_appcontext
 from werkzeug.security import generate_password_hash
 
 from .models import User, db
 
 
-@click.command("create-admin")
-@with_appcontext
-def create_admin_command():
+@click.command("create-admin")  # type: ignore[misc]
+@with_appcontext  # type: ignore[misc]
+def create_admin_command() -> None:
     """Create an admin user if no users exist."""
     if User.query.count() == 0:
         admin_username = current_app.config.get("ADMIN_USERNAME", "admin")
@@ -31,6 +31,6 @@ def create_admin_command():
         click.echo("Admin user already exists. No new user created.")
 
 
-def init_app(app):
+def init_app(app: Flask) -> None:
     """Register CLI commands with the Flask application."""
     app.cli.add_command(create_admin_command)

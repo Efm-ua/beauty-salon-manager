@@ -29,11 +29,9 @@
    - test_initialize_success: Успішна ініціалізація та створення першого адміністратора
 """
 
-import pytest
-from flask import session, url_for
 from werkzeug.security import generate_password_hash
 
-from app.models import User, db
+from app.models import User
 
 
 def test_login_success(client, regular_user, db):
@@ -405,7 +403,7 @@ def test_initialize_success(app, client, db):
         # Перевірка, що адміністратор створений
         admin = User.query.filter_by(username=admin_data["username"]).first()
         assert admin is not None
-        assert admin.is_admin == True
+        assert admin.is_admin
 
         # Очищення тестових даних
         db.session.delete(admin)

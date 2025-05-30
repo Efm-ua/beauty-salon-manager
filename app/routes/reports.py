@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any, Dict, Optional
 
 from flask import Blueprint, render_template
 from flask_login import current_user, login_required
@@ -12,14 +13,14 @@ from app.models import Appointment, AppointmentService, PaymentMethod, User
 
 
 # Helper function for calculating total with discount
-def calculate_total_with_discount(service_price, discount_percentage):
+def calculate_total_with_discount(service_price: float, discount_percentage: float) -> float:
     """Calculate the service price with discount applied."""
     discount_factor = 1 - float(discount_percentage) / 100
     return service_price * discount_factor
 
 
 # Helper function for calculating salary without discount
-def calculate_salary_without_discount(service_price, discount_percentage=None):
+def calculate_salary_without_discount(service_price: float, discount_percentage: Optional[float] = None) -> float:
     """Calculate the salary amount, ignoring any discount."""
     # Return the full service price without applying discount
     return service_price
@@ -47,16 +48,14 @@ class DailySalaryReportForm(FlaskForm):
 # Salary report route
 @bp.route("/salary", methods=["GET", "POST"])
 @login_required
-def salary_report():
+def salary_report() -> str:
     form = DailySalaryReportForm()
 
     # Отримання списку майстрів для фільтрації
-    form.master_id.choices = [(0, "Всі майстри")] + [
-        (u.id, u.full_name)
-        for u in User.query.filter_by(is_active_master=True)
-        .order_by(User.full_name)
-        .all()
+    master_choices: Any = [(0, "Всі майстри")] + [
+        (u.id, u.full_name) for u in User.query.filter_by(is_active_master=True).order_by(User.full_name).all()
     ]
+    form.master_id.choices = master_choices
 
     # If user is not admin, limit selection to current user
     if not current_user.is_admin:
@@ -101,9 +100,9 @@ def salary_report():
         # Calculate total service cost based ONLY on AppointmentService.price values
         if appointment_ids:
             # Get the sum of all service prices for these appointments using SQLAlchemy
-            service_sum_query = db.session.query(
-                func.sum(AppointmentService.price)
-            ).filter(AppointmentService.appointment_id.in_(appointment_ids))
+            service_sum_query = db.session.query(func.sum(AppointmentService.price)).filter(
+                AppointmentService.appointment_id.in_(appointment_ids)
+            )
             service_sum_result = service_sum_query.scalar()
             total_services_cost = float(service_sum_result or 0)
 
@@ -121,23 +120,15 @@ def salary_report():
 # Financial report route
 @bp.route("/financial", methods=["GET", "POST"])
 @login_required
-def financial_report():
+def financial_report() -> str:
     # Create form first so it's available for all template renderings
     form = DailySalaryReportForm()
 
     # Отримання списку майстрів для фільтрації
-    form.master_id.choices = [(0, "Всі майстри")] + [
-        (u.id, u.full_name)
-        for u in User.query.filter_by(is_active_master=True)
-        .order_by(User.full_name)
-        .all()
+    master_choices: Any = [(0, "Всі майстри")] + [
+        (u.id, u.full_name) for u in User.query.filter_by(is_active_master=True).order_by(User.full_name).all()
     ]
-
-    # Debug the admin status
-    print(f"User {current_user.username} is_admin: {current_user.is_admin}")
-    print(
-        f"User {current_user.username} is_administrator(): {current_user.is_administrator()}"
-    )
+    form.master_id.choices = master_choices
 
     # Only admins should see financial data, but everyone gets the form
     error_message = None
@@ -158,52 +149,35 @@ def financial_report():
         ).all()
 
         # Initialize payment method totals
-        payment_method_totals = {pm.value: 0 for pm in PaymentMethod}
-        payment_method_totals["Не вказано"] = 0
+        payment_method_totals: Dict[str, float] = {pm.value: 0.0 for pm in PaymentMethod}
+        payment_method_totals["Не вказано"] = 0.0
 
         # Process each completed appointment
         for appointment in completed_appointments:
             # Use amount_paid if available, otherwise calculate from services with discount
-            if (
-                appointment.amount_paid is not None
-                and float(appointment.amount_paid) > 0
-            ):
+            if appointment.amount_paid is not None and float(appointment.amount_paid) > 0:
                 amount = float(appointment.amount_paid)
                 total_amount += amount
 
                 # Add to the appropriate payment method
-                method_name = (
-                    "Не вказано"
-                    if appointment.payment_method is None
-                    else appointment.payment_method.value
-                )
+                method_name = "Не вказано" if appointment.payment_method is None else appointment.payment_method.value
                 payment_method_totals[method_name] += amount
             else:
                 # Calculate amount from services with discount
                 services_amount = sum(service.price for service in appointment.services)
                 if appointment.discount_percentage:
-                    discounted_amount = services_amount * (
-                        1 - float(appointment.discount_percentage) / 100
-                    )
+                    discounted_amount = services_amount * (1 - float(appointment.discount_percentage) / 100)
                 else:
                     discounted_amount = services_amount
 
                 total_amount += discounted_amount
 
                 # Add to the appropriate payment method
-                method_name = (
-                    "Не вказано"
-                    if appointment.payment_method is None
-                    else appointment.payment_method.value
-                )
+                method_name = "Не вказано" if appointment.payment_method is None else appointment.payment_method.value
                 payment_method_totals[method_name] += discounted_amount
 
         # Format results for display
-        payment_breakdown = [
-            (method, amount)
-            for method, amount in payment_method_totals.items()
-            if amount > 0
-        ]
+        payment_breakdown = [(method, amount) for method, amount in payment_method_totals.items() if amount > 0]
 
         # Add any missing payment methods with zero values if needed for display
         for method in PaymentMethod:

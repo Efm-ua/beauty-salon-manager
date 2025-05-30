@@ -1,9 +1,4 @@
-# Віртуальне середовище
-venv/
-env/
-ENV/
-
-# Кеш Python
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -25,12 +20,30 @@ wheels/
 .installed.cfg
 *.egg
 **/__pycache__/
-*.py[cod]
+
+# Віртуальне середовище
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Покриття коду та тестування
+.coverage
+coverage.*
+.coverage.*
+*,cover
+htmlcov/
+.tox/
+.pytest_cache/
+.cache/
 
 # База даних
 *.db
 *.sqlite
 *.sqlite3
+instance/
 # Виняток: зберігати скрипти міграцій
 !migrations/
 !migrations/versions/
@@ -42,9 +55,21 @@ wheels/
 # Локальні налаштування
 .env
 .flaskenv
+*.env
+.env.local
+.env.*.local
 
-# IDE
+# IDE / Editor files
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Тимчасові файли
+*.tmp
+*.temp
+*.bak
+*.backup

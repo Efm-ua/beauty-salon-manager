@@ -1,6 +1,5 @@
 from datetime import date, datetime, time, timedelta
 
-from bs4 import BeautifulSoup
 from flask import url_for
 
 

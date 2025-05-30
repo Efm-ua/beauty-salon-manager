@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 from flask import Flask
@@ -17,7 +18,7 @@ login_manager = LoginManager()
 csrf = CSRFProtect()
 
 
-def create_app(test_config=None):
+def create_app(test_config: Optional[Dict[str, Any]] = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(Config)
 
@@ -36,23 +37,23 @@ def create_app(test_config=None):
     csrf.init_app(app)
 
     # Налаштування менеджера входу
-    login_manager.login_view = "auth.login"
+    login_manager.login_view = "auth.login"  # type: ignore
     login_manager.login_message = "Please login to access this page"
     login_manager.login_message_category = "info"
 
-    @login_manager.user_loader
-    def load_user(user_id):
+    @login_manager.user_loader  # type: ignore[misc]
+    def load_user(user_id: str) -> Optional[User]:  # type: ignore[reportUnusedFunction]
         return db.session.get(User, int(user_id))
 
     # Jinja2 filters
-    @app.template_filter("format_percentage")
-    def format_percentage(value):
+    @app.template_filter("format_percentage")  # type: ignore[misc]
+    def format_percentage(value: Optional[float]) -> str:  # type: ignore[reportUnusedFunction]
         if value is None:
             return "0.00"
         return f"{float(value):.2f}"
 
-    @app.template_filter("format_currency")
-    def format_currency(value):
+    @app.template_filter("format_currency")  # type: ignore[misc]
+    def format_currency(value: Optional[float]) -> str:  # type: ignore[reportUnusedFunction]
         if value is None:
             return "0.00"
         return f"{float(value):.2f}"
@@ -72,8 +73,8 @@ def create_app(test_config=None):
 
     commands.init_app(app)
 
-    @app.route("/ping")
-    def ping():
+    @app.route("/ping")  # type: ignore[misc]
+    def ping() -> str:  # type: ignore[reportUnusedFunction]
         return "pong"
 
     # Set upload folder path
@@ -81,8 +82,8 @@ def create_app(test_config=None):
     # Create upload directory if it doesn't exist
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
-    @app.context_processor
-    def inject_now():
+    @app.context_processor  # type: ignore[misc]
+    def inject_now() -> Dict[str, datetime]:  # type: ignore[reportUnusedFunction]
         return {"now": datetime.now(timezone.utc)}
 
     return app

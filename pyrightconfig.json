@@ -1,0 +1,31 @@
+{
+    "include": [
+        "app"
+    ],
+    "exclude": [
+        "**/__pycache__",
+        "**/.*",
+        ".mypy_cache",
+        ".pytest_cache",
+        "venv",
+        "migrations"
+    ],
+    "reportMissingImports": false,
+    "reportMissingTypeStubs": "warning",
+    "reportOptionalMemberAccess": "error",
+    "reportGeneralTypeIssues": "error",
+    "reportOptionalSubscript": "error",
+    "reportOptionalIterable": "error",
+    "reportOptionalContextManager": "error",
+    "reportOptionalOperand": "error",
+    "reportUnknownMemberType": false,
+    "reportUnknownArgumentType": false,
+    "reportUnknownVariableType": false,
+    "reportUnknownParameterType": false,
+    "pythonVersion": "3.10",
+    "typeCheckingMode": "strict",
+    "useLibraryCodeForTypes": true,
+    "strictListInference": true,
+    "strictDictionaryInference": true,
+    "strictSetInference": true
+} 

@@ -189,6 +189,12 @@
               <span class="badge bg-primary rounded-pill me-2"
                 >{{ service.price }} грн</span
               >
+              <!-- DEBUG INFO -->
+              <div class="text-muted small">
+                DEBUG: is_admin={{ is_admin }}, master_id={{
+                appointment.master_id }}, current_user.id={{ current_user.id }},
+                status={{ appointment.status }}
+              </div>
               {% if (is_admin or appointment.master_id == current_user.id) and
               appointment.status == 'scheduled' %}
               <button

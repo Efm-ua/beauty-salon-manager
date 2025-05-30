@@ -1,8 +1,9 @@
+from typing import Any
+
 from flask import Blueprint, flash, jsonify, redirect, render_template, url_for
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import (FloatField, IntegerField, StringField, SubmitField,
-                     TextAreaField)
+from wtforms import FloatField, IntegerField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
 from app.models import AppointmentService, Service, db
@@ -15,9 +16,7 @@ bp = Blueprint("services", __name__, url_prefix="/services")
 class ServiceForm(FlaskForm):
     name = StringField("Назва", validators=[DataRequired(), Length(max=100)])
     description = TextAreaField("Опис", validators=[Optional()])
-    duration = IntegerField(
-        "Тривалість (хв)", validators=[DataRequired(), NumberRange(min=5, max=480)]
-    )
+    duration = IntegerField("Тривалість (хв)", validators=[DataRequired(), NumberRange(min=5, max=480)])
     base_price = FloatField(
         "Базова ціна (грн)",
         validators=[Optional(), NumberRange(min=0)],
@@ -29,7 +28,7 @@ class ServiceForm(FlaskForm):
 # Список всіх послуг (доступно для всіх користувачів)
 @bp.route("/")
 @login_required
-def index():
+def index() -> str:
     services = Service.query.order_by(Service.name).all()
 
     return render_template(
@@ -43,7 +42,7 @@ def index():
 # Створення нової послуги (тільки для адміністраторів)
 @bp.route("/create", methods=["GET", "POST"])
 @login_required
-def create():
+def create() -> Any:
     # Перевірка прав доступу
     if not current_user.is_admin:
         flash("У вас немає прав для створення нових послуг", "danger")
@@ -52,12 +51,12 @@ def create():
     form = ServiceForm()
 
     if form.validate_on_submit():
-        service = Service(
-            name=form.name.data,
-            description=form.description.data,
-            duration=form.duration.data,
-            base_price=form.base_price.data,
-        )
+        service = Service()
+        service.name = form.name.data
+        service.description = form.description.data
+        service.duration = form.duration.data
+        service.base_price = form.base_price.data
+
         db.session.add(service)
         db.session.commit()
 
@@ -70,7 +69,7 @@ def create():
 # Редагування послуги (тільки для адміністраторів)
 @bp.route("/<int:id>/edit", methods=["GET", "POST"])
 @login_required
-def edit(id):
+def edit(id: int) -> Any:
     # Перевірка прав доступу
     if not current_user.is_admin:
         flash("У вас немає прав для редагування послуг", "danger")
@@ -97,7 +96,7 @@ def edit(id):
 # Видалення послуги (тільки для адміністраторів)
 @bp.route("/<int:id>/delete", methods=["POST"])
 @login_required
-def delete(id):
+def delete(id: int) -> Any:
     # Перевірка прав доступу
     if not current_user.is_admin:
         flash("У вас немає прав для видалення послуг", "danger")
@@ -126,7 +125,7 @@ def delete(id):
 # API для отримання інформації про послугу
 @bp.route("/api/<int:id>")
 @login_required
-def api_service(id):
+def api_service(id: int) -> Any:
     service = Service.query.get_or_404(id)
 
     return jsonify(
@@ -143,7 +142,7 @@ def api_service(id):
 # API для отримання списку послуг
 @bp.route("/api/list")
 @login_required
-def api_list():
+def api_list() -> Any:
     services = Service.query.order_by(Service.name).all()
 
     result = []

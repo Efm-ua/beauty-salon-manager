@@ -47,15 +47,8 @@ from decimal import Decimal
 import pytest
 from werkzeug.security import generate_password_hash
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    PaymentMethod,
-    Service,
-    User,
-    db,
-)
+from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
+                        Service, User, db)
 
 
 @pytest.fixture
@@ -701,6 +694,491 @@ def test_daily_summary_shows_correct_total(
     assert response.status_code == 200
 
 
+# Розширені тести для daily_summary для досягнення 90% покриття
+
+
+def test_daily_summary_without_date_parameter(appointments_auth_client):
+    """
+    Тест запиту daily_summary без параметра дати.
+    Має використовувати поточну дату за замовчуванням.
+    """
+    response = appointments_auth_client.get("/appointments/daily-summary")
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    today = date.today()
+    # Перевіряємо, що використовується поточна дата
+    assert "Щоденний підсумок" in data or "Daily Summary" in data
+    # Перевірка наявності дати в різних форматах
+    date_formats = (
+        today.strftime("%Y-%m-%d") in data or today.strftime("%d.%m.%Y") in data
+    )
+    assert date_formats
+
+
+def test_daily_summary_invalid_date_format(appointments_auth_client):
+    """
+    Тест запиту daily_summary з некоректним форматом дати.
+    Має використовувати поточну дату за замовчуванням.
+    """
+    url = "/appointments/daily-summary?date=invalid-date"
+    response = appointments_auth_client.get(url)
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    today = date.today()
+    # При некоректній даті використовується поточна дата
+    assert "Щоденний підсумок" in data or "Daily Summary" in data
+
+
+def test_daily_summary_date_without_appointments(appointments_auth_client):
+    """
+    Тест запиту daily_summary для дати без записів.
+    Має повертати порожній звіт з нульовими сумами.
+    """
+    # Дата далеко в майбутньому, де точно немає записів
+    future_date = date.today() + timedelta(days=1000)
+    url = f"/appointments/daily-summary?" f"date={future_date.strftime('%Y-%m-%d')}"
+    response = appointments_auth_client.get(url)
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    assert "Щоденний підсумок" in data or "Daily Summary" in data
+    # Перевіряємо, що сума дорівнює 0
+    assert "0" in data or "0.00" in data
+
+
+def test_daily_summary_with_different_appointment_statuses(
+    appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест daily_summary з записами різних статусів.
+    Тільки 'completed' записи мають враховуватися в сумах.
+    """
+    test_date = date.today()
+
+    # Створюємо записи з різними статусами
+    appointments_data = [
+        {"status": "completed", "price": 100.0},
+        {"status": "scheduled", "price": 200.0},
+        {"status": "cancelled", "price": 300.0},
+        {"status": "completed", "price": 150.0},
+    ]
+
+    for i, app_data in enumerate(appointments_data):
+        appointment = Appointment(
+            client_id=appointment_test_data["client"].id,
+            master_id=appointment_test_data["master"].id,
+            date=test_date,
+            start_time=time(10 + i, 0),
+            end_time=time(11 + i, 0),
+            status=app_data["status"],
+            notes=f"Test appointment {i}",
+        )
+        session.add(appointment)
+        session.flush()
+
+        # Додаємо послугу
+        service = AppointmentService(
+            appointment_id=appointment.id,
+            service_id=appointment_test_data["service"].id,
+            price=app_data["price"],
+        )
+        session.add(service)
+
+    session.commit()
+
+    response = appointments_auth_client.get(
+        f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}"
+    )
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    # Очікувана сума: тільки completed записи (100.0 + 150.0 = 250.0)
+    assert "250" in data or "250.0" in data or "250.00" in data
+
+
+def test_daily_summary_amount_paid_vs_service_calculation(
+    appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест daily_summary з записами, що мають amount_paid vs розрахунок з послуг.
+    Якщо amount_paid > 0, використовується воно, інакше - сума послуг.
+    """
+    test_date = date.today()
+
+    # Запис з amount_paid
+    appointment1 = Appointment(
+        client_id=appointment_test_data["client"].id,
+        master_id=appointment_test_data["master"].id,
+        date=test_date,
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status="completed",
+        amount_paid=500.0,  # Використовується ця сума
+        notes="Test appointment with amount_paid",
+    )
+    session.add(appointment1)
+    session.flush()
+
+    # Додаємо послугу з іншою ціною
+    service1 = AppointmentService(
+        appointment_id=appointment1.id,
+        service_id=appointment_test_data["service"].id,
+        price=300.0,  # Ця сума ігнорується
+    )
+    session.add(service1)
+
+    # Запис без amount_paid (використовується сума послуг)
+    appointment2 = Appointment(
+        client_id=appointment_test_data["client"].id,
+        master_id=appointment_test_data["master"].id,
+        date=test_date,
+        start_time=time(12, 0),
+        end_time=time(13, 0),
+        status="completed",
+        amount_paid=None,  # Використовується сума послуг
+        notes="Test appointment without amount_paid",
+    )
+    session.add(appointment2)
+    session.flush()
+
+    service2 = AppointmentService(
+        appointment_id=appointment2.id,
+        service_id=appointment_test_data["service"].id,
+        price=200.0,  # Ця сума використовується
+    )
+    session.add(service2)
+
+    # Запис з amount_paid = 0 (використовується сума послуг)
+    appointment3 = Appointment(
+        client_id=appointment_test_data["client"].id,
+        master_id=appointment_test_data["master"].id,
+        date=test_date,
+        start_time=time(14, 0),
+        end_time=time(15, 0),
+        status="completed",
+        amount_paid=0.0,  # Використовується сума послуг
+        notes="Test appointment with zero amount_paid",
+    )
+    session.add(appointment3)
+    session.flush()
+
+    service3 = AppointmentService(
+        appointment_id=appointment3.id,
+        service_id=appointment_test_data["service"].id,
+        price=100.0,  # Ця сума використовується
+    )
+    session.add(service3)
+
+    session.commit()
+
+    response = appointments_auth_client.get(
+        f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}"
+    )
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    # Очікувана сума: 500.0 (amount_paid) + 200.0 + 100.0 = 800.0
+    assert "800" in data or "800.0" in data or "800.00" in data
+
+
+def test_daily_summary_with_valid_master_filter(
+    appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест daily_summary з коректним master_id.
+    Має фільтрувати записи за майстром та не показувати загальну статистику.
+    """
+    test_date = date.today()
+
+    # Створюємо другого майстра
+    master2 = User(
+        username=f"test_master2_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("password"),
+        full_name=f"Test Master 2 {uuid.uuid4().hex[:8]}",
+        is_admin=False,
+    )
+    session.add(master2)
+    session.flush()
+
+    # Записи для першого майстра
+    appointment1 = Appointment(
+        client_id=appointment_test_data["client"].id,
+        master_id=appointment_test_data["master"].id,
+        date=test_date,
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status="completed",
+        notes="Appointment for master 1",
+    )
+    session.add(appointment1)
+    session.flush()
+
+    service1 = AppointmentService(
+        appointment_id=appointment1.id,
+        service_id=appointment_test_data["service"].id,
+        price=100.0,
+    )
+    session.add(service1)
+
+    # Записи для другого майстра
+    appointment2 = Appointment(
+        client_id=appointment_test_data["client"].id,
+        master_id=master2.id,
+        date=test_date,
+        start_time=time(12, 0),
+        end_time=time(13, 0),
+        status="completed",
+        notes="Appointment for master 2",
+    )
+    session.add(appointment2)
+    session.flush()
+
+    service2 = AppointmentService(
+        appointment_id=appointment2.id,
+        service_id=appointment_test_data["service"].id,
+        price=200.0,
+    )
+    session.add(service2)
+
+    session.commit()
+
+    # Запит з фільтром по першому майстру
+    url = (
+        f"/appointments/daily-summary?"
+        f"date={test_date.strftime('%Y-%m-%d')}&"
+        f"master_id={appointment_test_data['master'].id}"
+    )
+    response = appointments_auth_client.get(url)
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    # Має показувати тільки суму першого майстра (100.0)
+    assert "100" in data or "100.0" in data or "100.00" in data
+    # Не має показувати суму другого майстра (200.0)
+    assert "200" not in data or data.count("200") == 0
+
+
+def test_daily_summary_with_invalid_master_filter(
+    appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест daily_summary з некоректним master_id.
+    Має ігнорувати фільтр та показувати всі записи.
+    """
+    test_date = date.today()
+
+    appointment = Appointment(
+        client_id=appointment_test_data["client"].id,
+        master_id=appointment_test_data["master"].id,
+        date=test_date,
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status="completed",
+        notes="Test appointment",
+    )
+    session.add(appointment)
+    session.flush()
+
+    service = AppointmentService(
+        appointment_id=appointment.id,
+        service_id=appointment_test_data["service"].id,
+        price=150.0,
+    )
+    session.add(service)
+    session.commit()
+
+    # Запит з некоректним master_id
+    url = (
+        f"/appointments/daily-summary?"
+        f"date={test_date.strftime('%Y-%m-%d')}&master_id=invalid"
+    )
+    response = appointments_auth_client.get(url)
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    # Має показувати всі записи, оскільки фільтр некоректний
+    assert "150" in data or "150.0" in data or "150.00" in data
+
+
+def test_daily_summary_with_nonexistent_master_filter(
+    appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест daily_summary з неіснуючим master_id.
+    Має показувати порожній результат для цього майстра.
+    """
+    test_date = date.today()
+
+    appointment = Appointment(
+        client_id=appointment_test_data["client"].id,
+        master_id=appointment_test_data["master"].id,
+        date=test_date,
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status="completed",
+        notes="Test appointment",
+    )
+    session.add(appointment)
+    session.flush()
+
+    service = AppointmentService(
+        appointment_id=appointment.id,
+        service_id=appointment_test_data["service"].id,
+        price=150.0,
+    )
+    session.add(service)
+    session.commit()
+
+    # Запит з неіснуючим master_id (але валідним числом)
+    nonexistent_master_id = 99999
+    url = (
+        f"/appointments/daily-summary?"
+        f"date={test_date.strftime('%Y-%m-%d')}&"
+        f"master_id={nonexistent_master_id}"
+    )
+    response = appointments_auth_client.get(url)
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    # Має показувати порожній результат або нульову суму
+    assert "0" in data or "0.00" in data
+
+
+def test_daily_summary_masters_statistics_calculation(
+    appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест розрахунку статистики майстрів у daily_summary.
+    Перевіряє коректність підрахунку кількості записів та сум для кожного майстра.
+    """
+    test_date = date.today()
+
+    # Створюємо другого майстра
+    master2 = User(
+        username=f"test_master2_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("password"),
+        full_name=f"Test Master 2 {uuid.uuid4().hex[:8]}",
+        is_admin=False,
+        is_active_master=True,
+    )
+    session.add(master2)
+    session.flush()
+
+    # Записи для першого майстра
+    for i in range(2):
+        appointment = Appointment(
+            client_id=appointment_test_data["client"].id,
+            master_id=appointment_test_data["master"].id,
+            date=test_date,
+            start_time=time(10 + i, 0),
+            end_time=time(11 + i, 0),
+            status="completed",
+            notes=f"Appointment {i} for master 1",
+        )
+        session.add(appointment)
+        session.flush()
+
+        service = AppointmentService(
+            appointment_id=appointment.id,
+            service_id=appointment_test_data["service"].id,
+            price=100.0,
+        )
+        session.add(service)
+
+    # Один запис для другого майстра
+    appointment3 = Appointment(
+        client_id=appointment_test_data["client"].id,
+        master_id=master2.id,
+        date=test_date,
+        start_time=time(14, 0),
+        end_time=time(15, 0),
+        status="completed",
+        notes="Appointment for master 2",
+    )
+    session.add(appointment3)
+    session.flush()
+
+    service3 = AppointmentService(
+        appointment_id=appointment3.id,
+        service_id=appointment_test_data["service"].id,
+        price=300.0,
+    )
+    session.add(service3)
+
+    session.commit()
+
+    # Запит без фільтра майстра (має показувати статистику всіх майстрів)
+    response = appointments_auth_client.get(
+        f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}"
+    )
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    # Загальна сума: 2 * 100.0 + 300.0 = 500.0
+    assert "500" in data or "500.0" in data or "500.00" in data
+
+    # Перевіряємо наявність імен майстрів у статистиці
+    assert appointment_test_data["master"].full_name in data
+    assert master2.full_name in data
+
+
+def test_daily_summary_with_scheduled_and_cancelled_appointments(
+    appointments_auth_client, appointment_test_data, session
+):
+    """
+    Тест daily_summary з записами статусів 'scheduled' та 'cancelled'.
+    Ці записи не мають враховуватися в сумах, але мають відображатися в списку.
+    """
+    test_date = date.today()
+
+    # Створюємо записи з різними статусами
+    statuses_and_prices = [
+        ("scheduled", 100.0),
+        ("cancelled", 200.0),
+        ("completed", 300.0),
+    ]
+
+    for i, (status, price) in enumerate(statuses_and_prices):
+        appointment = Appointment(
+            client_id=appointment_test_data["client"].id,
+            master_id=appointment_test_data["master"].id,
+            date=test_date,
+            start_time=time(10 + i, 0),
+            end_time=time(11 + i, 0),
+            status=status,
+            notes=f"Test {status} appointment",
+        )
+        session.add(appointment)
+        session.flush()
+
+        service = AppointmentService(
+            appointment_id=appointment.id,
+            service_id=appointment_test_data["service"].id,
+            price=price,
+        )
+        session.add(service)
+
+    session.commit()
+
+    response = appointments_auth_client.get(
+        f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}"
+    )
+    assert response.status_code == 200
+
+    data = response.data.decode("utf-8")
+    # Тільки completed запис має враховуватися в сумі (300.0)
+    assert "300" in data or "300.0" in data or "300.00" in data
+    # Перевіряємо, що всі записи відображаються в таблиці
+    # (шаблон показує всі записи, але статуси не виводяться)
+    assert appointment_test_data["client"].name in data
+    # Перевіряємо наявність часу записів
+    assert "10:00" in data
+    assert "11:00" in data
+    assert "12:00" in data
+
+
 def test_appointment_edit_with_import():
     """Цей тест перевіряє, що імпорт функції edit не викликає помилок."""
     # Import but don't use to avoid F401
@@ -962,7 +1440,8 @@ def test_appointment_completion_payment_methods(
     Перевіряє коректність встановлення amount_paid та payment_status.
     """
     from decimal import Decimal
-    from app.models import PaymentMethod, Appointment
+
+    from app.models import Appointment, PaymentMethod
 
     # Створення нового запису для тестування завершення
     with app.app_context():

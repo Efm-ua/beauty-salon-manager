@@ -1,12 +1,11 @@
 from datetime import datetime
+from typing import Any, List, Optional as OptionalType
 
-from flask import (Blueprint, flash, jsonify, redirect, render_template,
-                   request, url_for)
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, TextAreaField
-from wtforms.validators import (DataRequired, Email, Length, Optional,
-                                ValidationError)
+from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError
 
 from app.models import Appointment, Client, db
 
@@ -15,7 +14,7 @@ bp = Blueprint("clients", __name__, url_prefix="/clients")
 
 
 # Функція для перевірки чи містить рядок всі слова пошуку
-def contains_all_words(text, search_words):
+def contains_all_words(text: OptionalType[str], search_words: List[str]) -> bool:
     if not text:
         return False
 
@@ -31,27 +30,24 @@ class ClientForm(FlaskForm):
     notes = TextAreaField("Примітки", validators=[Optional()])
     submit = SubmitField("Зберегти")
 
-    def validate_phone(self, phone):
+    def validate_phone(self, phone: StringField) -> None:
         client = Client.query.filter_by(phone=phone.data).first()
-        if client and (not hasattr(self, "client_id") or client.id != self.client_id):
+        if client and (not hasattr(self, "client_id") or client.id != getattr(self, "client_id", None)):
             raise ValidationError("Клієнт з таким номером телефону вже існує.")
 
-    def validate_email(self, email):
+    def validate_email(self, email: StringField) -> None:
         if email.data:
             client = Client.query.filter_by(email=email.data).first()
-            if client and (
-                not hasattr(self, "client_id") or client.id != self.client_id
-            ):
+            if client and (not hasattr(self, "client_id") or client.id != getattr(self, "client_id", None)):
                 raise ValidationError("Клієнт з таким email вже існує.")
 
 
 # Список всіх клієнтів
 @bp.route("/")
 @login_required
-def index():
+def index() -> str:
     # Отримання параметра пошуку
     search = request.args.get("search", "")
-    print(f"Searching for: {search}")
 
     # Базовий запит клієнтів
     if current_user.is_admin:
@@ -59,11 +55,7 @@ def index():
         query = Client.query
     else:
         # Майстер може бачити тільки клієнтів з якими мав записи
-        client_ids = (
-            db.session.query(Appointment.client_id)
-            .filter(Appointment.master_id == current_user.id)
-            .distinct()
-        )
+        client_ids = db.session.query(Appointment.client_id).filter(Appointment.master_id == current_user.id).distinct()
         query = Client.query.filter(Client.id.in_(client_ids))
 
     # Фільтрація за пошуковим запитом
@@ -74,7 +66,6 @@ def index():
 
         # Split search string into words and convert to lowercase for case-insensitive comparison
         search_words = [word.lower() for word in search.split()]
-        print(f"Search words: {search_words}")
 
         # Filter clients in Python (case-insensitive)
         clients = []
@@ -99,15 +90,9 @@ def index():
                 clients.append(client)
                 continue
 
-        print(f"Python filtering found {len(clients)} clients")
     else:
         # Без пошуку просто повертаємо відфільтрованих клієнтів
         clients = query.order_by(Client.name).all()
-
-    print(f"Total clients found: {len(clients)}")
-    if clients:
-        for client in clients:
-            print(f"Client: {client.name}, ID: {client.id}")
 
     return render_template(
         "clients/index.html",
@@ -121,7 +106,7 @@ def index():
 # Створення нового клієнта
 @bp.route("/create", methods=["GET", "POST"])
 @login_required
-def create():
+def create() -> Any:
     # Перевірка прав доступу: тільки адміністратори можуть створювати клієнтів
     if not current_user.is_admin:
         flash("У вас немає прав для створення нових клієнтів", "danger")
@@ -133,12 +118,12 @@ def create():
         # Якщо email пустий, встановлюємо його як None
         email = form.email.data if form.email.data else None
 
-        client = Client(
-            name=form.name.data,
-            phone=form.phone.data,
-            email=email,  # Використовуємо None замість порожнього рядка
-            notes=form.notes.data,
-        )
+        client = Client()
+        client.name = form.name.data
+        client.phone = form.phone.data
+        client.email = email
+        client.notes = form.notes.data
+
         db.session.add(client)
         db.session.commit()
 
@@ -151,7 +136,7 @@ def create():
 # Перегляд клієнта
 @bp.route("/<int:id>")
 @login_required
-def view(id):
+def view(id: int) -> Any:
     client = Client.query.get_or_404(id)
 
     # Перевірка прав доступу: Майстер може переглядати тільки клієнтів з якими мав записи
@@ -168,10 +153,7 @@ def view(id):
     if current_user.is_admin:
         # Адміністратор бачить всі записи клієнта
         appointments = (
-            Appointment.query.filter_by(client_id=client.id)
-            .order_by(Appointment.date.desc())
-            .limit(10)
-            .all()
+            Appointment.query.filter_by(client_id=client.id).order_by(Appointment.date.desc()).limit(10).all()
         )
     else:
         # Майстер бачить тільки свої записи з цим клієнтом
@@ -194,7 +176,7 @@ def view(id):
 # Редагування клієнта
 @bp.route("/<int:id>/edit", methods=["GET", "POST"])
 @login_required
-def edit(id):
+def edit(id: int) -> Any:
     # Перевірка прав доступу: тільки адміністратори можуть редагувати клієнтів
     if not current_user.is_admin:
         flash("У вас немає прав для редагування клієнтів", "danger")
@@ -202,7 +184,7 @@ def edit(id):
 
     client = Client.query.get_or_404(id)
     form = ClientForm(obj=client)
-    form.client_id = client.id
+    setattr(form, "client_id", client.id)
 
     if form.validate_on_submit():
         # Зберігаємо всі поля, крім email
@@ -229,7 +211,7 @@ def edit(id):
 # Видалення клієнта
 @bp.route("/<int:id>/delete", methods=["POST"])
 @login_required
-def delete(id):
+def delete(id: int) -> Any:
     # Перевірка прав доступу: тільки адміністратори можуть видаляти клієнтів
     if not current_user.is_admin:
         flash("У вас немає прав для видалення клієнтів", "danger")
@@ -262,12 +244,10 @@ def delete(id):
 # API для пошуку клієнтів
 @bp.route("/api/search")
 @login_required
-def api_search():
+def api_search() -> Any:
     query_string = request.args.get("q", "")
     if not query_string or len(query_string) < 2:
         return jsonify([])
-
-    print(f"API searching for: {query_string}")
 
     # Базовий запит для отримання клієнтів
     if current_user.is_admin:
@@ -276,19 +256,13 @@ def api_search():
     else:
         # Майстер може бачити тільки клієнтів з якими мав записи
         client_ids = (
-            db.session.query(Appointment.client_id)
-            .filter(Appointment.master_id == current_user.id)
-            .distinct()
-            .all()
+            db.session.query(Appointment.client_id).filter(Appointment.master_id == current_user.id).distinct().all()
         )
         client_ids = [client_id[0] for client_id in client_ids]
-        all_clients = (
-            Client.query.filter(Client.id.in_(client_ids)).all() if client_ids else []
-        )
+        all_clients = Client.query.filter(Client.id.in_(client_ids)).all() if client_ids else []
 
     # Split query string into words and convert to lowercase for case-insensitive comparison
     query_words = [word.lower() for word in query_string.split()]
-    print(f"API search words: {query_words}")
 
     # Filter clients in Python (case-insensitive)
     clients = []
@@ -340,5 +314,4 @@ def api_search():
                 }
             )
 
-    print(f"API found {len(clients)} clients")
     return jsonify(clients[:10])
