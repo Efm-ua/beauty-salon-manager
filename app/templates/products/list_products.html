@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="fas fa-box me-2"></i>Каталог товарів</h2>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('products.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Додати товар
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Пошук та фільтри -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('products.index') }}">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="search" class="form-label">Пошук</label>
+                    <input type="text" name="search" class="form-control" id="search" 
+                           value="{{ search }}" placeholder="Назва, SKU або бренд...">
+                </div>
+                <div class="col-md-4">
+                    <label for="brand" class="form-label">Бренд</label>
+                    <select name="brand" class="form-select" id="brand">
+                        <option value="0">Всі бренди</option>
+                        {% for brand in brands %}
+                        <option value="{{ brand.id }}" {% if brand_filter == brand.id %}selected{% endif %}>
+                            {{ brand.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-outline-primary">
+                            <i class="fas fa-search me-2"></i>Знайти
+                        </button>
+                        <a href="{{ url_for('products.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Очистити
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if products.items %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-primary">
+                    <tr>
+                        <th>SKU</th>
+                        <th>Назва товару</th>
+                        <th>Бренд</th>
+                        <th>Об'єм/Вага</th>
+                        <th>Ціна продажу</th>
+                        <th>Залишок</th>
+                        <th>Мін. рівень</th>
+                        {% if current_user.is_admin %}
+                        <th width="200">Дії</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products.items %}
+                    {% set stock_level = product.stock_records[0] if product.stock_records else none %}
+                    <tr {% if stock_level and stock_level.quantity <= product.min_stock_level %}class="table-warning"{% endif %}>
+                        <td>
+                            <code>{{ product.sku }}</code>
+                        </td>
+                        <td>
+                            <strong>{{ product.name }}</strong>
+                            {% if product.description %}
+                            <br><small class="text-muted">{{ product.description[:50] }}{% if product.description|length > 50 %}...{% endif %}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ product.brand.name }}</span>
+                        </td>
+                        <td>
+                            {% if product.volume_value and product.volume_unit %}
+                            {{ product.volume_value }} {{ product.volume_unit }}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if product.current_sale_price %}
+                            <strong>{{ "%.2f"|format(product.current_sale_price) }} грн</strong>
+                            {% else %}
+                            <span class="text-muted">Не встановлено</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stock_level %}
+                            {% if stock_level.quantity <= product.min_stock_level %}
+                            <span class="badge bg-danger">{{ stock_level.quantity }}</span>
+                            {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+                            <span class="badge bg-warning">{{ stock_level.quantity }}</span>
+                            {% else %}
+                            <span class="badge bg-success">{{ stock_level.quantity }}</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="badge bg-secondary">0</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ product.min_stock_level }}</small>
+                        </td>
+                        {% if current_user.is_admin %}
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{{ url_for('products.view', id=product.id) }}" 
+                                   class="btn btn-sm btn-outline-info">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('products.edit', id=product.id) }}" 
+                                   class="btn btn-sm btn-outline-warning">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form method="POST" action="{{ url_for('products.delete', id=product.id) }}" 
+                                      class="d-inline" onsubmit="return confirm('Ви впевнені, що хочете видалити цей товар?')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Пагінація -->
+        {% if products.pages > 1 %}
+        <nav aria-label="Пагінація товарів">
+            <ul class="pagination justify-content-center">
+                {% if products.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('products.index', page=products.prev_num, search=search, brand=brand_filter) }}">
+                        <i class="fas fa-chevron-left"></i> Попередня
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for page_num in products.iter_pages() %}
+                {% if page_num %}
+                {% if page_num != products.page %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('products.index', page=page_num, search=search, brand=brand_filter) }}">{{ page_num }}</a>
+                </li>
+                {% else %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                </li>
+                {% endif %}
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">…</span>
+                </li>
+                {% endif %}
+                {% endfor %}
+
+                {% if products.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('products.index', page=products.next_num, search=search, brand=brand_filter) }}">
+                        Наступна <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-box fa-3x text-muted mb-3"></i>
+            <h4 class="text-muted">Товари не знайдено</h4>
+            {% if search or brand_filter %}
+            <p class="text-muted">Спробуйте змінити критерії пошуку або очистити фільтри.</p>
+            <a href="{{ url_for('products.index') }}" class="btn btn-outline-primary">
+                <i class="fas fa-times me-2"></i>Очистити фільтри
+            </a>
+            {% else %}
+            {% if current_user.is_admin %}
+            <p class="text-muted">Додайте перший товар, щоб почати роботу з каталогом.</p>
+            <a href="{{ url_for('products.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Додати перший товар
+            </a>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col">
+        <small class="text-muted">
+            Загалом товарів: {{ products.total }}
+            {% if products.pages > 1 %}
+            | Сторінка {{ products.page }} з {{ products.pages }}
+            {% endif %}
+        </small>
+        {% if products.items %}
+        <div class="float-end">
+            <a href="{{ url_for('products.stock_levels') }}" class="btn btn-sm btn-outline-info">
+                <i class="fas fa-warehouse me-2"></i>Переглянути залишки
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Легенда для кольорів залишків -->
+{% if products.items %}
+<div class="row mt-3">
+    <div class="col">
+        <div class="card bg-light">
+            <div class="card-body py-2">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-2"></i>Легенда залишків:
+                    <span class="badge bg-danger ms-2">Критично низький</span>
+                    <span class="badge bg-warning ms-1">Низький</span>
+                    <span class="badge bg-success ms-1">Достатній</span>
+                    <span class="badge bg-secondary ms-1">Відсутній</span>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %} 

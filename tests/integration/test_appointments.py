@@ -47,8 +47,7 @@ from decimal import Decimal
 import pytest
 from werkzeug.security import generate_password_hash
 
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User, db)
+from app.models import Appointment, AppointmentService, Client, PaymentMethod, Service, User, db
 
 
 @pytest.fixture
@@ -186,9 +185,7 @@ def test_appointment_filter_by_date(appointments_auth_client, appointment_test_d
     next_year = date.today().year + 1
     test_date = date(next_year, 5, 4)
 
-    response = appointments_auth_client.get(
-        f"/appointments/?date={test_date.strftime('%Y-%m-%d')}"
-    )
+    response = appointments_auth_client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}")
 
     assert response.status_code == 200
     content = response.data.decode("utf-8")
@@ -201,13 +198,85 @@ def test_appointment_filter_by_master(appointments_auth_client, appointment_test
     Тест фільтрації записів за майстром.
     Перевіряє, що при застосуванні фільтра за майстром відображаються правильні записи.
     """
+    from app.models import Appointment, AppointmentService, Client, Service, User, db
+    from datetime import date, time
+
+    # Створюємо другого майстра для тестування фільтрації
+    master2 = User(
+        username="master2_integration_test",
+        password="test_password",
+        full_name="Master Two Integration",
+        is_admin=False,
+        is_active_master=True,
+    )
+    db.session.add(master2)
+
+    # Створюємо додаткового клієнта
+    client2 = Client(name="Client Two Integration", phone="+380509999999")
+    db.session.add(client2)
+
+    db.session.commit()
+
+    # Створюємо запис для другого майстра на ту ж дату
+    test_date = appointment_test_data["appointment"].date
+    appointment2 = Appointment(
+        client_id=client2.id,
+        master_id=master2.id,
+        date=test_date,
+        start_time=time(13, 0),
+        end_time=time(14, 0),
+        status="scheduled",
+        notes="Appointment for master 2 integration test",
+    )
+    db.session.add(appointment2)
+    db.session.commit()
+
+    # Додаємо послугу до другого запису
+    appointment2_service = AppointmentService(
+        appointment_id=appointment2.id,
+        service_id=appointment_test_data["service"].id,
+        price=100.0,
+    )
+    db.session.add(appointment2_service)
+    db.session.commit()
+
+    # Тест 1: Фільтрація за першим майстром
     response = appointments_auth_client.get(
-        f"/appointments/?master_id={appointment_test_data['master'].id}"
+        f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id={appointment_test_data['master'].id}"
     )
 
     assert response.status_code == 200
     content = response.data.decode("utf-8")
     assert "Записи" in content
+    # Повинен бути клієнт першого майстра
+    assert appointment_test_data["client"].name in content
+    # Не повинно бути клієнта другого майстра
+    assert "Client Two Integration" not in content
+    # Не перевіряємо відсутність імені майстра в загальному контенті,
+    # оскільки воно може з'явитися в dropdown фільтрі
+
+    # Тест 2: Фільтрація за другим майстром
+    response = appointments_auth_client.get(
+        f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id={master2.id}"
+    )
+
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    assert "Записи" in content
+    # Повинен бути клієнт другого майстра
+    assert "Client Two Integration" in content
+    # Не повинно бути клієнта першого майстра
+    assert appointment_test_data["client"].name not in content
+
+    # Тест 3: Без фільтра - повинні бути обидва записи
+    response = appointments_auth_client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}")
+
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    assert "Записи" in content
+    # Повинні бути обидва клієнти
+    assert appointment_test_data["client"].name in content
+    assert "Client Two Integration" in content
 
 
 # 2. Тести для створення записів
@@ -223,9 +292,7 @@ def test_appointment_create_page_accessible(appointments_auth_client):
     assert "form" in data and ("client_id" in data or "Клієнт" in data)
 
 
-def test_appointment_create_success(
-    appointments_auth_client, test_client, test_service, regular_user, session
-):
+def test_appointment_create_success(appointments_auth_client, test_client, test_service, regular_user, session):
     """
     Тест успішного створення запису з коректними даними.
     Перевіряє коректність обчислення end_time.
@@ -275,9 +342,7 @@ def test_appointment_create_success(
     assert appointment.services[0].service_id == test_service.id
 
     # Тестуємо відображення запису (слідкуємо за перенаправленням)
-    response = appointments_auth_client.get(
-        f"/appointments/{appointment.id}", follow_redirects=True
-    )
+    response = appointments_auth_client.get(f"/appointments/{appointment.id}", follow_redirects=True)
     assert response.status_code == 200
 
 
@@ -293,9 +358,7 @@ def test_appointment_create_invalid_data(appointments_auth_client):
         "submit": "Створити",
     }
 
-    response = appointments_auth_client.post(
-        "/appointments/create", data=invalid_data, follow_redirects=True
-    )
+    response = appointments_auth_client.post("/appointments/create", data=invalid_data, follow_redirects=True)
 
     assert response.status_code == 200
     # Перевіряємо наявність помилок валідації або форми створення
@@ -304,16 +367,12 @@ def test_appointment_create_invalid_data(appointments_auth_client):
 
 
 # 3. Тести для перегляду запису
-def test_appointment_view_page_accessible(
-    appointments_auth_client, appointment_test_data
-):
+def test_appointment_view_page_accessible(appointments_auth_client, appointment_test_data):
     """
     Тест доступності сторінки перегляду запису.
     Перевіряє статус відповіді та відображення інформації про запис.
     """
-    response = appointments_auth_client.get(
-        f"/appointments/{appointment_test_data['appointment'].id}"
-    )
+    response = appointments_auth_client.get(f"/appointments/{appointment_test_data['appointment'].id}")
 
     # Очікуємо або успішний перегляд або перенаправлення, якщо запис не існує
     assert response.status_code in [200, 302]
@@ -324,16 +383,12 @@ def test_appointment_view_page_accessible(
         assert appointment_test_data["client"].name in data or "Деталі запису" in data
 
 
-def test_appointment_view_shows_correct_info(
-    appointments_auth_client, appointment_test_data
-):
+def test_appointment_view_shows_correct_info(appointments_auth_client, appointment_test_data):
     """
     Тест відображення коректної інформації про запис.
     Перевіряє наявність всіх полів запису на сторінці перегляду.
     """
-    response = appointments_auth_client.get(
-        f"/appointments/{appointment_test_data['appointment'].id}"
-    )
+    response = appointments_auth_client.get(f"/appointments/{appointment_test_data['appointment'].id}")
 
     # Очікуємо або успішний перегляд або перенаправлення, якщо запис не існує
     assert response.status_code in [200, 302]
@@ -348,16 +403,12 @@ def test_appointment_view_shows_correct_info(
 
 
 # 4. Тести для редагування запису
-def test_appointment_edit_page_accessible(
-    appointments_auth_client, appointment_test_data
-):
+def test_appointment_edit_page_accessible(appointments_auth_client, appointment_test_data):
     """
     Тест доступності сторінки редагування запису.
     Перевіряє статус відповіді та наявність форми редагування.
     """
-    response = appointments_auth_client.get(
-        f"/appointments/{appointment_test_data['appointment'].id}/edit"
-    )
+    response = appointments_auth_client.get(f"/appointments/{appointment_test_data['appointment'].id}/edit")
 
     # Очікуємо або успішне відображення або перенаправлення, якщо запис не існує
     assert response.status_code in [200, 302]
@@ -368,9 +419,7 @@ def test_appointment_edit_page_accessible(
         assert "form" in data and "client_id" in data
 
 
-def test_appointment_edit_success(
-    appointments_auth_client, test_client, test_service, regular_user, session
-):
+def test_appointment_edit_success(appointments_auth_client, test_client, test_service, regular_user, session):
     """
     Тест успішного оновлення інформації про запис.
     Перевіряє редагування даних запису через API.
@@ -423,16 +472,12 @@ def test_appointment_edit_success(
     assert test_appointment.end_time.minute == end_datetime.time().minute
 
     # Перевіряємо перегляд запису
-    response = appointments_auth_client.get(
-        f"/appointments/{test_appointment.id}", follow_redirects=True
-    )
+    response = appointments_auth_client.get(f"/appointments/{test_appointment.id}", follow_redirects=True)
     assert response.status_code == 200
 
 
 # 5. Тести для зміни статусу запису
-def test_appointment_status_change_to_completed(
-    appointments_auth_client, appointment_test_data
-):
+def test_appointment_status_change_to_completed(appointments_auth_client, appointment_test_data):
     """
     Тест зміни статусу запису на "виконано".
     Перевіряє статус відповіді та зміну статусу запису в БД.
@@ -445,16 +490,10 @@ def test_appointment_status_change_to_completed(
     assert response.status_code == 200
     # Перевіряємо успішну зміну статусу - або флеш-повідомлення або перенаправлення на сторінку записів
     data = response.data.decode("utf-8")
-    assert (
-        ("Статус запису змінено" in data)
-        or ("completed" in data)
-        or ("/appointments" in data)
-    )
+    assert ("Статус запису змінено" in data) or ("completed" in data) or ("/appointments" in data)
 
 
-def test_appointment_status_change_to_cancelled(
-    appointments_auth_client, appointment_test_data
-):
+def test_appointment_status_change_to_cancelled(appointments_auth_client, appointment_test_data):
     """
     Тест зміни статусу запису на "скасовано".
     Перевіряє статус відповіді та зміну статусу запису в БД.
@@ -467,16 +506,10 @@ def test_appointment_status_change_to_cancelled(
     assert response.status_code == 200
     # Перевіряємо успішну зміну статусу - або флеш-повідомлення або перенаправлення на сторінку записів
     data = response.data.decode("utf-8")
-    assert (
-        ("Статус запису змінено" in data)
-        or ("cancelled" in data)
-        or ("/appointments" in data)
-    )
+    assert ("Статус запису змінено" in data) or ("cancelled" in data) or ("/appointments" in data)
 
 
-def test_appointment_status_change_to_scheduled(
-    appointments_auth_client, appointment_test_data
-):
+def test_appointment_status_change_to_scheduled(appointments_auth_client, appointment_test_data):
     """
     Тест повернення запису до статусу "заплановано".
     Перевіряє статус відповіді та зміну статусу запису в БД.
@@ -496,17 +529,11 @@ def test_appointment_status_change_to_scheduled(
     assert response.status_code == 200
     # Перевіряємо успішну зміну статусу - або флеш-повідомлення або перенаправлення на сторінку записів
     data = response.data.decode("utf-8")
-    assert (
-        ("Статус запису змінено" in data)
-        or ("scheduled" in data)
-        or ("/appointments" in data)
-    )
+    assert ("Статус запису змінено" in data) or ("scheduled" in data) or ("/appointments" in data)
 
 
 # 6. Тести для управління послугами в записі
-def test_appointment_add_service(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_appointment_add_service(appointments_auth_client, appointment_test_data, session):
     """
     Тест додавання послуги до запису.
     Перевіряє статус відповіді та додавання послуги до запису в БД.
@@ -543,9 +570,7 @@ def test_appointment_add_service(
     )
 
 
-def test_appointment_edit_service_price(
-    appointments_auth_client, appointment_test_data
-):
+def test_appointment_edit_service_price(appointments_auth_client, appointment_test_data):
     """
     Тест редагування ціни послуги у записі.
     Перевіряє статус відповіді та зміну ціни послуги в БД.
@@ -554,8 +579,12 @@ def test_appointment_edit_service_price(
         "price": 150.0,
     }
 
+    edit_url = (
+        f"/appointments/{appointment_test_data['appointment'].id}/"
+        f"edit_service/{appointment_test_data['appointment_service'].id}"
+    )
     response = appointments_auth_client.post(
-        f"/appointments/{appointment_test_data['appointment'].id}/edit_service/{appointment_test_data['appointment_service'].id}",
+        edit_url,
         data=edit_data,
         follow_redirects=True,
     )
@@ -563,24 +592,22 @@ def test_appointment_edit_service_price(
     assert response.status_code == 200
     # Перевіряємо успішну зміну ціни - або флеш-повідомлення або оновлена ціна на сторінці
     data = response.data.decode("utf-8")
-    assert (
-        ("Ціну послуги оновлено" in data)
-        or ("150.0" in data)
-        or ("/appointments/" in data)
-    )
+    assert ("Ціну послуги оновлено" in data) or ("150.0" in data) or ("/appointments/" in data)
 
 
-def test_appointment_remove_service(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_appointment_remove_service(appointments_auth_client, appointment_test_data, session):
     """
     Тест видалення послуги з запису.
     Перевіряє статус відповіді та видалення послуги з запису в БД.
     """
     service_name = appointment_test_data["service"].name
 
+    url = (
+        f"/appointments/{appointment_test_data['appointment'].id}/"
+        f"remove_service/{appointment_test_data['appointment_service'].id}"
+    )
     response = appointments_auth_client.post(
-        f"/appointments/{appointment_test_data['appointment'].id}/remove_service/{appointment_test_data['appointment_service'].id}",
+        url,
         follow_redirects=True,
     )
 
@@ -591,9 +618,7 @@ def test_appointment_remove_service(
 
 
 # 7. Тести для API записів
-def test_appointment_api_get_by_date(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_appointment_api_get_by_date(appointments_auth_client, appointment_test_data, session):
     """
     Тест API для отримання записів за датою.
     Перевіряє, що API повертає коректний список записів.
@@ -612,9 +637,7 @@ def test_appointment_api_get_by_date(
     session.add(new_appointment)
     session.commit()
 
-    response = appointments_auth_client.get(
-        f"/appointments/api/dates/{today.strftime('%Y-%m-%d')}"
-    )
+    response = appointments_auth_client.get(f"/appointments/api/dates/{today.strftime('%Y-%m-%d')}")
     assert response.status_code == 200
 
     data = response.get_json()
@@ -655,9 +678,7 @@ def test_daily_summary_filter_works(appointments_auth_client, appointment_test_d
     )
 
 
-def test_daily_summary_shows_correct_total(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_daily_summary_shows_correct_total(appointments_auth_client, appointment_test_data, session):
     """
     Тест відображення коректної суми за день.
     Перевіряє, що на сторінці щоденних звітів відображається
@@ -686,9 +707,7 @@ def test_daily_summary_shows_correct_total(
     session.add(new_service)
     session.commit()
 
-    response = appointments_auth_client.get(
-        f"/appointments/daily-summary?date={today.strftime('%Y-%m-%d')}"
-    )
+    response = appointments_auth_client.get(f"/appointments/daily-summary?date={today.strftime('%Y-%m-%d')}")
 
     # Перевіряємо тільки статус відповіді - це мінімальна перевірка успішності запиту
     assert response.status_code == 200
@@ -710,9 +729,7 @@ def test_daily_summary_without_date_parameter(appointments_auth_client):
     # Перевіряємо, що використовується поточна дата
     assert "Щоденний підсумок" in data or "Daily Summary" in data
     # Перевірка наявності дати в різних форматах
-    date_formats = (
-        today.strftime("%Y-%m-%d") in data or today.strftime("%d.%m.%Y") in data
-    )
+    date_formats = today.strftime("%Y-%m-%d") in data or today.strftime("%d.%m.%Y") in data
     assert date_formats
 
 
@@ -748,9 +765,7 @@ def test_daily_summary_date_without_appointments(appointments_auth_client):
     assert "0" in data or "0.00" in data
 
 
-def test_daily_summary_with_different_appointment_statuses(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_daily_summary_with_different_appointment_statuses(appointments_auth_client, appointment_test_data, session):
     """
     Тест daily_summary з записами різних статусів.
     Тільки 'completed' записи мають враховуватися в сумах.
@@ -788,9 +803,7 @@ def test_daily_summary_with_different_appointment_statuses(
 
     session.commit()
 
-    response = appointments_auth_client.get(
-        f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}"
-    )
+    response = appointments_auth_client.get(f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}")
     assert response.status_code == 200
 
     data = response.data.decode("utf-8")
@@ -798,9 +811,7 @@ def test_daily_summary_with_different_appointment_statuses(
     assert "250" in data or "250.0" in data or "250.00" in data
 
 
-def test_daily_summary_amount_paid_vs_service_calculation(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_daily_summary_amount_paid_vs_service_calculation(appointments_auth_client, appointment_test_data, session):
     """
     Тест daily_summary з записами, що мають amount_paid vs розрахунок з послуг.
     Якщо amount_paid > 0, використовується воно, інакше - сума послуг.
@@ -873,9 +884,7 @@ def test_daily_summary_amount_paid_vs_service_calculation(
 
     session.commit()
 
-    response = appointments_auth_client.get(
-        f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}"
-    )
+    response = appointments_auth_client.get(f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}")
     assert response.status_code == 200
 
     data = response.data.decode("utf-8")
@@ -883,9 +892,7 @@ def test_daily_summary_amount_paid_vs_service_calculation(
     assert "800" in data or "800.0" in data or "800.00" in data
 
 
-def test_daily_summary_with_valid_master_filter(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_daily_summary_with_valid_master_filter(appointments_auth_client, appointment_test_data, session):
     """
     Тест daily_summary з коректним master_id.
     Має фільтрувати записи за майстром та не показувати загальну статистику.
@@ -960,9 +967,7 @@ def test_daily_summary_with_valid_master_filter(
     assert "200" not in data or data.count("200") == 0
 
 
-def test_daily_summary_with_invalid_master_filter(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_daily_summary_with_invalid_master_filter(appointments_auth_client, appointment_test_data, session):
     """
     Тест daily_summary з некоректним master_id.
     Має ігнорувати фільтр та показувати всі записи.
@@ -990,10 +995,7 @@ def test_daily_summary_with_invalid_master_filter(
     session.commit()
 
     # Запит з некоректним master_id
-    url = (
-        f"/appointments/daily-summary?"
-        f"date={test_date.strftime('%Y-%m-%d')}&master_id=invalid"
-    )
+    url = f"/appointments/daily-summary?" f"date={test_date.strftime('%Y-%m-%d')}&master_id=invalid"
     response = appointments_auth_client.get(url)
     assert response.status_code == 200
 
@@ -1002,9 +1004,7 @@ def test_daily_summary_with_invalid_master_filter(
     assert "150" in data or "150.0" in data or "150.00" in data
 
 
-def test_daily_summary_with_nonexistent_master_filter(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_daily_summary_with_nonexistent_master_filter(appointments_auth_client, appointment_test_data, session):
     """
     Тест daily_summary з неіснуючим master_id.
     Має показувати порожній результат для цього майстра.
@@ -1033,11 +1033,7 @@ def test_daily_summary_with_nonexistent_master_filter(
 
     # Запит з неіснуючим master_id (але валідним числом)
     nonexistent_master_id = 99999
-    url = (
-        f"/appointments/daily-summary?"
-        f"date={test_date.strftime('%Y-%m-%d')}&"
-        f"master_id={nonexistent_master_id}"
-    )
+    url = f"/appointments/daily-summary?" f"date={test_date.strftime('%Y-%m-%d')}&" f"master_id={nonexistent_master_id}"
     response = appointments_auth_client.get(url)
     assert response.status_code == 200
 
@@ -1046,9 +1042,7 @@ def test_daily_summary_with_nonexistent_master_filter(
     assert "0" in data or "0.00" in data
 
 
-def test_daily_summary_masters_statistics_calculation(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_daily_summary_masters_statistics_calculation(appointments_auth_client, appointment_test_data, session):
     """
     Тест розрахунку статистики майстрів у daily_summary.
     Перевіряє коректність підрахунку кількості записів та сум для кожного майстра.
@@ -1110,9 +1104,7 @@ def test_daily_summary_masters_statistics_calculation(
     session.commit()
 
     # Запит без фільтра майстра (має показувати статистику всіх майстрів)
-    response = appointments_auth_client.get(
-        f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}"
-    )
+    response = appointments_auth_client.get(f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}")
     assert response.status_code == 200
 
     data = response.data.decode("utf-8")
@@ -1162,9 +1154,7 @@ def test_daily_summary_with_scheduled_and_cancelled_appointments(
 
     session.commit()
 
-    response = appointments_auth_client.get(
-        f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}"
-    )
+    response = appointments_auth_client.get(f"/appointments/daily-summary?date={test_date.strftime('%Y-%m-%d')}")
     assert response.status_code == 200
 
     data = response.data.decode("utf-8")
@@ -1189,9 +1179,7 @@ def test_appointment_edit_with_import():
 
 
 # Тести для редагування ціни послуги в записі
-def test_edit_service_price_success(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_edit_service_price_success(appointments_auth_client, appointment_test_data, session):
     """
     Тест успішного редагування ціни послуги в записі.
     Перевіряє статус відповіді, наявність повідомлення про успіх,
@@ -1292,9 +1280,7 @@ def test_edit_service_price_wrong_master(client, appointment_test_data, session)
     assert "У вас немає доступу" in response.data.decode("utf-8")
 
 
-def test_edit_service_price_non_scheduled_status(
-    appointments_auth_client, appointment_test_data, session
-):
+def test_edit_service_price_non_scheduled_status(appointments_auth_client, appointment_test_data, session):
     """
     Тест спроби редагування ціни послуги в записі не в статусі 'scheduled'.
     Перевіряє відмову в редагуванні.
@@ -1316,15 +1302,10 @@ def test_edit_service_price_non_scheduled_status(
 
     # Перевіряємо відмову в редагуванні через статус
     assert response.status_code == 200
-    assert (
-        "Редагування ціни можливе тільки для запланованих записів"
-        in response.data.decode("utf-8")
-    )
+    assert "Редагування ціни можливе тільки для запланованих записів" in response.data.decode("utf-8")
 
 
-def test_edit_service_price_invalid_input(
-    appointments_auth_client, appointment_test_data
-):
+def test_edit_service_price_invalid_input(appointments_auth_client, appointment_test_data):
     """
     Тест спроби редагування ціни послуги з невалідними даними.
     Перевіряє валідацію введеної ціни.
@@ -1432,16 +1413,12 @@ def test_edit_service_price_updates_total_price(appointments_auth_client, sessio
 
 
 # Test payment logic when completing an appointment
-def test_appointment_completion_payment_methods(
-    app, appointments_auth_client, appointment_test_data, session
-):
+def test_appointment_completion_payment_methods(app, appointments_auth_client, appointment_test_data, session):
     """
     Тест обробки оплати при завершенні запису з різними методами оплати.
     Перевіряє коректність встановлення amount_paid та payment_status.
     """
-    from decimal import Decimal
-
-    from app.models import Appointment, PaymentMethod
+    from app.models import Appointment
 
     # Створення нового запису для тестування завершення
     with app.app_context():

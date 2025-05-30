@@ -170,6 +170,9 @@ def register() -> Any:
         schedule_display_order = None
         if is_active_master and form.schedule_display_order.data:
             schedule_display_order = form.schedule_display_order.data
+        else:
+            # Для неактивних майстрів та адмінів явно встановлюємо None
+            schedule_display_order = None
 
         user = User(
             username=form.username.data,

@@ -5,14 +5,12 @@ from unittest.mock import patch
 
 import pytest
 from sqlalchemy import inspect
+from bs4 import BeautifulSoup
 
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User, db)
+from app.models import Appointment, AppointmentService, Client, PaymentMethod, Service, User, db
 
 
-def test_appointment_complete_with_payment_method(
-    client, test_appointment, regular_user
-):
+def test_appointment_complete_with_payment_method(client, test_appointment, regular_user):
     """
     Тестує функціональність призначення способу оплати при зміні статусу запису на "завершено".
     Перевіряє, що дані зберігаються коректно в базі даних.
@@ -57,27 +55,19 @@ def test_appointment_complete_with_payment_method(
             f"detached={inspect(reloaded_appointment.master).detached}"
         )
     else:
-        print(
-            "DEBUG TEST: Reloaded appointment has no master or appointment not found."
-        )
+        print("DEBUG TEST: Reloaded appointment has no master or appointment not found.")
 
     # Перевіряємо, що новий статус збережено у базі даних
     # Використовуємо перезавантажений об'єкт замість test_appointment
     if reloaded_appointment:
-        print(
-            f"DEBUG TEST: Before assert: reloaded_appointment.status={reloaded_appointment.status}"
-        )
+        print(f"DEBUG TEST: Before assert: reloaded_appointment.status={reloaded_appointment.status}")
         assert reloaded_appointment.status == "completed"
-        print(
-            f"DEBUG TEST: Before assert: reloaded_appointment.payment_method={reloaded_appointment.payment_method}"
-        )
+        print(f"DEBUG TEST: Before assert: reloaded_appointment.payment_method={reloaded_appointment.payment_method}")
         assert reloaded_appointment.payment_method == PaymentMethod.CASH
     else:
         # Використовуємо old way з updated_appointment для сумісності
         updated_appointment = Appointment.query.get(appointment_id)
-        print(
-            f"DEBUG TEST: Before assert with updated_appointment: status={updated_appointment.status}"
-        )
+        print(f"DEBUG TEST: Before assert with updated_appointment: status={updated_appointment.status}")
         assert updated_appointment.status == "completed"
         print(
             f"DEBUG TEST: Before assert with updated_appointment: payment_method={updated_appointment.payment_method}"
@@ -85,9 +75,7 @@ def test_appointment_complete_with_payment_method(
         assert updated_appointment.payment_method == PaymentMethod.CASH
 
     # Перевіряємо неможливість зміни статусу без вибору типу оплати
-    client.get(
-        f"/appointments/{appointment_id}/status/scheduled", follow_redirects=True
-    )
+    client.get(f"/appointments/{appointment_id}/status/scheduled", follow_redirects=True)
     response = client.post(
         f"/appointments/{appointment_id}/status/completed",
         follow_redirects=True,
@@ -99,9 +87,7 @@ def test_appointment_complete_with_payment_method(
 # Нові тести для покриття непокритих сценаріїв
 
 
-def test_create_appointment_as_non_admin_for_another_master_mock(
-    db, client, regular_user, test_client, test_service
-):
+def test_create_appointment_as_non_admin_for_another_master_mock(db, client, regular_user, test_client, test_service):
     """
     Тестує модельний рівень обмеження створення запису звичайним користувачем для іншого майстра.
     """
@@ -140,10 +126,7 @@ def test_create_appointment_as_non_admin_for_another_master_mock(
                 },
             ):
                 # Дозволено створювати запис тільки для себе
-                if (
-                    not mock_current_user.is_admin
-                    and another_master.id != mock_current_user.id
-                ):
+                if not mock_current_user.is_admin and another_master.id != mock_current_user.id:
                     flask.flash("Ви можете створювати записи тільки для себе", "danger")
                     raise Exception("Створення запису для іншого майстра заборонено")
 
@@ -177,10 +160,7 @@ def test_create_appointment_without_services(client, admin_user, test_client):
     assert "Вийти" in response.text or "Logout" in response.text
 
     # Додаємо логування стану адміністратора (поточного користувача)
-    print(
-        f"DEBUG TEST CREATE: Before POST - admin_user ID={admin_user.id}, "
-        f"username={admin_user.username}"
-    )
+    print(f"DEBUG TEST CREATE: Before POST - admin_user ID={admin_user.id}, " f"username={admin_user.username}")
 
     try:
         # Спроба отримати об'єкт користувача для логування його стану
@@ -210,13 +190,9 @@ def test_create_appointment_without_services(client, admin_user, test_client):
     )
 
     # Додаємо логування після POST-запиту
-    print(
-        f"DEBUG TEST CREATE: After POST - response status code: {response.status_code}"
-    )
+    print(f"DEBUG TEST CREATE: After POST - response status code: {response.status_code}")
     print(f"*** Response content length: {len(response.text)} ***")
-    print(
-        f"*** Response contains 'field is required': {'field is required' in response.text} ***"
-    )
+    print(f"*** Response contains 'field is required': {'field is required' in response.text} ***")
     print(f"*** Response contains 'поле є обов': {'поле є обов' in response.text} ***")
 
     # Спроба отримати ID нового запису (якщо він був створений)
@@ -244,13 +220,13 @@ def test_create_appointment_without_services(client, admin_user, test_client):
                     f"detached={inspect(reloaded_appointment.master).detached}"
                 )
         else:
-            print(
-                f"DEBUG TEST CREATE: Could not reload appointment with ID={new_appointment_id}"
-            )
+            print(f"DEBUG TEST CREATE: Could not reload appointment with ID={new_appointment_id}")
     else:
-        print(
-            "DEBUG TEST CREATE: Could not determine new_appointment_id for reloading (probably not created due to validation)"
+        debug_msg = (
+            "DEBUG TEST CREATE: Could not determine new_appointment_id for reloading "
+            "(probably not created due to validation)"
         )
+        print(debug_msg)
 
     # Перевіряємо наявність повідомлення про помилку валідації
     print("DEBUG TEST CREATE: Before validation assertion")
@@ -268,9 +244,7 @@ def test_create_appointment_without_services(client, admin_user, test_client):
     print("*** Completed test_create_appointment_without_services ***")
 
 
-def test_create_appointment_with_services_debug(
-    client, active_master, test_client, test_service_with_price
-):
+def test_create_appointment_with_services_debug(client, active_master, test_client, test_service_with_price):
     """
     Тестова функція для діагностики DetachedInstanceError при створенні запису.
     На відміну від test_create_appointment_without_services,
@@ -346,9 +320,7 @@ def test_create_appointment_with_services_debug(
     assert check_appointment.services[0].id == test_service_with_price.id
 
 
-def test_create_appointment_with_invalid_datetime(
-    client, admin_user, test_client, test_service
-):
+def test_create_appointment_with_invalid_datetime(client, admin_user, test_client, test_service):
     """
     Тестує, що неможливо створити запис з датою/часом у минулому.
     """
@@ -488,9 +460,7 @@ def test_edit_appointment_with_invalid_form_data(client, admin_user, test_appoin
     )
 
 
-def test_change_status_to_completed_with_invalid_payment_method(
-    client, regular_user, test_appointment
-):
+def test_change_status_to_completed_with_invalid_payment_method(client, regular_user, test_appointment):
     """
     Тестує спробу зміни статусу на 'completed' з недійсним значенням payment_method.
     Має бути відхилено.
@@ -528,9 +498,7 @@ def test_change_status_to_completed_with_invalid_payment_method(
     ), f"Status should not change from {original_status}, but was changed to {updated_appointment.status}"
 
 
-def test_change_status_to_completed_with_multiple_payment_methods(
-    client, regular_user, test_appointment
-):
+def test_change_status_to_completed_with_multiple_payment_methods(client, regular_user, test_appointment):
     """
     Тестує спробу зміни статусу на 'completed' з наданням декількох значень payment_method.
     Перевіряє, що наш код правильно обробляє ситуацію, коли payment_method - це список.
@@ -582,9 +550,7 @@ def test_change_status_to_completed_with_multiple_payment_methods(
     assert updated_appointment.payment_method == PaymentMethod.CASH  # "Готівка"
 
 
-def test_add_service_to_appointment_fixed(
-    client, regular_user, test_appointment, test_service
-):
+def test_add_service_to_appointment_fixed(client, regular_user, test_appointment, test_service):
     """
     Виправлена версія тесту для додавання послуги до запису.
     Покриває рядки 263-298, 356
@@ -621,9 +587,7 @@ def test_add_service_to_appointment_fixed(
     initial_service_count = len(test_appointment.services)
 
     # Спочатку відкриваємо форму додавання послуги для перевірки доступності
-    response = client.get(
-        f"/appointments/{test_appointment.id}/add_service", follow_redirects=True
-    )
+    response = client.get(f"/appointments/{test_appointment.id}/add_service", follow_redirects=True)
     assert response.status_code == 200
     assert "Додати послугу" in response.text or "Add service" in response.text
 
@@ -650,9 +614,12 @@ def test_add_service_to_appointment_fixed(
 
     # Перевіряємо, що послуга додана до запису в базі даних
     current_service_count = len(test_appointment.services)
-    assert (
-        current_service_count == initial_service_count + 1
-    ), f"Кількість послуг має збільшитись з {initial_service_count} до {initial_service_count + 1}, але зараз {current_service_count}"
+    expected_count = initial_service_count + 1
+    error_msg = (
+        f"Кількість послуг має збільшитись з {initial_service_count} до {expected_count}, "
+        f"але зараз {current_service_count}"
+    )
+    assert current_service_count == expected_count, error_msg
 
     # Знаходимо нову додану послугу (остання в списку)
     added_service = None
@@ -662,9 +629,7 @@ def test_add_service_to_appointment_fixed(
             break
 
     assert added_service is not None, "Додана послуга не знайдена в записі"
-    assert (
-        added_service.price == 200.0
-    ), f"Ціна послуги має бути 200.0, але вона {added_service.price}"
+    assert added_service.price == 200.0, f"Ціна послуги має бути 200.0, але вона {added_service.price}"
     assert (
         added_service.notes == "Тестова послуга"
     ), f"Примітки мають бути 'Тестова послуга', але вони '{added_service.notes}'"
@@ -742,9 +707,7 @@ def test_change_appointment_status_completed_with_payment(
     assert updated_appointment.payment_method == PaymentMethod.CASH
 
 
-def test_change_appointment_status_completed_with_debt_payment(
-    client, regular_user, test_appointment, test_service
-):
+def test_change_appointment_status_completed_with_debt_payment(client, regular_user, test_appointment, test_service):
     """
     Тестує зміну статусу запису на 'completed' з методом оплати "Борг".
     Перевіряє, що amount_paid встановлюється в 0, а payment_status в 'unpaid'.
@@ -792,9 +755,7 @@ def test_change_appointment_status_completed_with_debt_payment(
     assert updated_appointment.payment_method == PaymentMethod.DEBT
 
 
-def test_change_status_completed_fully_paid(
-    client, session, regular_user, test_appointment
-):
+def test_change_status_completed_fully_paid(client, session, regular_user, test_appointment):
     """
     Tests changing appointment status to 'completed' when amount_paid equals total_cost.
     Payment status should become 'paid'.
@@ -821,9 +782,7 @@ def test_change_status_completed_fully_paid(
     # Change status to completed
     response = client.post(
         f"/appointments/{test_appointment.id}/status/completed",
-        data={
-            "payment_method": PaymentMethod.CASH.value
-        },  # Use the actual string value
+        data={"payment_method": PaymentMethod.CASH.value},  # Use the actual string value
         follow_redirects=True,
     )
     assert response.status_code == 200
@@ -831,15 +790,11 @@ def test_change_status_completed_fully_paid(
 
     updated_appointment = session.get(Appointment, test_appointment.id)
     assert updated_appointment.status == "completed"
-    assert (
-        updated_appointment.payment_status == "paid"
-    )  # total_cost is 100, amount_paid is 100
+    assert updated_appointment.payment_status == "paid"  # total_cost is 100, amount_paid is 100
     assert updated_appointment.payment_method == PaymentMethod.CASH
 
 
-def test_change_status_completed_partially_paid(
-    client, session, regular_user, test_appointment
-):
+def test_change_status_completed_partially_paid(client, session, regular_user, test_appointment):
     """
     Tests changing appointment status to 'completed' when selecting a non-debt payment method.
     With our new logic, the payment_status should be 'paid' when completing with a non-debt
@@ -873,9 +828,7 @@ def test_change_status_completed_partially_paid(
     assert updated_appointment.payment_method == PaymentMethod.PRIVAT
 
 
-def test_change_status_completed_not_paid(
-    client, session, regular_user, test_appointment
-):
+def test_change_status_completed_not_paid(client, session, regular_user, test_appointment):
     """
     Tests changing appointment status to 'completed' with a non-debt payment method
     when amount_paid was previously zero.
@@ -909,9 +862,7 @@ def test_change_status_completed_not_paid(
     assert updated_appointment.payment_method == PaymentMethod.CASH
 
 
-def test_change_status_to_completed_without_payment_method(
-    client, session, regular_user, test_appointment
-):
+def test_change_status_to_completed_without_payment_method(client, session, regular_user, test_appointment):
     """
     Tests that changing status to 'completed' without selecting a payment method
     results in a warning and the status is NOT changed, and payment_method is not set.
@@ -933,9 +884,7 @@ def test_change_status_to_completed_without_payment_method(
         # No data for payment_method
         follow_redirects=True,
     )
-    assert (
-        response.status_code == 200
-    )  # The request itself is successful, but it should redirect
+    assert response.status_code == 200  # The request itself is successful, but it should redirect
     # Check for the flash message
     assert "Будь ласка, виберіть тип оплати для завершення запису." in response.text
 
@@ -943,12 +892,8 @@ def test_change_status_to_completed_without_payment_method(
     # The route should redirect to view, and not commit status change
     updated_appointment = session.get(Appointment, test_appointment.id)
     assert updated_appointment.status == initial_status  # Status should not change
-    assert (
-        updated_appointment.payment_status == initial_payment_status
-    )  # Payment status should not change
-    assert (
-        updated_appointment.payment_method == initial_payment_method
-    )  # Payment method should not change
+    assert updated_appointment.payment_status == initial_payment_status  # Payment status should not change
+    assert updated_appointment.payment_method == initial_payment_method  # Payment method should not change
 
 
 def test_change_status_to_cancelled(client, session, regular_user, test_appointment):
@@ -993,9 +938,7 @@ def test_change_status_to_cancelled(client, session, regular_user, test_appointm
     assert updated_appointment.payment_status == "not_applicable"
 
 
-def test_change_status_from_completed_to_scheduled(
-    client, session, regular_user, test_appointment
-):
+def test_change_status_from_completed_to_scheduled(client, session, regular_user, test_appointment):
     """
     Tests changing appointment status from 'completed' back to 'scheduled'.
     Payment method should be cleared, and payment status re-evaluated.
@@ -1055,13 +998,9 @@ def test_edit_appointment_amount_paid_updates_payment_status_to_paid(
     assert test_appointment.payment_status == "unpaid"
     assert test_appointment.amount_paid is None
 
-    print(
-        f"TEST DEBUG: Initial appointment services: {[s.price for s in test_appointment.services]}"
-    )
+    print(f"TEST DEBUG: Initial appointment services: {[s.price for s in test_appointment.services]}")
     print(f"TEST DEBUG: Initial total_price: {test_appointment.get_total_price()}")
-    print(
-        f"TEST DEBUG: Initial discounted_price: {test_appointment.get_discounted_price()}"
-    )
+    print(f"TEST DEBUG: Initial discounted_price: {test_appointment.get_discounted_price()}")
 
     # Get a service and its actual price from the test_appointment
     # Since we've seen from debug logs that the service price is 600.00, we'll use that value
@@ -1093,28 +1032,16 @@ def test_edit_appointment_amount_paid_updates_payment_status_to_paid(
     updated_appointment = session.get(Appointment, test_appointment.id)
 
     print(f"TEST DEBUG: After edit - amount_paid: {updated_appointment.amount_paid}")
-    print(
-        f"TEST DEBUG: After edit - payment_method: {updated_appointment.payment_method}"
-    )
-    print(
-        f"TEST DEBUG: After edit - payment_status: {updated_appointment.payment_status}"
-    )
-    print(
-        f"TEST DEBUG: After edit - services: {[s.price for s in updated_appointment.services]}"
-    )
-    print(
-        f"TEST DEBUG: After edit - total_price: {updated_appointment.get_total_price()}"
-    )
-    print(
-        f"TEST DEBUG: After edit - discounted_price: {updated_appointment.get_discounted_price()}"
-    )
+    print(f"TEST DEBUG: After edit - payment_method: {updated_appointment.payment_method}")
+    print(f"TEST DEBUG: After edit - payment_status: {updated_appointment.payment_status}")
+    print(f"TEST DEBUG: After edit - services: {[s.price for s in updated_appointment.services]}")
+    print(f"TEST DEBUG: After edit - total_price: {updated_appointment.get_total_price()}")
+    print(f"TEST DEBUG: After edit - discounted_price: {updated_appointment.get_discounted_price()}")
 
     # Manually run update payment status and see what happens
     print("TEST DEBUG: Manually running update_payment_status...")
     updated_appointment.update_payment_status()
-    print(
-        f"TEST DEBUG: After manual update - payment_status: {updated_appointment.payment_status}"
-    )
+    print(f"TEST DEBUG: After manual update - payment_status: {updated_appointment.payment_status}")
 
     assert updated_appointment.amount_paid == Decimal(str(service_price))
     assert updated_appointment.payment_method == PaymentMethod.CASH
@@ -1138,9 +1065,7 @@ def test_edit_appointment_amount_paid_updates_payment_status_to_partially_paid(
         "master_id": test_appointment.master_id,
         "date": test_appointment.date.strftime("%Y-%m-%d"),
         "start_time": test_appointment.start_time.strftime("%H:%M"),
-        "services": [
-            s.service_id for s in test_appointment.services
-        ],  # total_cost = 100
+        "services": [s.service_id for s in test_appointment.services],  # total_cost = 100
         "discount_percentage": "0.00",
         "amount_paid": "30.00",  # Partial payment
         "payment_method": PaymentMethod.PRIVAT.value,
@@ -1185,9 +1110,7 @@ def test_edit_appointment_amount_paid_updates_payment_status_to_not_paid(
         "master_id": test_appointment.master_id,
         "date": test_appointment.date.strftime("%Y-%m-%d"),
         "start_time": test_appointment.start_time.strftime("%H:%M"),
-        "services": [
-            s.service_id for s in test_appointment.services
-        ],  # total_cost = 100
+        "services": [s.service_id for s in test_appointment.services],  # total_cost = 100
         "discount_percentage": "0.00",
         "amount_paid": "0.00",  # Zero payment
         "payment_method": "",  # No payment method if amount_paid is 0
@@ -1225,9 +1148,7 @@ def test_edit_appointment_change_services_affects_payment_status(
     )
 
     # Create new services for this test
-    service1 = Service(
-        name="Service A", duration=30
-    )  # Price will be used from AppointmentService
+    service1 = Service(name="Service A", duration=30)  # Price will be used from AppointmentService
     service2 = Service(name="Service B", duration=40)
     session.add_all([service1, service2])
     session.commit()
@@ -1343,9 +1264,7 @@ def test_cannot_assign_appointment_to_inactive_master(
     assert appointment is None
 
 
-def test_schedule_filters_exclude_inactive_masters(
-    admin_auth_client, active_master, inactive_master
-):
+def test_schedule_filters_exclude_inactive_masters(admin_auth_client, active_master, inactive_master):
     """Test that inactive masters are not shown in schedule filters."""
     # Access the schedule page which should have master filters
     response = admin_auth_client.get("/schedule")
@@ -1357,20 +1276,14 @@ def test_schedule_filters_exclude_inactive_masters(
     assert inactive_master.full_name not in response.text
 
 
-def test_inactive_master_not_in_public_master_list(
-    auth_client, active_master, inactive_master
-):
+def test_inactive_master_not_in_public_master_list(auth_client, active_master, inactive_master):
     """Test that inactive masters are not shown in public master lists."""
     # Access a page that shows a list of masters (this might need to be adjusted based on your app structure)
-    response = auth_client.get(
-        "/"
-    )  # Assuming homepage might show masters or there's some public page
+    response = auth_client.get("/")  # Assuming homepage might show masters or there's some public page
     assert response.status_code == 200
 
     # Check that public pages don't show inactive masters
-    if (
-        active_master.full_name in response.text
-    ):  # Only check if masters are shown on this page
+    if active_master.full_name in response.text:  # Only check if masters are shown on this page
         assert inactive_master.full_name not in response.text
 
 
@@ -1439,7 +1352,424 @@ def test_appointment_session_integrity(client, test_appointment, admin_user):
     """
     # Додаємо логування стану об'єкта
     print("\n*** Starting test_appointment_session_integrity ***")
-    print(
-        f"Initial appointment state: id={test_appointment.id}, status={test_appointment.status}"
-    )
+    print(f"Initial appointment state: id={test_appointment.id}, status={test_appointment.status}")
     print(f"Initial session state: detached={inspect(test_appointment).detached}")
+
+
+def test_appointments_index_filter_by_master_id_admin(client, admin_user, regular_user):
+    """
+    Тест фільтрації записів за master_id для адміністратора.
+    Адміністратор повинен бачити записи конкретного майстра при фільтрації.
+    """
+    from app.models import Appointment, AppointmentService, Client, Service, User, db
+
+    # Логін адміністратором
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user.username,
+            "password": "admin_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Створюємо тестові дані
+    test_date = date.today()
+
+    # Створюємо другого майстра
+    master2 = User(
+        username="master2_for_filter_test",
+        password="test_password",
+        full_name="Master Two",
+        is_admin=False,
+        is_active_master=True,
+    )
+    db.session.add(master2)
+
+    # Створюємо клієнтів
+    client1 = Client(name="Client 1", phone="+380501234567")
+    client2 = Client(name="Client 2", phone="+380501234568")
+    db.session.add(client1)
+    db.session.add(client2)
+
+    # Створюємо послугу
+    service = Service(name="Test Service", duration=60, base_price=100.0)
+    db.session.add(service)
+
+    db.session.commit()
+
+    # Створюємо записи для різних майстрів на одну дату
+    appointment1 = Appointment(
+        client_id=client1.id,
+        master_id=regular_user.id,
+        date=test_date,
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status="scheduled",
+        notes="Appointment for master 1",
+    )
+    appointment2 = Appointment(
+        client_id=client2.id,
+        master_id=master2.id,
+        date=test_date,
+        start_time=time(11, 0),
+        end_time=time(12, 0),
+        status="scheduled",
+        notes="Appointment for master 2",
+    )
+    db.session.add(appointment1)
+    db.session.add(appointment2)
+    db.session.commit()
+
+    # Додаємо послуги до записів
+    appointment1_service = AppointmentService(
+        appointment_id=appointment1.id,
+        service_id=service.id,
+        price=100.0,
+    )
+    appointment2_service = AppointmentService(
+        appointment_id=appointment2.id,
+        service_id=service.id,
+        price=100.0,
+    )
+    db.session.add(appointment1_service)
+    db.session.add(appointment2_service)
+    db.session.commit()
+
+    # Тест 1: Без фільтра - повинні бачити записи всіх майстрів
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    assert "Client 1" in content
+    assert "Client 2" in content
+    # Перевіряємо, що обидва майстри присутні в таблиці записів
+    assert regular_user.full_name in content
+    # Master Two присутній в фільтрі, але також і в записах, так що цю перевірку залишаємо
+
+    # Тест 2: З фільтром за regular_user - повинні бачити тільки його записи
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id={regular_user.id}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    assert "Client 1" in content
+    assert "Client 2" not in content
+    # Не перевіряємо відсутність імені майстра в загальному контенті,
+    # оскільки воно може з'явитися в dropdown фільтрі
+    # Перевіряємо, що ім'я regular_user присутнє (як майстер запису)
+    assert regular_user.full_name in content
+
+    # Тест 3: З фільтром за master2 - повинні бачити тільки його записи
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id={master2.id}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    assert "Client 1" not in content
+    assert "Client 2" in content
+    assert "Master Two" in content
+    # Не перевіряємо відсутність імені regular_user в загальному контенті,
+    # оскільки воно може з'явитися в dropdown фільтрі
+
+
+def test_appointments_index_filter_by_master_id_invalid(client, admin_user):
+    """
+    Тест обробки невалідного master_id.
+    При невалідному master_id повинні відображатися записи всіх майстрів.
+    """
+    # Логін адміністратором
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user.username,
+            "password": "admin_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    test_date = date.today()
+
+    # Тест з невалідним master_id (не числовий)
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id=invalid")
+    assert response.status_code == 200
+
+    # Тест з невалідним master_id (порожній)
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id=")
+    assert response.status_code == 200
+
+    # Тест з невалідним master_id (неіснуючий ID)
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id=99999")
+    assert response.status_code == 200
+
+
+def test_appointments_index_filter_regular_user_restrictions(client, regular_user):
+    """
+    Тест обмежень для звичайного користувача (майстра).
+    Звичайний користувач повинен бачити тільки свої записи, незалежно від фільтра master_id.
+    """
+    from app.models import Appointment, AppointmentService, Client, Service, User, db
+
+    # Логін звичайним користувачем
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": regular_user.username,
+            "password": "user_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Створюємо тестові дані
+    test_date = date.today()
+
+    # Створюємо другого майстра
+    master2 = User(
+        username="master2_for_restriction_test",
+        password="test_password",
+        full_name="Master Two Restricted",
+        is_admin=False,
+        is_active_master=True,
+    )
+    db.session.add(master2)
+
+    # Створюємо клієнтів
+    client1 = Client(name="Client Regular", phone="+380507777777")
+    client2 = Client(name="Client Master2", phone="+380507777778")
+    db.session.add(client1)
+    db.session.add(client2)
+
+    # Створюємо послугу
+    service = Service(name="Restricted Test Service", duration=60, base_price=100.0)
+    db.session.add(service)
+
+    db.session.commit()
+
+    # Створюємо записи для різних майстрів на одну дату
+    appointment1 = Appointment(
+        client_id=client1.id,
+        master_id=regular_user.id,
+        date=test_date,
+        start_time=time(14, 0),
+        end_time=time(15, 0),
+        status="scheduled",
+        notes="Appointment for regular user",
+    )
+    appointment2 = Appointment(
+        client_id=client2.id,
+        master_id=master2.id,
+        date=test_date,
+        start_time=time(15, 0),
+        end_time=time(16, 0),
+        status="scheduled",
+        notes="Appointment for master 2",
+    )
+    db.session.add(appointment1)
+    db.session.add(appointment2)
+    db.session.commit()
+
+    # Додаємо послуги до записів
+    appointment1_service = AppointmentService(
+        appointment_id=appointment1.id,
+        service_id=service.id,
+        price=100.0,
+    )
+    appointment2_service = AppointmentService(
+        appointment_id=appointment2.id,
+        service_id=service.id,
+        price=100.0,
+    )
+    db.session.add(appointment1_service)
+    db.session.add(appointment2_service)
+    db.session.commit()
+
+    # Тест: Звичайний користувач повинен бачити тільки свої записи,
+    # навіть якщо вказаний фільтр для іншого майстра
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id={master2.id}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    # Повинен бачити тільки свої записи
+    assert "Client Regular" in content
+    assert "Client Master2" not in content
+    assert regular_user.full_name in content
+    assert "Master Two Restricted" not in content
+
+
+def test_appointments_index_no_filter_master_shows_all(client, admin_user):
+    """
+    Тест що без фільтра master_id адміністратор бачить записи всіх майстрів.
+    """
+    from app.models import Appointment, AppointmentService, Client, Service, User, db
+
+    # Логін адміністратором
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user.username,
+            "password": "admin_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Створюємо тестові дані
+    test_date = date.today()
+
+    # Створюємо майстра
+    master = User(
+        username="master_for_no_filter_test",
+        password="test_password",
+        full_name="Master No Filter",
+        is_admin=False,
+        is_active_master=True,
+    )
+    db.session.add(master)
+
+    # Створюємо клієнта
+    test_client = Client(name="Client No Filter", phone="+380508888888")
+    db.session.add(test_client)
+
+    # Створюємо послугу
+    service = Service(name="No Filter Test Service", duration=60, base_price=100.0)
+    db.session.add(service)
+
+    db.session.commit()
+
+    # Створюємо запис
+    appointment = Appointment(
+        client_id=test_client.id,
+        master_id=master.id,
+        date=test_date,
+        start_time=time(16, 0),
+        end_time=time(17, 0),
+        status="scheduled",
+        notes="Appointment without filter",
+    )
+    db.session.add(appointment)
+    db.session.commit()
+
+    # Додаємо послугу до запису
+    appointment_service = AppointmentService(
+        appointment_id=appointment.id,
+        service_id=service.id,
+        price=100.0,
+    )
+    db.session.add(appointment_service)
+    db.session.commit()
+
+    # Тест: Без master_id повинні бачити записи всіх майстрів
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    assert "Client No Filter" in content
+    assert "Master No Filter" in content
+    # Замість перевірки notes, перевіряємо що запис присутній через час та статус
+    assert "16:00 - 17:00" in content  # Час запису
+    assert "Заплановано" in content  # Статус запису
+
+
+def test_appointments_index_master_filter_works(client, admin_user, regular_user):
+    """
+    Простий тест фільтрації записів за master_id.
+    Перевіряє, що при застосуванні фільтра кількість записів змінюється.
+    """
+    from app.models import Appointment, AppointmentService, Client, Service, User, db
+
+    # Логін адміністратором
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": admin_user.username,
+            "password": "admin_password",
+            "remember_me": "y",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    # Створюємо тестові дані
+    test_date = date.today()
+
+    # Створюємо другого майстра
+    master2 = User(
+        username="master2_simple_test",
+        password="test_password",
+        full_name="Master Simple Two",
+        is_admin=False,
+        is_active_master=True,
+    )
+    db.session.add(master2)
+
+    # Створюємо клієнтів
+    client1 = Client(name="FilterClient1", phone="+380501111111")
+    client2 = Client(name="FilterClient2", phone="+380502222222")
+    db.session.add(client1)
+    db.session.add(client2)
+
+    # Створюємо послугу
+    service = Service(name="Filter Test Service", duration=60, base_price=100.0)
+    db.session.add(service)
+
+    db.session.commit()
+
+    # Створюємо записи для різних майстрів на одну дату
+    appointment1 = Appointment(
+        client_id=client1.id,
+        master_id=regular_user.id,
+        date=test_date,
+        start_time=time(10, 0),
+        end_time=time(11, 0),
+        status="scheduled",
+    )
+    appointment2 = Appointment(
+        client_id=client2.id,
+        master_id=master2.id,
+        date=test_date,
+        start_time=time(11, 0),
+        end_time=time(12, 0),
+        status="scheduled",
+    )
+    db.session.add(appointment1)
+    db.session.add(appointment2)
+    db.session.commit()
+
+    # Додаємо послуги до записів
+    appointment1_service = AppointmentService(
+        appointment_id=appointment1.id,
+        service_id=service.id,
+        price=100.0,
+    )
+    appointment2_service = AppointmentService(
+        appointment_id=appointment2.id,
+        service_id=service.id,
+        price=100.0,
+    )
+    db.session.add(appointment1_service)
+    db.session.add(appointment2_service)
+    db.session.commit()
+
+    # Тест 1: Без фільтра - повинні бачити записи всіх майстрів
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    # Обидва клієнти повинні бути присутні
+    assert "FilterClient1" in content
+    assert "FilterClient2" in content
+
+    # Тест 2: З фільтром за regular_user - повинні бачити тільки його записи
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id={regular_user.id}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    # Повинен бути FilterClient1, але не FilterClient2
+    assert "FilterClient1" in content
+    assert "FilterClient2" not in content
+
+    # Тест 3: З фільтром за master2 - повинні бачити тільки його записи
+    response = client.get(f"/appointments/?date={test_date.strftime('%Y-%m-%d')}&master_id={master2.id}")
+    assert response.status_code == 200
+    content = response.data.decode("utf-8")
+    # Повинен бути FilterClient2, але не FilterClient1
+    assert "FilterClient1" not in content
+    assert "FilterClient2" in content

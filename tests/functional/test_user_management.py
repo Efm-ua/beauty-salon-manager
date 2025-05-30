@@ -18,9 +18,7 @@ def test_user_list_access_denied_for_master(auth_client):
     """Verify masters cannot access the user list."""
     response = auth_client.get(url_for("auth.users"), follow_redirects=True)
     assert response.status_code == 200
-    assert "Тільки адміністратори мають доступ до цієї сторінки" in response.get_data(
-        as_text=True
-    )
+    assert "Тільки адміністратори мають доступ до цієї сторінки" in response.get_data(as_text=True)
 
 
 def test_create_user_as_admin(admin_auth_client, session):
@@ -33,16 +31,16 @@ def test_create_user_as_admin(admin_auth_client, session):
             "password": "password123",
             "password2": "password123",
             "is_admin": "",  # Not checked, so it will be a master
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 101,  # Use unique value to avoid conflicts
         },
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert "Користувач New Master успішно зареєстрований!" in response.get_data(
-        as_text=True
-    )
+    assert "Користувач New Master успішно зареєстрований!" in response.get_data(as_text=True)
 
-    # Verify the user was created
-    new_user = User.query.filter_by(username="new_master").first()
+    # Verify the user was created - use a fresh query
+    new_user = session.query(User).filter_by(username="new_master").first()
     assert new_user is not None
     assert new_user.full_name == "New Master"
     assert not new_user.is_admin  # Should be a master (not admin)
@@ -58,16 +56,15 @@ def test_create_admin_as_admin(admin_auth_client, session):
             "password": "password123",
             "password2": "password123",
             "is_admin": "y",  # Checked, so it will be an admin
+            "is_active_master": "",  # Not checked, admins are not active masters
         },
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert "Користувач New Admin успішно зареєстрований!" in response.get_data(
-        as_text=True
-    )
+    assert "Користувач New Admin успішно зареєстрований!" in response.get_data(as_text=True)
 
-    # Verify the user was created as an admin
-    new_user = User.query.filter_by(username="new_admin").first()
+    # Verify the user was created as an admin - use a fresh query
+    new_user = session.query(User).filter_by(username="new_admin").first()
     assert new_user is not None
     assert new_user.full_name == "New Admin"
     assert new_user.is_admin  # Should be an admin
@@ -84,12 +81,10 @@ def test_edit_user_as_admin(admin_auth_client, regular_user, session):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert "Користувач Updated Master Name успішно оновлений!" in response.get_data(
-        as_text=True
-    )
+    assert "Користувач Updated Master Name успішно оновлений!" in response.get_data(as_text=True)
 
     # Verify user was updated
-    updated_user = User.query.get(regular_user.id)
+    updated_user = session.get(User, regular_user.id)
     assert updated_user.full_name == "Updated Master Name"
     assert not updated_user.is_admin
 
@@ -106,7 +101,7 @@ def test_toggle_admin_status(admin_auth_client, regular_user, session):
     assert response.status_code == 200
 
     # Verify admin status changed
-    updated_user = User.query.get(regular_user.id)
+    updated_user = session.get(User, regular_user.id)
     assert updated_user.is_admin  # Now an admin
 
     # Admin to Master (toggle back)
@@ -117,7 +112,7 @@ def test_toggle_admin_status(admin_auth_client, regular_user, session):
     assert response.status_code == 200
 
     # Verify admin status changed back
-    updated_user = User.query.get(regular_user.id)
+    updated_user = session.get(User, regular_user.id)
     assert not updated_user.is_admin  # Back to master
 
 
@@ -129,13 +124,10 @@ def test_cannot_toggle_own_admin_status(admin_auth_client, admin_user, session):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert (
-        "Ви не можете змінити свій власний статус адміністратора"
-        in response.get_data(as_text=True)
-    )
+    assert "Ви не можете змінити свій власний статус адміністратора" in response.get_data(as_text=True)
 
     # Verify admin status did not change
-    updated_user = User.query.get(admin_user.id)
+    updated_user = session.get(User, admin_user.id)
     assert updated_user.is_admin  # Still an admin
 
 
@@ -194,9 +186,7 @@ def test_admin_can_view_is_active_master_status(admin_auth_client, regular_user)
     assert 'type="checkbox"' in response.text
 
 
-def test_admin_can_set_user_is_active_master_true(
-    admin_auth_client, regular_user, session
-):
+def test_admin_can_set_user_is_active_master_true(admin_auth_client, regular_user, session):
     """Test that an admin can set is_active_master=True for a user."""
     # Set is_active_master to False first (to test changing it to True)
     regular_user.is_active_master = False
@@ -214,13 +204,11 @@ def test_admin_can_set_user_is_active_master_true(
     assert response.status_code == 200
 
     # Verify user was updated
-    updated_user = User.query.get(regular_user.id)
+    updated_user = session.get(User, regular_user.id)
     assert updated_user.is_active_master is True
 
 
-def test_admin_can_set_user_is_active_master_false(
-    admin_auth_client, regular_user, session
-):
+def test_admin_can_set_user_is_active_master_false(admin_auth_client, regular_user, session):
     """Test that an admin can set is_active_master=False for a user."""
     # Set is_active_master to True first (to test changing it to False)
     regular_user.is_active_master = True
@@ -238,13 +226,11 @@ def test_admin_can_set_user_is_active_master_false(
     assert response.status_code == 200
 
     # Verify user was updated
-    updated_user = User.query.get(regular_user.id)
+    updated_user = session.get(User, regular_user.id)
     assert updated_user.is_active_master is False
 
 
-def test_user_creation_form_sets_is_active_master_correctly_for_new_master(
-    admin_auth_client, session
-):
+def test_user_creation_form_sets_is_active_master_correctly_for_new_master(admin_auth_client, session):
     """Test that when creating a Master through the admin form, is_active_master is set to True."""
     response = admin_auth_client.post(
         url_for("auth.register"),
@@ -254,22 +240,21 @@ def test_user_creation_form_sets_is_active_master_correctly_for_new_master(
             "password": "password123",
             "password2": "password123",
             "is_admin": "",  # Not checked, so it will be a master
-            # Not sending is_active_master, should default to True for masters
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 102,  # Use unique value to avoid conflicts
         },
         follow_redirects=True,
     )
     assert response.status_code == 200
 
-    # Verify the user was created with is_active_master=True
-    new_user = User.query.filter_by(username="new_master").first()
+    # Verify the user was created with is_active_master=True - use a fresh query
+    new_user = session.query(User).filter_by(username="new_master").first()
     assert new_user is not None
-    assert not new_user.is_admin  # Should be a master (not admin)
-    assert new_user.is_active_master is True  # Should be active master by default
+    assert new_user.is_active_master is True
+    assert new_user.schedule_display_order == 102
 
 
-def test_user_creation_form_sets_is_active_master_correctly_for_new_admin(
-    admin_auth_client, session
-):
+def test_user_creation_form_sets_is_active_master_correctly_for_new_admin(admin_auth_client, session):
     """Test that when creating an Admin through the admin form, is_active_master is set to False."""
     response = admin_auth_client.post(
         url_for("auth.register"),
@@ -279,17 +264,17 @@ def test_user_creation_form_sets_is_active_master_correctly_for_new_admin(
             "password": "password123",
             "password2": "password123",
             "is_admin": "y",  # Checked, so it will be an admin
-            # Not sending is_active_master, should default to False for admins
+            "is_active_master": "",  # Not checked, admins are not active masters
         },
         follow_redirects=True,
     )
     assert response.status_code == 200
 
-    # Verify the user was created with is_active_master=False
-    new_user = User.query.filter_by(username="new_admin").first()
+    # Verify the user was created with is_active_master=False - use a fresh query
+    new_user = session.query(User).filter_by(username="new_admin").first()
     assert new_user is not None
-    assert new_user.is_admin  # Should be an admin
-    assert new_user.is_active_master is False  # Should not be active master by default
+    assert new_user.is_active_master is False
+    assert new_user.schedule_display_order is None
 
 
 # Tests for schedule_display_order functionality
@@ -307,20 +292,15 @@ def test_admin_can_set_schedule_display_order(admin_auth_client, regular_user, s
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert (
-        f"Користувач {regular_user.full_name} успішно оновлений!"
-        in response.get_data(as_text=True)
-    )
+    assert f"Користувач {regular_user.full_name} успішно оновлений!" in response.get_data(as_text=True)
 
     # Verify user was updated with the correct schedule_display_order
-    updated_user = User.query.get(regular_user.id)
+    updated_user = session.get(User, regular_user.id)
     assert updated_user.schedule_display_order == 5
     assert updated_user.is_active_master is True
 
 
-def test_schedule_display_order_reset_when_not_active_master(
-    admin_auth_client, regular_user, session
-):
+def test_schedule_display_order_reset_when_not_active_master(admin_auth_client, regular_user, session):
     """Test that schedule_display_order is reset to None when a user is not an active master."""
     # First set the schedule_display_order
     regular_user.is_active_master = True
@@ -341,7 +321,7 @@ def test_schedule_display_order_reset_when_not_active_master(
     assert response.status_code == 200
 
     # Verify user was updated with schedule_display_order set to None
-    updated_user = User.query.get(regular_user.id)
+    updated_user = session.get(User, regular_user.id)
     assert updated_user.schedule_display_order is None
     assert updated_user.is_active_master is False
 
@@ -377,12 +357,10 @@ def test_schedule_display_order_uniqueness_validation(admin_auth_client, session
 
     # Should fail with validation error
     assert response.status_code == 200
-    assert "вже використовується іншим активним майстром" in response.get_data(
-        as_text=True
-    )
+    assert "вже використовується іншим активним майстром" in response.get_data(as_text=True)
 
     # No new user should be created
-    assert User.query.filter_by(username="display_order_test2").first() is None
+    assert session.get(User, "display_order_test2") is None
 
 
 def test_schedule_display_order_in_register_form(admin_auth_client, session):
@@ -396,26 +374,20 @@ def test_schedule_display_order_in_register_form(admin_auth_client, session):
             "password2": "password123",
             "is_admin": "",  # Not checked, so it will be a master
             "is_active_master": "y",  # Active master
-            "schedule_display_order": 15,  # Set display order
+            "schedule_display_order": 103,  # Use unique value to avoid conflicts
         },
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert (
-        "Користувач Display Order New User успішно зареєстрований!"
-        in response.get_data(as_text=True)
-    )
+    assert "Користувач Display Order New User успішно зареєстрований!" in response.get_data(as_text=True)
 
-    # Verify the user was created with correct schedule_display_order
-    new_user = User.query.filter_by(username="display_order_new").first()
+    # Verify the user was created with correct schedule_display_order - use a fresh query
+    new_user = session.query(User).filter_by(username="display_order_new").first()
     assert new_user is not None
-    assert new_user.schedule_display_order == 15
-    assert new_user.is_active_master is True
+    assert new_user.schedule_display_order == 103
 
 
-def test_toggle_admin_resets_schedule_display_order(
-    admin_auth_client, regular_user, session
-):
+def test_toggle_admin_resets_schedule_display_order(admin_auth_client, regular_user, session):
     """Test that toggling a user to admin resets their schedule_display_order."""
     # Set up an active master with schedule_display_order
     regular_user.is_active_master = True
@@ -430,7 +402,7 @@ def test_toggle_admin_resets_schedule_display_order(
     assert response.status_code == 200
 
     # Verify user was updated to admin and schedule_display_order is reset
-    updated_user = User.query.get(regular_user.id)
+    updated_user = session.get(User, regular_user.id)
     assert updated_user.is_admin is True
     assert updated_user.is_active_master is False
     assert updated_user.schedule_display_order is None

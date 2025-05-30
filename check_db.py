@@ -7,13 +7,17 @@ import sys
 from datetime import datetime
 
 
-def check_database(db_path):
+def check_database(db_path: str) -> None:
     """
     Перевіряє структуру бази даних SQLite.
 
     :param db_path: Шлях до файлу бази даних SQLite
     """
+    conn = None
     try:
+        print(f"Перевірка бази даних: {db_path}")
+        print(f"Час: {datetime.now()}")
+
         # Підключення до бази даних
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -30,9 +34,7 @@ def check_database(db_path):
             columns = cursor.fetchall()
             print("\nКолонки таблиці appointment:")
             for column in columns:
-                print(
-                    f"- {column[1]} ({column[2]}), NotNull: {column[3]}, DefaultValue: {column[4]}"
-                )
+                print(f"- {column[1]} ({column[2]}), NotNull: {column[3]}, DefaultValue: {column[4]}")
 
             # Перевірка наявності конкретних колонок
             column_names = [column[1] for column in columns]
@@ -45,10 +47,11 @@ def check_database(db_path):
 
         # Закриття з'єднання
         conn.close()
+        print("\nПеревірка завершена успішно!")
 
     except Exception as e:
         print(f"Помилка при перевірці бази даних: {e}")
-        if "conn" in locals():
+        if conn is not None:
             conn.close()
         sys.exit(1)
 
@@ -56,7 +59,5 @@ def check_database(db_path):
 if __name__ == "__main__":
     # Використання аргументу командного рядка як шляху до бази даних або значення за замовчуванням
     db_path = sys.argv[1] if len(sys.argv) > 1 else "instance/beauty_salon.db"
-    print(f"Перевірка бази даних: {db_path}")
-    print(f"Час: {datetime.now()}")
 
     check_database(db_path)

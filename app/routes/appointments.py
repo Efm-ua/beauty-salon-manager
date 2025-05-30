@@ -129,6 +129,10 @@ def index() -> str:
 
     if not current_user.is_admin:
         query = query.filter(Appointment.master_id == current_user.id)
+    else:
+        # Додаємо фільтрацію за майстром для адміністраторів, якщо вказано
+        if filter_master:
+            query = query.filter(Appointment.master_id == filter_master)
 
     # Отримання записів
     appointments = query.order_by(Appointment.start_time).all()

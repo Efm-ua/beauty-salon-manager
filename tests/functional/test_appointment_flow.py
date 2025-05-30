@@ -3,9 +3,7 @@ from datetime import date, datetime, time, timedelta
 from flask import url_for
 
 
-def test_appointment_complete_flow(
-    session, client, test_client, test_service, regular_user, additional_service, db
-):
+def test_appointment_complete_flow(session, client, test_client, test_service, regular_user, additional_service, db):
     """
     Tests a complete appointment flow from creation to completion.
 
@@ -91,11 +89,7 @@ def test_appointment_complete_flow(
         appointment_service = AppointmentService(
             appointment_id=appointment.id,
             service_id=test_service.id,
-            price=(
-                float(test_service.base_price)
-                if test_service.base_price is not None
-                else 100.0
-            ),
+            price=(float(test_service.base_price) if test_service.base_price is not None else 100.0),
             notes="",
         )
         session.add(appointment_service)
@@ -149,9 +143,7 @@ def test_appointment_complete_flow(
         appointment_id=appointment_id,
         service_id=new_service_id,
     ).first()
-    assert (
-        added_service is not None
-    ), "Additional service was not added to the appointment"
+    assert added_service is not None, "Additional service was not added to the appointment"
     assert added_service.price == 75.50
     assert added_service.notes == "Additional service notes"
 
@@ -160,9 +152,7 @@ def test_appointment_complete_flow(
         appointment_id=appointment_id,
         service_id=test_service.id,
     ).first()
-    assert (
-        original_service is not None
-    ), "Original appointment service not found in database"
+    assert original_service is not None, "Original appointment service not found in database"
     service_id = original_service.id
 
     # Update the price of the original service
@@ -195,24 +185,18 @@ def test_appointment_complete_flow(
         session.refresh(appointment)
 
     # Verify the status was updated in the database
-    assert (
-        appointment.status == "completed"
-    ), "Appointment status was not updated to completed"
+    assert appointment.status == "completed", "Appointment status was not updated to completed"
 
     # Перевірка, що тип оплати також збережено
     assert appointment.payment_method == PaymentMethod.CASH
 
     # Calculate and verify total price
-    appointment_services = AppointmentService.query.filter_by(
-        appointment_id=appointment_id
-    ).all()
+    appointment_services = AppointmentService.query.filter_by(appointment_id=appointment_id).all()
     total_price = sum(service.price for service in appointment_services)
     assert total_price == 120.00 + 75.50, "Total price calculation is incorrect"
 
 
-def test_appointment_filtering(
-    session, client, test_client, test_service, regular_user, db
-):
+def test_appointment_filtering(session, client, test_client, test_service, regular_user, db):
     """
     Tests appointment filtering functionality.
 
@@ -335,9 +319,7 @@ def test_appointment_filtering(
         notes="Tomorrow's filter test appointment",
     ).first()
 
-    assert (
-        tomorrow_appointment is not None
-    ), "Tomorrow's appointment not found in database"
+    assert tomorrow_appointment is not None, "Tomorrow's appointment not found in database"
     assert tomorrow_appointment.start_time.strftime("%H:%M") == "11:00"
 
     # Calculate expected end_time for tomorrow's appointment
@@ -350,35 +332,21 @@ def test_appointment_filtering(
 
     # Query appointments by date and verify filtering works
     today_appointments = Appointment.query.filter_by(date=today).all()
-    assert (
-        today_appointment in today_appointments
-    ), "Today's appointment not found in filtered results"
-    assert (
-        tomorrow_appointment not in today_appointments
-    ), "Tomorrow's appointment found in today's filtered results"
+    assert today_appointment in today_appointments, "Today's appointment not found in filtered results"
+    assert tomorrow_appointment not in today_appointments, "Tomorrow's appointment found in today's filtered results"
 
     # Query appointments by tomorrow's date
     tomorrow_appointments = Appointment.query.filter_by(date=tomorrow).all()
-    assert (
-        tomorrow_appointment in tomorrow_appointments
-    ), "Tomorrow's appointment not found in filtered results"
-    assert (
-        today_appointment not in tomorrow_appointments
-    ), "Today's appointment found in tomorrow's filtered results"
+    assert tomorrow_appointment in tomorrow_appointments, "Tomorrow's appointment not found in filtered results"
+    assert today_appointment not in tomorrow_appointments, "Today's appointment found in tomorrow's filtered results"
 
     # Query appointments by master
     master_appointments = Appointment.query.filter_by(master_id=regular_user.id).all()
-    assert (
-        today_appointment in master_appointments
-    ), "Today's appointment not found in master's appointments"
-    assert (
-        tomorrow_appointment in master_appointments
-    ), "Tomorrow's appointment not found in master's appointments"
+    assert today_appointment in master_appointments, "Today's appointment not found in master's appointments"
+    assert tomorrow_appointment in master_appointments, "Tomorrow's appointment not found in master's appointments"
 
 
-def test_appointment_pricing(
-    session, client, test_client, test_service, regular_user, haircut_service, db
-):
+def test_appointment_pricing(session, client, test_client, test_service, regular_user, haircut_service, db):
     """
     Tests appointment pricing functionality.
 
@@ -446,12 +414,8 @@ def test_appointment_pricing(
     from app.models import Service
 
     # Create two additional services directly in the database (instead of using POST)
-    styling_service = Service(
-        name="Styling", description="Service for styling test", duration=15
-    )
-    coloring_service = Service(
-        name="Hair Coloring", description="Service for coloring test", duration=60
-    )
+    styling_service = Service(name="Styling", description="Service for styling test", duration=15)
+    coloring_service = Service(name="Hair Coloring", description="Service for coloring test", duration=60)
     session.add(styling_service)
     session.add(coloring_service)
     session.commit()
@@ -475,19 +439,11 @@ def test_appointment_pricing(
         )
 
         # Verify service was added with correct price
-        added_service = AppointmentService.query.filter_by(
-            appointment_id=appointment_id, service_id=service.id
-        ).first()
+        added_service = AppointmentService.query.filter_by(appointment_id=appointment_id, service_id=service.id).first()
 
-        assert (
-            added_service is not None
-        ), f"Service {service.name} was not added to appointment"
-        assert (
-            added_service.price == service_prices[i]
-        ), f"Price for {service.name} is incorrect"
-        assert (
-            added_service.notes == f"Price test service {i+1}"
-        ), f"Notes for {service.name} are incorrect"
+        assert added_service is not None, f"Service {service.name} was not added to appointment"
+        assert added_service.price == service_prices[i], f"Price for {service.name} is incorrect"
+        assert added_service.notes == f"Price test service {i+1}", f"Notes for {service.name} are incorrect"
 
     # Find the original service (the one added during appointment creation)
     original_service = AppointmentService.query.filter_by(
@@ -501,9 +457,7 @@ def test_appointment_pricing(
     total_price = original_price + sum(service_prices)
 
     # Get all services and verify total
-    all_services = AppointmentService.query.filter_by(
-        appointment_id=appointment_id
-    ).all()
+    all_services = AppointmentService.query.filter_by(appointment_id=appointment_id).all()
     assert len(all_services) == 4, "Expected 4 services (original + 3 added)"
 
     calculated_total = sum(service.price for service in all_services)
@@ -512,14 +466,10 @@ def test_appointment_pricing(
     ), f"Total price calculation incorrect. Expected {total_price}, got {calculated_total}"
 
     # Verify appointment's get_total_price method works correctly
-    assert (
-        appointment.get_total_price() == total_price
-    ), "Appointment.get_total_price() calculated incorrectly"
+    assert appointment.get_total_price() == total_price, "Appointment.get_total_price() calculated incorrectly"
 
 
-def test_appointment_redirect_to_schedule_date(
-    session, client, test_client, regular_user, test_service, db
-):
+def test_appointment_redirect_to_schedule_date(session, client, test_client, regular_user, test_service, db):
     """
     Tests that appointments created from the schedule view redirect back to the schedule view
     with the same date as the appointment.
@@ -558,9 +508,7 @@ def test_appointment_redirect_to_schedule_date(
     assert f"date={future_date}" in redirect_location
 
 
-def test_appointment_form_uses_date_parameter(
-    session, client, test_client, regular_user, test_service, db
-):
+def test_appointment_form_uses_date_parameter(session, client, test_client, regular_user, test_service, db):
     """
     Tests that the appointment creation form uses the date parameter from the URL.
 
@@ -705,14 +653,10 @@ def test_appointment_back_to_schedule_button_includes_date(
     # Extract the href attribute of the "Back to schedule" button using regex or other means
     # For simplicity, we'll just check if the HTML contains the correct URL
     href_content = f'href="{url_for("main.schedule")}?date={formatted_date}"'
-    assert (
-        href_content in response.text or href_content.replace('"', "'") in response.text
-    )
+    assert href_content in response.text or href_content.replace('"', "'") in response.text
 
 
-def test_appointment_edit_redirect(
-    session, client, test_client, regular_user, admin_user, test_service, db
-):
+def test_appointment_edit_redirect(session, client, test_client, regular_user, admin_user, test_service, db):
     """
     Tests that appointment edit works correctly and redirects to the appropriate page.
     """
@@ -786,21 +730,19 @@ def test_appointment_edit_redirect(
 
     # Check redirect to appointment view
     assert response.status_code == 302
-    print(
-        f"DEBUG TEST test_appointment_edit_redirect: Normal edit redirect location = {response.headers['Location']}"
-    )
+    print(f"DEBUG TEST test_appointment_edit_redirect: Normal edit redirect location = {response.headers['Location']}")
     assert f"/appointments/{appointment.id}" in response.headers["Location"]
 
     # Get the edit form with from_schedule parameter to extract CSRF token
     response = client.get(f"/appointments/{appointment.id}/edit?from_schedule=1")
-    print(
-        f"DEBUG TEST test_appointment_edit_redirect: from_schedule URL = /appointments/{appointment.id}/edit?from_schedule=1"
-    )
+    debug_url = f"/appointments/{appointment.id}/edit?from_schedule=1"
+    print(f"DEBUG TEST test_appointment_edit_redirect: from_schedule URL = {debug_url}")
 
     # Додаємо вивод всіх форм в сторінці редагування
     for input_field in response.text.split("<input"):
         if "name=" in input_field:
-            print(f"Form field: {input_field.split('>')[0]}")
+            field_content = input_field.split(">")[0]
+            print(f"Form field: {field_content}")
 
     # Update the appointment again, but from schedule view
     response = client.post(
@@ -822,9 +764,7 @@ def test_appointment_edit_redirect(
     # Should redirect to schedule with date
     assert response.status_code == 302
     actual_redirect_location = response.headers["Location"]
-    print(
-        f"DEBUG TEST test_appointment_edit_redirect: Actual redirect location = {actual_redirect_location}"
-    )
+    print(f"DEBUG TEST test_appointment_edit_redirect: Actual redirect location = {actual_redirect_location}")
 
     # Відновлюємо правильну перевірку - повинен перенаправляти на /schedule з датою
     assert "/schedule" in actual_redirect_location

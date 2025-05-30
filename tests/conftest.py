@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash
 
 from app import create_app
 from app.config import Config
-from app.models import Appointment, AppointmentService, Client, Service, User
+from app.models import Appointment, AppointmentService, Brand, Client, Product, Service, StockLevel, User
 from app.models import db as _db
 
 
@@ -35,9 +35,7 @@ def app():
         "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
         "WTF_CSRF_ENABLED": False,
         "SECRET_KEY": "test-secret-key",
-        "UPLOAD_FOLDER": os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "uploads"
-        ),
+        "UPLOAD_FOLDER": os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads"),
     }
     app = create_app(test_config=test_config)
 
@@ -85,9 +83,7 @@ def session(db):  # 'db' - це екземпляр Flask-SQLAlchemy
     connection = db.engine.connect()
     transaction = connection.begin()
 
-    configured_session_factory = db.sessionmaker(
-        bind=connection, expire_on_commit=False
-    )
+    configured_session_factory = db.sessionmaker(bind=connection, expire_on_commit=False)
 
     original_factory = db.session.session_factory
     db.session.session_factory = configured_session_factory
@@ -339,31 +335,21 @@ def admin_auth_client(client, admin_user):
         data={"username": admin_user.username, "password": "admin_password"},
         follow_redirects=True,
     )
-    print(
-        f"DEBUG admin_auth_client: Login response status code: {response.status_code}"
-    )
+    print(f"DEBUG admin_auth_client: Login response status code: {response.status_code}")
     print(f"DEBUG admin_auth_client: Login response data: {response.data[:100]}")
 
     # Додаємо перевірку GET-запиту до кореневого URL для визначення поточного користувача
     test_response = client.get("/")
-    print(
-        f"DEBUG admin_auth_client: Test GET response status: {test_response.status_code}"
-    )
-    print(
-        f"DEBUG admin_auth_client: Is 'Вийти' in response: {'Вийти' in test_response.text}"
-    )
+    print(f"DEBUG admin_auth_client: Test GET response status: {test_response.status_code}")
+    print(f"DEBUG admin_auth_client: Is 'Вийти' in response: {'Вийти' in test_response.text}")
 
     # Перевірка успішності автентифікації
-    assert (
-        response.status_code == 200
-    ), f"Login failed: status code {response.status_code}"
+    assert response.status_code == 200, f"Login failed: status code {response.status_code}"
 
     # Перевірка наявності ознак успішного входу в систему
     # 1. Перевірка наявності елементу, який видно тільки після входу (посилання на вихід)
     logout_path = "/auth/logout"
-    assert (
-        logout_path in response.text
-    ), f"Login failed: Logout link not found in response for {admin_user.username}"
+    assert logout_path in response.text, f"Login failed: Logout link not found in response for {admin_user.username}"
 
     # 2. Перевірка наявності імені адміністратора у відповіді
     assert (

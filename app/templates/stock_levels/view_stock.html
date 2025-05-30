@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="fas fa-warehouse me-2"></i>Залишки товарів</h2>
+            <a href="{{ url_for('products.index') }}" class="btn btn-outline-primary">
+                <i class="fas fa-box me-2"></i>Каталог товарів
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Пошук та фільтри -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('products.stock_levels') }}">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="search" class="form-label">Пошук</label>
+                    <input type="text" name="search" class="form-control" id="search" 
+                           value="{{ search }}" placeholder="Назва, SKU або бренд...">
+                </div>
+                <div class="col-md-3">
+                    <label for="brand" class="form-label">Бренд</label>
+                    <select name="brand" class="form-select" id="brand">
+                        <option value="0">Всі бренди</option>
+                        {% for brand in brands %}
+                        <option value="{{ brand.id }}" {% if brand_filter == brand.id %}selected{% endif %}>
+                            {{ brand.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="low_stock" class="form-label">Фільтр</label>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="low_stock" id="low_stock" 
+                               value="true" {% if low_stock %}checked{% endif %}>
+                        <label class="form-check-label" for="low_stock">
+                            Тільки низькі залишки
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-outline-primary">
+                            <i class="fas fa-search me-2"></i>Знайти
+                        </button>
+                        <a href="{{ url_for('products.stock_levels') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Очистити
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if stock_data.items %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-primary">
+                    <tr>
+                        <th>SKU</th>
+                        <th>Назва товару</th>
+                        <th>Бренд</th>
+                        <th>Об'єм/Вага</th>
+                        <th>Поточний залишок</th>
+                        <th>Мін. рівень</th>
+                        <th>Статус</th>
+                        <th>Остання оновлення</th>
+                        {% if current_user.is_admin %}
+                        <th width="120">Дії</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product, stock_level, brand in stock_data.items %}
+                    <tr {% if stock_level.quantity <= product.min_stock_level %}class="table-warning"{% endif %}>
+                        <td>
+                            <code>{{ product.sku }}</code>
+                        </td>
+                        <td>
+                            <strong>{{ product.name }}</strong>
+                            {% if product.description %}
+                            <br><small class="text-muted">{{ product.description[:40] }}{% if product.description|length > 40 %}...{% endif %}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ brand.name }}</span>
+                        </td>
+                        <td>
+                            {% if product.volume_value and product.volume_unit %}
+                            {{ product.volume_value }} {{ product.volume_unit }}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {% if stock_level.quantity <= product.min_stock_level %}
+                                <span class="badge bg-danger me-2">{{ stock_level.quantity }}</span>
+                                <i class="fas fa-exclamation-triangle text-danger" title="Критично низький залишок"></i>
+                                {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+                                <span class="badge bg-warning me-2">{{ stock_level.quantity }}</span>
+                                <i class="fas fa-exclamation-circle text-warning" title="Низький залишок"></i>
+                                {% else %}
+                                <span class="badge bg-success">{{ stock_level.quantity }}</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ product.min_stock_level }}</small>
+                        </td>
+                        <td>
+                            {% if stock_level.quantity <= product.min_stock_level %}
+                            <span class="badge bg-danger">Критично низький</span>
+                            {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+                            <span class="badge bg-warning text-dark">Низький</span>
+                            {% elif stock_level.quantity == 0 %}
+                            <span class="badge bg-secondary">Відсутній</span>
+                            {% else %}
+                            <span class="badge bg-success">Достатній</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {{ stock_level.last_updated.strftime('%d.%m.%Y %H:%M') if stock_level.last_updated else 'Ніколи' }}
+                            </small>
+                        </td>
+                        {% if current_user.is_admin %}
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{{ url_for('products.view', id=product.id) }}" 
+                                   class="btn btn-sm btn-outline-info" title="Переглянути товар">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('products.edit', id=product.id) }}" 
+                                   class="btn btn-sm btn-outline-warning" title="Редагувати товар">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Пагінація -->
+        {% if stock_data.pages > 1 %}
+        <nav aria-label="Пагінація залишків">
+            <ul class="pagination justify-content-center">
+                {% if stock_data.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('products.stock_levels', page=stock_data.prev_num, search=search, brand=brand_filter, low_stock=low_stock) }}">
+                        <i class="fas fa-chevron-left"></i> Попередня
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for page_num in stock_data.iter_pages() %}
+                {% if page_num %}
+                {% if page_num != stock_data.page %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('products.stock_levels', page=page_num, search=search, brand=brand_filter, low_stock=low_stock) }}">{{ page_num }}</a>
+                </li>
+                {% else %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                </li>
+                {% endif %}
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">…</span>
+                </li>
+                {% endif %}
+                {% endfor %}
+
+                {% if stock_data.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('products.stock_levels', page=stock_data.next_num, search=search, brand=brand_filter, low_stock=low_stock) }}">
+                        Наступна <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-warehouse fa-3x text-muted mb-3"></i>
+            <h4 class="text-muted">Дані про залишки не знайдено</h4>
+            {% if search or brand_filter or low_stock %}
+            <p class="text-muted">Спробуйте змінити критерії пошуку або очистити фільтри.</p>
+            <a href="{{ url_for('products.stock_levels') }}" class="btn btn-outline-primary">
+                <i class="fas fa-times me-2"></i>Очистити фільтри
+            </a>
+            {% else %}
+            <p class="text-muted">Спочатку створіть товари в каталозі.</p>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('products.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Додати товар
+            </a>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col">
+        <small class="text-muted">
+            Загалом записів: {{ stock_data.total }}
+            {% if stock_data.pages > 1 %}
+            | Сторінка {{ stock_data.page }} з {{ stock_data.pages }}
+            {% endif %}
+        </small>
+    </div>
+</div>
+
+<!-- Статистика -->
+{% if stock_data.items %}
+<div class="row mt-4">
+    <div class="col">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h6 class="card-title mb-3"><i class="fas fa-chart-pie me-2"></i>Статистика залишків</h6>
+                <div class="row text-center">
+                    {% set critical_count = stock_data.items | selectattr('1.quantity', 'le', 0) | list | length %}
+                    {% set low_count = stock_data.items | selectattr('1.quantity', 'le', stock_data.items[0][0].min_stock_level) | list | length %}
+                    {% set adequate_count = stock_data.items | length - low_count %}
+                    
+                    <div class="col-md-3">
+                        <div class="h4 text-danger mb-1">{{ critical_count }}</div>
+                        <small class="text-muted">Відсутні на складі</small>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="h4 text-warning mb-1">{{ low_count - critical_count }}</div>
+                        <small class="text-muted">Низькі залишки</small>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="h4 text-success mb-1">{{ adequate_count }}</div>
+                        <small class="text-muted">Достатні залишки</small>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="h4 text-info mb-1">{{ stock_data.items | length }}</div>
+                        <small class="text-muted">Всього товарів</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Легенда -->
+<div class="row mt-3">
+    <div class="col">
+        <div class="card bg-light">
+            <div class="card-body py-2">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-2"></i>Легенда статусів:
+                    <span class="badge bg-danger ms-2">Критично низький (≤ мін. рівень)</span>
+                    <span class="badge bg-warning text-dark ms-1">Низький (≤ 2×мін. рівень)</span>
+                    <span class="badge bg-success ms-1">Достатній</span>
+                    <span class="badge bg-secondary ms-1">Відсутній (0)</span>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

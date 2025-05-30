@@ -1,0 +1,175 @@
+{% extends "base.html" %} {% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <a href="{{ url_for('products.index') }}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-2"></i>Назад до каталогу
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0">
+      <i class="fas fa-plus me-2"></i>Додавання нового товару
+    </h5>
+  </div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('products.create') }}">
+      {{ form.hidden_tag() }}
+
+      <div class="row">
+        <div class="col-md-6">
+          <div class="mb-3">
+            {{ form.name.label(class="form-label") }} {% if form.name.errors %}
+            {{ form.name(class="form-control is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.name.errors %} {{ error }} {% endfor %}
+            </div>
+            {% else %} {{ form.name(class="form-control") }} {% endif %}
+            <small class="form-text text-muted">Повна назва товару</small>
+          </div>
+
+          <div class="mb-3">
+            {{ form.brand_id.label(class="form-label") }} {% if
+            form.brand_id.errors %} {{ form.brand_id(class="form-select
+            is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.brand_id.errors %} {{ error }} {% endfor %}
+            </div>
+            {% else %} {{ form.brand_id(class="form-select") }} {% endif %}
+            <small class="form-text text-muted">
+              Оберіть бренд товару.
+              <a href="{{ url_for('products.brands_create') }}" target="_blank"
+                >Додати новий бренд</a
+              >
+            </small>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                {{ form.volume_value.label(class="form-label") }} {% if
+                form.volume_value.errors %} {{
+                form.volume_value(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                  {% for error in form.volume_value.errors %} {{ error }} {%
+                  endfor %}
+                </div>
+                {% else %} {{ form.volume_value(class="form-control") }} {%
+                endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                {{ form.volume_unit.label(class="form-label") }} {% if
+                form.volume_unit.errors %} {{
+                form.volume_unit(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                  {% for error in form.volume_unit.errors %} {{ error }} {%
+                  endfor %}
+                </div>
+                {% else %} {{ form.volume_unit(class="form-control") }} {% endif
+                %}
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            {{ form.description.label(class="form-label") }} {% if
+            form.description.errors %} {{ form.description(class="form-control
+            is-invalid", rows=3) }}
+            <div class="invalid-feedback">
+              {% for error in form.description.errors %} {{ error }} {% endfor
+              %}
+            </div>
+            {% else %} {{ form.description(class="form-control", rows=3) }} {%
+            endif %}
+            <small class="form-text text-muted"
+              >Детальний опис товару (необов'язково)</small
+            >
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="mb-3">
+            {{ form.min_stock_level.label(class="form-label") }} {% if
+            form.min_stock_level.errors %} {{
+            form.min_stock_level(class="form-control is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.min_stock_level.errors %} {{ error }} {%
+              endfor %}
+            </div>
+            {% else %} {{ form.min_stock_level(class="form-control") }} {% endif
+            %}
+            <small class="form-text text-muted"
+              >Мінімальна кількість для сповіщення про дефіцит</small
+            >
+          </div>
+
+          <div class="mb-3">
+            {{ form.current_sale_price.label(class="form-label") }} {% if
+            form.current_sale_price.errors %} {{
+            form.current_sale_price(class="form-control is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.current_sale_price.errors %} {{ error }} {%
+              endfor %}
+            </div>
+            {% else %} {{ form.current_sale_price(class="form-control") }} {%
+            endif %}
+            <small class="form-text text-muted"
+              >Ціна продажу в гривнях (необов'язково)</small
+            >
+          </div>
+
+          <div class="mb-3">
+            {{ form.last_cost_price.label(class="form-label") }} {% if
+            form.last_cost_price.errors %} {{
+            form.last_cost_price(class="form-control is-invalid") }}
+            <div class="invalid-feedback">
+              {% for error in form.last_cost_price.errors %} {{ error }} {%
+              endfor %}
+            </div>
+            {% else %} {{ form.last_cost_price(class="form-control") }} {% endif
+            %}
+            <small class="form-text text-muted"
+              >Остання собівартість в гривнях (необов'язково)</small
+            >
+          </div>
+
+          <div class="alert alert-info">
+            <h6><i class="fas fa-info-circle me-2"></i>Автоматичні дії</h6>
+            <ul class="mb-0">
+              <li>
+                SKU буде згенеровано автоматично на основі назви бренду та
+                товару
+              </li>
+              <li>Запис залишків буде створено автоматично з кількістю 0</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-grid">{{ form.submit(class="btn btn-primary") }}</div>
+    </form>
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col">
+    <div class="card bg-light">
+      <div class="card-body">
+        <h6 class="card-title"><i class="fas fa-lightbulb me-2"></i>Поради</h6>
+        <ul class="mb-0">
+          <li>Використовуйте зрозумілі та описові назви товарів</li>
+          <li>Вказуйте об'єм/вагу для кращої ідентифікації товару</li>
+          <li>
+            Встановлюйте реалістичні мінімальні рівні запасів для своєчасного
+            поповнення
+          </li>
+          <li>Ціни можна встановити пізніше або змінити в будь-який час</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

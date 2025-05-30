@@ -63,7 +63,7 @@ def salary_report() -> str:
         form.master_id.render_kw = {"disabled": "disabled"}
 
     appointments = []
-    total_services_cost = 0
+    total_services_cost = 0.0
     selected_date = None
     selected_master = None
 
@@ -135,7 +135,7 @@ def financial_report() -> str:
     if not current_user.is_admin:
         error_message = "Тільки адміністратори мають доступ до цього звіту"
 
-    total_amount = 0
+    total_amount = 0.0
     payment_breakdown = []
     selected_date = None
 

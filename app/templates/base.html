@@ -70,6 +70,43 @@
               <a
                 class="nav-link dropdown-toggle"
                 href="#"
+                id="inventoryDropdown"
+                role="button"
+                data-bs-toggle="dropdown"
+              >
+                <i class="fas fa-boxes me-1"></i>Інвентар
+              </a>
+              <ul class="dropdown-menu">
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('products.index') }}"
+                  >
+                    <i class="fas fa-bottle-water me-1"></i>Товари
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('products.brands_list') }}"
+                  >
+                    <i class="fas fa-tags me-1"></i>Бренди
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('products.stock_levels') }}"
+                  >
+                    <i class="fas fa-warehouse me-1"></i>Склад
+                  </a>
+                </li>
+              </ul>
+            </li>
+            <li class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle"
+                href="#"
                 id="reportsDropdown"
                 role="button"
                 data-bs-toggle="dropdown"

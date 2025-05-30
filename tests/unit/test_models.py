@@ -7,8 +7,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User)
+from app.models import Appointment, AppointmentService, Client, PaymentMethod, Service, User
 
 
 class TestUserModel:
@@ -85,9 +84,7 @@ class TestUserModel:
 
         # Перевіряємо, що is_active_master за замовчуванням True для майстра
         saved_user = session.query(User).filter_by(username=username).first()
-        assert hasattr(
-            saved_user, "is_active_master"
-        ), "User model doesn't have is_active_master attribute"
+        assert hasattr(saved_user, "is_active_master"), "User model doesn't have is_active_master attribute"
         assert saved_user.is_active_master is True
 
     def test_new_admin_default_is_inactive(self, session):
@@ -106,9 +103,7 @@ class TestUserModel:
 
         # Перевіряємо, що is_active_master за замовчуванням False для адміністратора
         saved_user = session.query(User).filter_by(username=username).first()
-        assert hasattr(
-            saved_user, "is_active_master"
-        ), "User model doesn't have is_active_master attribute"
+        assert hasattr(saved_user, "is_active_master"), "User model doesn't have is_active_master attribute"
         assert saved_user.is_active_master is False
 
     def test_user_can_toggle_is_active_master(self, session):
@@ -157,9 +152,7 @@ class TestClientModel:
         saved_client = session.query(Client).filter_by(phone=client.phone).first()
         assert saved_client is not None
         assert saved_client.id is not None
-        assert (
-            saved_client.created_at is not None
-        )  # Перевірка автоматичного створення timestamp
+        assert saved_client.created_at is not None  # Перевірка автоматичного створення timestamp
 
     def test_client_attributes(self, test_client):
         """Тест перевірки атрибутів клієнта"""
@@ -288,9 +281,7 @@ class TestAppointmentModel:
 
         # Перевірка, що запис збережено в базі даних
         saved_appointment = (
-            session.query(Appointment)
-            .filter_by(client_id=test_client.id, date=date(2023, 5, 15))
-            .first()
+            session.query(Appointment).filter_by(client_id=test_client.id, date=date(2023, 5, 15)).first()
         )
         assert saved_appointment is not None
         assert saved_appointment.id is not None
@@ -315,9 +306,7 @@ class TestAppointmentModel:
         assert test_appointment.amount_paid is None
         assert test_appointment.payment_method is None
 
-    def test_appointment_relationships(
-        self, test_appointment, test_client, regular_user
-    ):
+    def test_appointment_relationships(self, test_appointment, test_client, regular_user):
         """Тест перевірки зв'язків запису з клієнтом та майстром"""
         assert test_appointment.client_id == test_client.id
         assert test_appointment.master_id == regular_user.id
@@ -361,12 +350,8 @@ class TestAppointmentModel:
 
         # Перевірка з пустим списком послуг (новий запис)
         # Create a new client and user for this empty appointment if necessary, or use existing test_client/regular_user
-        client_for_empty = Client.query.first() or Client(
-            name="Empty Client", phone="0000000000"
-        )
-        master_for_empty = User.query.first() or User(
-            username="empty_master", password="pwd", full_name="Empty Master"
-        )
+        client_for_empty = Client.query.first() or Client(name="Empty Client", phone="0000000000")
+        master_for_empty = User.query.first() or User(username="empty_master", password="pwd", full_name="Empty Master")
         if not client_for_empty.id:
             session.add(client_for_empty)
         if not master_for_empty.id:
@@ -447,17 +432,13 @@ class TestAppointmentModel:
         appointment.amount_paid = 0.0
         appointment.update_payment_status()
         # Якщо ціна 0, і сплачено 0, то вважається оплаченим
-        assert (
-            appointment.payment_status == "paid"
-        )  # Based on Appointment.update_payment_status logic
+        assert appointment.payment_status == "paid"  # Based on Appointment.update_payment_status logic
 
         # Сценарій 7: discounted_price = 0, amount_paid = None (безкоштовно, але сума не вказана)
         appointment.amount_paid = None
         appointment.update_payment_status()
         # Якщо ціна 0 і сума не вказана, то unpaid.
-        assert (
-            appointment.payment_status == "unpaid"
-        )  # Based on Appointment.update_payment_status logic
+        assert appointment.payment_status == "unpaid"  # Based on Appointment.update_payment_status logic
 
     def test_get_total_price_with_custom_service_prices(self, session):
         """Тест методу get_total_price для запису з індивідуальними цінами послуг"""
@@ -518,11 +499,7 @@ class TestAppointmentModel:
         session.commit()
         session.refresh(appointment)
 
-        expected_discounted = (
-            Decimal(str(expected_total))
-            * (Decimal("100") - discount_percentage)
-            / Decimal("100")
-        )
+        expected_discounted = Decimal(str(expected_total)) * (Decimal("100") - discount_percentage) / Decimal("100")
         actual_discounted = appointment.get_discounted_price()
 
         # Порівнюємо з невеликою похибкою через перетворення float в Decimal
@@ -559,7 +536,7 @@ class TestAppointmentServiceModel:
         session.commit()
 
         # Перевіряємо, що ціна змінилася
-        updated_service = session.query(AppointmentService).get(appointment_service.id)
+        updated_service = session.get(AppointmentService, appointment_service.id)
         assert updated_service.price == 120.0
 
         # Перевіряємо, що загальна сума запису оновилася
@@ -598,7 +575,7 @@ class TestAppointmentServiceModel:
         assert saved_service.notes == "Another service in appointment"
 
         # Перевіряємо, що послуга додана до запису
-        updated_appointment = session.query(Appointment).get(test_appointment.id)
+        updated_appointment = session.get(Appointment, test_appointment.id)
         assert len(updated_appointment.services) > 1  # Має бути більше однієї послуги
 
 

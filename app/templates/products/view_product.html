@@ -1,0 +1,249 @@
+{% extends "base.html" %} {% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <div class="d-flex justify-content-between align-items-center">
+      <a href="{{ url_for('products.index') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Назад до каталогу
+      </a>
+      {% if current_user.is_admin %}
+      <div class="btn-group">
+        <a
+          href="{{ url_for('products.edit', id=product.id) }}"
+          class="btn btn-outline-warning"
+        >
+          <i class="fas fa-edit me-2"></i>Редагувати
+        </a>
+        <form
+          method="POST"
+          action="{{ url_for('products.delete', id=product.id) }}"
+          class="d-inline"
+          onsubmit="return confirm('Ви впевнені, що хочете видалити цей товар?')"
+        >
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button type="submit" class="btn btn-outline-danger">
+            <i class="fas fa-trash me-2"></i>Видалити
+          </button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-8">
+    <!-- Основна інформація про товар -->
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-cube me-2"></i>{{ product.name }}</h5>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <dl class="row">
+              <dt class="col-sm-4">SKU:</dt>
+              <dd class="col-sm-8"><code>{{ product.sku }}</code></dd>
+
+              <dt class="col-sm-4">Бренд:</dt>
+              <dd class="col-sm-8">
+                <span class="badge bg-secondary fs-6"
+                  >{{ product.brand.name }}</span
+                >
+              </dd>
+
+              <dt class="col-sm-4">Об'єм/Вага:</dt>
+              <dd class="col-sm-8">
+                {% if product.volume_value and product.volume_unit %} {{
+                product.volume_value }} {{ product.volume_unit }} {% else %}
+                <span class="text-muted">Не вказано</span>
+                {% endif %}
+              </dd>
+
+              <dt class="col-sm-4">Створено:</dt>
+              <dd class="col-sm-8">
+                {{ product.created_at.strftime('%d.%m.%Y %H:%M') }}
+              </dd>
+            </dl>
+          </div>
+          <div class="col-md-6">
+            <dl class="row">
+              <dt class="col-sm-5">Ціна продажу:</dt>
+              <dd class="col-sm-7">
+                {% if product.current_sale_price %}
+                <strong class="text-success"
+                  >{{ "%.2f"|format(product.current_sale_price) }} грн</strong
+                >
+                {% else %}
+                <span class="text-muted">Не встановлено</span>
+                {% endif %}
+              </dd>
+
+              <dt class="col-sm-5">Собівартість:</dt>
+              <dd class="col-sm-7">
+                {% if product.last_cost_price %} {{
+                "%.2f"|format(product.last_cost_price) }} грн {% else %}
+                <span class="text-muted">Не встановлено</span>
+                {% endif %}
+              </dd>
+
+              <dt class="col-sm-5">Мін. рівень:</dt>
+              <dd class="col-sm-7">{{ product.min_stock_level }}</dd>
+
+              {% if product.current_sale_price and product.last_cost_price %}
+              <dt class="col-sm-5">Наценка:</dt>
+              <dd class="col-sm-7">
+                {% set markup = ((product.current_sale_price -
+                product.last_cost_price) / product.last_cost_price * 100) %}
+                <span
+                  class="{% if markup > 50 %}text-success{% elif markup > 20 %}text-warning{% else %}text-danger{% endif %}"
+                >
+                  {{ "%.1f"|format(markup) }}%
+                </span>
+              </dd>
+              {% endif %}
+            </dl>
+          </div>
+        </div>
+
+        {% if product.description %}
+        <hr />
+        <div>
+          <h6><i class="fas fa-align-left me-2"></i>Опис</h6>
+          <p class="text-muted">{{ product.description }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <!-- Інформація про залишки -->
+    <div class="card">
+      <div
+        class="card-header {% if stock_level and stock_level.quantity <= product.min_stock_level %}bg-danger text-white{% else %}bg-info text-white{% endif %}"
+      >
+        <h6 class="mb-0">
+          <i class="fas fa-warehouse me-2"></i>Залишки на складі
+        </h6>
+      </div>
+      <div class="card-body text-center">
+        {% if stock_level %}
+        <div class="display-6 mb-2">
+          {% if stock_level.quantity <= product.min_stock_level %}
+          <span class="text-danger">{{ stock_level.quantity }}</span>
+          {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+          <span class="text-warning">{{ stock_level.quantity }}</span>
+          {% else %}
+          <span class="text-success">{{ stock_level.quantity }}</span>
+          {% endif %}
+        </div>
+        <p class="text-muted mb-2">одиниць в наявності</p>
+
+        {% if stock_level.quantity <= product.min_stock_level %}
+        <div class="alert alert-danger py-2 px-3">
+          <small>
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            Критично низький залишок!
+          </small>
+        </div>
+        {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+        <div class="alert alert-warning py-2 px-3">
+          <small>
+            <i class="fas fa-exclamation-circle me-1"></i>
+            Низький залишок
+          </small>
+        </div>
+        {% endif %}
+
+        <small class="text-muted">
+          Оновлено: {{ stock_level.last_updated.strftime('%d.%m.%Y %H:%M') if
+          stock_level.last_updated else 'Ніколи' }}
+        </small>
+        {% else %}
+        <div class="display-6 mb-2">
+          <span class="text-secondary">0</span>
+        </div>
+        <p class="text-muted">Немає даних про залишки</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Швидкі дії -->
+    {% if current_user.is_admin %}
+    <div class="card mt-3">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-bolt me-2"></i>Швидкі дії</h6>
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          <a
+            href="{{ url_for('products.edit', id=product.id) }}"
+            class="btn btn-outline-warning btn-sm"
+          >
+            <i class="fas fa-edit me-2"></i>Редагувати товар
+          </a>
+          <a
+            href="{{ url_for('products.index', brand=product.brand_id) }}"
+            class="btn btn-outline-info btn-sm"
+          >
+            <i class="fas fa-tags me-2"></i>Всі товари бренду
+          </a>
+          <a
+            href="{{ url_for('products.stock_levels', search=product.sku) }}"
+            class="btn btn-outline-primary btn-sm"
+          >
+            <i class="fas fa-warehouse me-2"></i>Переглянути в залишках
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Статистика -->
+    <div class="card mt-3">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Статистика</h6>
+      </div>
+      <div class="card-body">
+        <div class="row text-center">
+          <div class="col-6">
+            <div class="border-end">
+              <div class="h5 mb-0">0</div>
+              <small class="text-muted">Продажів</small>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="h5 mb-0">0</div>
+            <small class="text-muted">Надходжень</small>
+          </div>
+        </div>
+        <hr class="my-2" />
+        <small class="text-muted">
+          <i class="fas fa-info-circle me-1"></i>
+          Детальна статистика буде доступна в наступних версіях
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Історія операцій (placeholder) -->
+<div class="row mt-4">
+  <div class="col">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0">
+          <i class="fas fa-history me-2"></i>Історія операцій
+        </h6>
+      </div>
+      <div class="card-body text-center text-muted py-4">
+        <i class="fas fa-clock fa-2x mb-3"></i>
+        <p>
+          Історія операцій з товаром буде доступна після реалізації модулів
+          надходжень та продажів.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
