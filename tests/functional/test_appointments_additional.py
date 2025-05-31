@@ -11,15 +11,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from werkzeug.security import generate_password_hash
 
-from app.models import (
-    Appointment,
-    AppointmentService,
-    Client,
-    PaymentMethod,
-    Service,
-    User,
-    db,
-)
+from app.models import Appointment, AppointmentService, Client
+from app.models import PaymentMethod as PaymentMethodModel
+from app.models import PaymentMethodEnum as PaymentMethod
+from app.models import Service, User, db
 
 
 class TestAppointmentValidation:
@@ -66,9 +61,7 @@ class TestAppointmentValidation:
 class TestAppointmentCreationValidation:
     """Тесты валидации создания записей."""
 
-    def test_create_appointment_past_datetime(
-        self, client, admin_user, test_client, test_service
-    ):
+    def test_create_appointment_past_datetime(self, client, admin_user, test_client, test_service):
         """Тест попытки создания записи на прошедшую дату/время."""
         # Логинимся как администратор
         response = client.post(
@@ -100,9 +93,7 @@ class TestAppointmentCreationValidation:
         assert response.status_code == 200
         # Проверяем, что получили сообщение об ошибке или что запись не была создана
 
-    def test_create_appointment_non_admin_form_setup(
-        self, client, regular_user, test_client, test_service
-    ):
+    def test_create_appointment_non_admin_form_setup(self, client, regular_user, test_client, test_service):
         """Тест настройки формы для немастера-администратора."""
         # Логинимся как обычный пользователь
         response = client.post(
@@ -121,9 +112,7 @@ class TestAppointmentCreationValidation:
         assert response.status_code == 200
         # Форма должна автоматически выбрать текущего пользователя как мастера
 
-    def test_create_appointment_debugging_output(
-        self, client, admin_user, test_client, test_service
-    ):
+    def test_create_appointment_debugging_output(self, client, admin_user, test_client, test_service):
         """Тест отладочного вывода в процессе создания записи."""
         # Логинимся как администратор
         response = client.post(
@@ -158,9 +147,7 @@ class TestAppointmentCreationValidation:
 class TestAppointmentEditing:
     """Тесты редактирования записей."""
 
-    def test_edit_appointment_validation_error(
-        self, client, admin_user, test_appointment
-    ):
+    def test_edit_appointment_validation_error(self, client, admin_user, test_appointment):
         """Тест обработки ошибок валидации при редактировании."""
         # Логинимся как администратор
         response = client.post(
@@ -210,18 +197,14 @@ class TestAppointmentDeletion:
         appointment_id = test_appointment.id
 
         # Удаляем запись
-        response = client.post(
-            f"/appointments/{appointment_id}/delete", follow_redirects=True
-        )
+        response = client.post(f"/appointments/{appointment_id}/delete", follow_redirects=True)
         assert response.status_code == 200
 
         # Проверяем, что запись удалена
         deleted_appointment = db.session.get(Appointment, appointment_id)
         assert deleted_appointment is None
 
-    def test_delete_appointment_unauthorized(
-        self, client, regular_user, test_appointment
-    ):
+    def test_delete_appointment_unauthorized(self, client, regular_user, test_appointment):
         """Тест попытки удаления записи неавторизованным пользователем."""
         # Логинимся как обычный пользователь
         response = client.post(
@@ -236,9 +219,7 @@ class TestAppointmentDeletion:
         assert response.status_code == 200
 
         # Попытка удалить чужую запись
-        response = client.post(
-            f"/appointments/{test_appointment.id}/delete", follow_redirects=True
-        )
+        response = client.post(f"/appointments/{test_appointment.id}/delete", follow_redirects=True)
         # Должен быть редирект на главную или ошибка доступа
         assert response.status_code in [200, 403, 404]
 
@@ -286,9 +267,7 @@ class TestAppointmentAPIValidation:
 class TestAppointmentStatusValidation:
     """Тесты валидации изменения статуса."""
 
-    def test_status_change_without_payment_method_edge_cases(
-        self, client, admin_user, test_appointment
-    ):
+    def test_status_change_without_payment_method_edge_cases(self, client, admin_user, test_appointment):
         """Тест граничных случаев при изменении статуса без метода оплаты."""
         # Логинимся как администратор
         response = client.post(
@@ -304,11 +283,9 @@ class TestAppointmentStatusValidation:
 
         # Пытаемся изменить статус на completed без метода оплаты
         response = client.get(f"/appointments/{test_appointment.id}/status/completed")
-        assert response.status_code == 200
+        assert response.status_code == 302  # Очікуємо редірект
 
-    def test_status_change_validation_errors(
-        self, client, admin_user, test_appointment
-    ):
+    def test_status_change_validation_errors(self, client, admin_user, test_appointment):
         """Тест ошибок валидации при изменении статуса."""
         # Логинимся как администратор
         response = client.post(
@@ -360,9 +337,7 @@ class TestAppointmentServiceManagement:
         )
         assert response.status_code == 200
 
-    def test_edit_service_various_error_conditions(
-        self, client, admin_user, test_appointment, test_service
-    ):
+    def test_edit_service_various_error_conditions(self, client, admin_user, test_appointment, test_service):
         """Тест различных условий ошибок при редактировании услуги."""
         # Создаем связь услуги с записью
         appointment_service = AppointmentService(
@@ -463,9 +438,7 @@ class TestDailySummaryEdgeCases:
         assert response.status_code == 200
 
         # Запрос с различными параметрами для проверки обработки ошибок
-        response = client.get(
-            "/appointments/daily-summary?date=invalid&master_id=99999"
-        )
+        response = client.get("/appointments/daily-summary?date=invalid&master_id=99999")
         assert response.status_code == 200
 
     def test_daily_summary_calculation_edge_cases(self, client, admin_user):

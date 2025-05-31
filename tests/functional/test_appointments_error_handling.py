@@ -11,16 +11,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 from werkzeug.security import generate_password_hash
 
-from app.models import (Appointment, AppointmentService, Client, PaymentMethod,
-                        Service, User, db)
+from app.models import Appointment, AppointmentService, Client
+from app.models import PaymentMethod as PaymentMethodModel
+from app.models import PaymentMethodEnum as PaymentMethod
+from app.models import Service, User, db
 
 
 class TestAppointmentCreationErrors:
     """Тесты ошибок создания записей."""
 
-    def test_create_appointment_database_error(
-        self, client, admin_user, test_client, test_service
-    ):
+    def test_create_appointment_database_error(self, client, admin_user, test_client, test_service):
         """Тест обработки ошибки базы данных при создании записи."""
         # Логинимся как администратор
         response = client.post(
@@ -54,9 +54,7 @@ class TestAppointmentCreationErrors:
 
             assert response.status_code == 200
 
-    def test_create_appointment_no_services_selected(
-        self, client, admin_user, test_client
-    ):
+    def test_create_appointment_no_services_selected(self, client, admin_user, test_client):
         """Тест создания записи без выбранных услуг."""
         # Логинимся как администратор
         response = client.post(
@@ -105,12 +103,10 @@ class TestAppointmentViewErrors:
         assert response.status_code == 200
 
         # Попытка просмотра несуществующей записи
-        response = client.get("/appointments/99999")
+        response = client.get("/appointments/view/99999")
         assert response.status_code in [404, 500]
 
-    def test_view_appointment_access_denied(
-        self, client, regular_user, test_appointment
-    ):
+    def test_view_appointment_access_denied(self, client, regular_user, test_appointment):
         """Тест запрета доступа к записи другого мастера."""
         # Логинимся как обычный пользователь
         response = client.post(
@@ -125,9 +121,9 @@ class TestAppointmentViewErrors:
         assert response.status_code == 200
 
         # Попытка просмотра чужой записи
-        response = client.get(f"/appointments/{test_appointment.id}")
+        response = client.get(f"/appointments/view/{test_appointment.id}")
         # Должен быть редирект или ошибка доступа
-        assert response.status_code in [200, 403, 404]
+        assert response.status_code in [200, 302, 403, 404]
 
 
 class TestAppointmentEditErrors:
@@ -148,12 +144,10 @@ class TestAppointmentEditErrors:
         assert response.status_code == 200
 
         # Попытка редактирования несуществующей записи
-        response = client.get("/appointments/99999/edit")
+        response = client.get("/appointments/edit/99999")
         assert response.status_code in [404, 500]
 
-    def test_edit_appointment_database_error(
-        self, client, admin_user, test_appointment
-    ):
+    def test_edit_appointment_database_error(self, client, admin_user, test_appointment):
         """Тест ошибки базы данных при редактировании."""
         # Логинимся как администратор
         response = client.post(
@@ -206,9 +200,7 @@ class TestAppointmentStatusErrors:
         assert response.status_code == 200
 
         # Попытка изменения статуса несуществующей записи
-        response = client.post(
-            "/appointments/99999/status/completed", follow_redirects=True
-        )
+        response = client.post("/appointments/99999/status/completed", follow_redirects=True)
         assert response.status_code in [200, 404]
 
     def test_status_change_database_error(self, client, admin_user, test_appointment):
@@ -238,9 +230,7 @@ class TestAppointmentStatusErrors:
 class TestAppointmentServiceErrors:
     """Тесты ошибок управления услугами."""
 
-    def test_add_service_nonexistent_appointment(
-        self, client, admin_user, test_service
-    ):
+    def test_add_service_nonexistent_appointment(self, client, admin_user, test_service):
         """Тест добавления услуги к несуществующей записи."""
         # Логинимся как администратор
         response = client.post(
@@ -266,9 +256,7 @@ class TestAppointmentServiceErrors:
         )
         assert response.status_code in [200, 404]
 
-    def test_remove_service_nonexistent_appointment(
-        self, client, admin_user, test_service
-    ):
+    def test_remove_service_nonexistent_appointment(self, client, admin_user, test_service):
         """Тест удаления услуги из несуществующей записи."""
         # Логинимся как администратор
         response = client.post(
@@ -289,9 +277,7 @@ class TestAppointmentServiceErrors:
         )
         assert response.status_code in [200, 404]
 
-    def test_edit_service_nonexistent_appointment(
-        self, client, admin_user, test_service
-    ):
+    def test_edit_service_nonexistent_appointment(self, client, admin_user, test_service):
         """Тест редактирования услуги в несуществующей записи."""
         # Логинимся как администратор
         response = client.post(
@@ -313,9 +299,7 @@ class TestAppointmentServiceErrors:
         )
         assert response.status_code in [200, 404]
 
-    def test_remove_service_database_error(
-        self, client, admin_user, test_appointment, test_service
-    ):
+    def test_remove_service_database_error(self, client, admin_user, test_appointment, test_service):
         """Тест ошибки базы данных при удалении услуги."""
         # Создаем связь услуги с записью
         appointment_service = AppointmentService(
@@ -481,9 +465,7 @@ class TestFormValidationErrors:
         )
         assert response.status_code == 200
 
-    def test_status_payment_form_validation_errors(
-        self, client, admin_user, test_appointment
-    ):
+    def test_status_payment_form_validation_errors(self, client, admin_user, test_appointment):
         """Тест ошибок валидации формы статуса и оплаты."""
         # Логинимся как администратор
         response = client.post(

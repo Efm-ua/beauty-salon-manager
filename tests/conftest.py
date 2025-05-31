@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash
 
 from app import create_app
 from app.config import Config
-from app.models import Appointment, AppointmentService, Brand, Client, Product, Service, StockLevel, User
+from app.models import Appointment, AppointmentService, Brand, Client, PaymentMethod, Product, Service, StockLevel, User
 from app.models import db as _db
 
 
@@ -76,7 +76,7 @@ def db(app):
 @pytest.fixture(scope="function")
 def session(db):  # 'db' - це екземпляр Flask-SQLAlchemy
     """
-    Надає сесію бази даних для кожного тесту всередині транзакції,
+    Надає сесію бази даних для кожного тесту всередини транзакції,
     яка відкочується після завершення тесту. Сесії налаштовані
     з expire_on_commit=False для запобігання DetachedInstanceError.
     """
@@ -87,9 +87,12 @@ def session(db):  # 'db' - це екземпляр Flask-SQLAlchemy
 
     original_factory = db.session.session_factory
     db.session.session_factory = configured_session_factory
+
+    # Important: Remove existing session and create a new one with the test configuration
     db.session.remove()
 
-    # Створюємо та використовуємо конкретний екземпляр сесії
+    # Now db.session() will use our test transaction
+    # This makes test data accessible through db.session queries
     test_session_instance = db.session()
 
     yield test_session_instance  # Надаємо екземпляр сесії, а не proxy
@@ -189,6 +192,7 @@ def test_client(session):
     )
     session.add(client)
     session.commit()
+
     return client
 
 
@@ -208,6 +212,7 @@ def test_service(session):
     )
     session.add(service)
     session.commit()
+
     return service
 
 
@@ -387,14 +392,15 @@ def test_user(session):
 
 # Фікстура для процесу авторизації
 @pytest.fixture(scope="function")
-def auth(client):
+def auth(client, admin_user):
     """
     Допоміжна фікстура, яка надає методи для авторизації користувача.
     """
 
     class AuthActions:
-        def __init__(self, client):
+        def __init__(self, client, admin_user):
             self._client = client
+            self._admin_user = admin_user
 
         def login(self, username="test_user", password="test_password"):
             return self._client.post(
@@ -403,10 +409,18 @@ def auth(client):
                 follow_redirects=True,
             )
 
+        def login_as_admin(self):
+            """Login as admin user for functional tests."""
+            return self._client.post(
+                "/auth/login",
+                data={"username": self._admin_user.username, "password": "admin_password"},
+                follow_redirects=True,
+            )
+
         def logout(self):
             return self._client.get("/auth/logout", follow_redirects=True)
 
-    return AuthActions(client)
+    return AuthActions(client, admin_user)
 
 
 # Фікстура для роботи з тестовою базою даних
@@ -475,3 +489,130 @@ def inactive_master(session):
     session.commit()
     session.refresh(master)
     return master
+
+
+# Фікстура для створення методів оплати
+@pytest.fixture(scope="function")
+def payment_methods(session):
+    """
+    Створює стандартні методи оплати для тестів.
+    """
+    payment_method_names = ["Готівка", "Малібу", "ФОП", "Приват", "MONO", "Борг"]
+
+    for name in payment_method_names:
+        payment_method = PaymentMethod()
+        payment_method.name = name
+        payment_method.is_active = True
+        session.add(payment_method)
+
+    session.commit()
+    return PaymentMethod.query.all()
+
+
+@pytest.fixture(scope="function")
+def test_product(session):
+    """
+    Creates a test product with a brand.
+    """
+    # Create a test brand first
+    brand = Brand(name=f"Test Brand {uuid.uuid4().hex[:8]}")
+    session.add(brand)
+    session.commit()
+
+    # Create a test product
+    product = Product(
+        name=f"Test Product {uuid.uuid4().hex[:8]}",
+        sku=f"TEST-{uuid.uuid4().hex[:8]}",
+        brand_id=brand.id,
+        volume_value=100,
+        volume_unit="мл",
+        description="Test product description",
+        min_stock_level=5,
+        current_sale_price=150.00,
+        last_cost_price=100.00,
+    )
+    session.add(product)
+    session.commit()
+
+    # Get and update the auto-created stock level
+    stock = StockLevel.query.filter_by(product_id=product.id).first()
+    if stock:
+        stock.quantity = 0
+        session.commit()
+
+    return product
+
+
+# Additional fixtures for inventory tests
+@pytest.fixture(scope="function")
+def master_user(session):
+    """
+    Створює тестового майстра (не адміністратора) для тестів інвентаризації.
+    """
+    user = User(
+        username=f"master_test_{uuid.uuid4().hex[:8]}",
+        password=generate_password_hash("master_password"),
+        full_name="Master Test",
+        is_admin=False,
+        is_active_master=True,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def sample_products_with_stock(session):
+    """
+    Створює кілька тестових товарів з відомими залишками на складі.
+    """
+    products = []
+
+    # Створюємо кілька брендів
+    brands = []
+    for i in range(3):
+        brand = Brand(name=f"Test Brand {i+1}_{uuid.uuid4().hex[:8]}")
+        session.add(brand)
+        brands.append(brand)
+    session.commit()
+
+    # Створюємо товари з різними залишками
+    initial_quantities = [15, 25, 8, 12, 30]
+
+    for i, qty in enumerate(initial_quantities):
+        product = Product(
+            name=f"Test Product {i+1}_{uuid.uuid4().hex[:8]}",
+            sku=f"TEST-{i+1}-{uuid.uuid4().hex[:8]}",
+            brand_id=brands[i % len(brands)].id,
+            volume_value=100 + i * 10,
+            volume_unit="мл",
+            description=f"Test product {i+1} description",
+            min_stock_level=5,
+            current_sale_price=150.00 + i * 25,
+            last_cost_price=100.00 + i * 15,
+        )
+        session.add(product)
+        session.flush()  # Щоб отримати ID продукту
+
+        # Оновлюємо автоматично створений StockLevel
+        stock_level = StockLevel.query.filter_by(product_id=product.id).first()
+        if stock_level:
+            stock_level.quantity = qty
+        else:
+            # Якщо з якоїсь причини не створився автоматично
+            stock_level = StockLevel(product_id=product.id, quantity=qty)
+            session.add(stock_level)
+
+        products.append(product)
+
+    session.commit()
+
+    # Перевіряємо, що всі товари мають залишки
+    for product in products:
+        session.refresh(product)
+        stock = StockLevel.query.filter_by(product_id=product.id).first()
+        assert stock is not None, f"StockLevel not found for product {product.id}"
+        assert stock.quantity > 0, f"Stock quantity is not positive for product {product.id}"
+
+    return products

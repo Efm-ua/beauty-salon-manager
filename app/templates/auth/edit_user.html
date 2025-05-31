@@ -47,6 +47,18 @@
           </div>
 
           <div class="mb-3">
+            {{ form.configurable_commission_rate.label(class="form-label") }} {{
+            form.configurable_commission_rate(class="form-control", step="0.01")
+            }} {% for error in form.configurable_commission_rate.errors %}
+            <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+            <small class="form-text text-muted"
+              >Комісійна ставка від наданих послуг. Для адміністраторів також
+              використовується як базова ставка при продажу товарів.</small
+            >
+          </div>
+
+          <div class="mb-3">
             {{ form.submit(class="btn btn-primary") }}
             <a href="{{ url_for('auth.users') }}" class="btn btn-secondary"
               >Скасувати</a

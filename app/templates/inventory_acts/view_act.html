@@ -1,0 +1,285 @@
+{% extends "base.html" %} {% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ title }}</h2>
+        <div>
+          <a
+            href="{{ url_for('products.inventory_acts_list') }}"
+            class="btn btn-secondary"
+          >
+            <i class="fas fa-arrow-left"></i> Назад до списку
+          </a>
+          {% if act.status != 'completed' %}
+          <a
+            href="{{ url_for('products.inventory_acts_edit', act_id=act.id) }}"
+            class="btn btn-primary"
+          >
+            <i class="fas fa-edit"></i> Редагувати
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">
+              <h5>Інформація про акт</h5>
+            </div>
+            <div class="card-body">
+              <dl class="row">
+                <dt class="col-sm-4">№ Акту:</dt>
+                <dd class="col-sm-8"><strong>#{{ act.id }}</strong></dd>
+
+                <dt class="col-sm-4">Дата акту:</dt>
+                <dd class="col-sm-8">
+                  {{ act.act_date.strftime('%d.%m.%Y') }}
+                </dd>
+
+                <dt class="col-sm-4">Статус:</dt>
+                <dd class="col-sm-8">
+                  {% if act.status == 'new' %}
+                  <span class="badge bg-secondary">Новий</span>
+                  {% elif act.status == 'in_progress' %}
+                  <span class="badge bg-warning">В процесі</span>
+                  {% elif act.status == 'completed' %}
+                  <span class="badge bg-success">Завершено</span>
+                  {% endif %}
+                </dd>
+
+                <dt class="col-sm-4">Створено:</dt>
+                <dd class="col-sm-8">
+                  {{ act.created_at.strftime('%d.%m.%Y %H:%M') }}
+                </dd>
+
+                <dt class="col-sm-4">Створив:</dt>
+                <dd class="col-sm-8">{{ act.user.full_name }}</dd>
+
+                {% if act.notes %}
+                <dt class="col-sm-4">Примітки:</dt>
+                <dd class="col-sm-8">{{ act.notes }}</dd>
+                {% endif %}
+              </dl>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">
+              <h5>Статистика</h5>
+            </div>
+            <div class="card-body">
+              <dl class="row">
+                <dt class="col-sm-6">Всього позицій:</dt>
+                <dd class="col-sm-6">
+                  <strong>{{ act.items|length }}</strong>
+                </dd>
+
+                {% if act.status == 'completed' %}
+                <dt class="col-sm-6">З розбіжностями:</dt>
+                <dd class="col-sm-6">
+                  <strong>{{ act.items_with_discrepancy }}</strong>
+                  {% if act.items|length > 0 %} ({{
+                  "%.1f"|format((act.items_with_discrepancy / act.items|length)
+                  * 100) }}%) {% endif %}
+                </dd>
+
+                <dt class="col-sm-6">Загальна розбіжність:</dt>
+                <dd class="col-sm-6">
+                  {% if act.total_discrepancy > 0 %}
+                  <strong class="text-success"
+                    >+{{ act.total_discrepancy }}</strong
+                  >
+                  {% elif act.total_discrepancy < 0 %}
+                  <strong class="text-danger"
+                    >{{ act.total_discrepancy }}</strong
+                  >
+                  {% else %}
+                  <strong class="text-muted">0</strong>
+                  {% endif %}
+                </dd>
+                {% else %}
+                <dt class="col-sm-6">Заповнено:</dt>
+                <dd class="col-sm-6">
+                  {% set filled_items = act.items|selectattr('actual_quantity',
+                  'ne', none)|list|length %}
+                  <strong>{{ filled_items }}</strong> з {{ act.items|length }}
+                  {% if act.items|length > 0 %} ({{ "%.1f"|format((filled_items
+                  / act.items|length) * 100) }}%) {% endif %}
+                </dd>
+                {% endif %}
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div
+          class="card-header d-flex justify-content-between align-items-center"
+        >
+          <h5>Позиції акту інвентаризації</h5>
+          <div>
+            {% if act.status == 'completed' %}
+            <span class="badge bg-info"
+              >Показано {{ act.items|length }} позицій</span
+            >
+            {% else %}
+            <span class="badge bg-warning">В процесі заповнення</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead class="table-dark">
+                <tr>
+                  <th>№</th>
+                  <th>Товар</th>
+                  <th>SKU</th>
+                  <th>Планова кількість</th>
+                  <th>Фактична кількість</th>
+                  <th>Розбіжність</th>
+                  <th>% розбіжності</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in act.items %}
+                <tr
+                  {%
+                  if
+                  item.discrepancy
+                  and
+                  item.discrepancy
+                  !="0"
+                  %}class="table-warning"
+                  {%
+                  endif
+                  %}
+                >
+                  <td>{{ loop.index }}</td>
+                  <td>
+                    <strong>{{ item.product.brand.name }}</strong> - {{
+                    item.product.name }} {% if item.product.volume_value and
+                    item.product.volume_unit %} <br /><small class="text-muted"
+                      >{{ item.product.volume_value }} {{
+                      item.product.volume_unit }}</small
+                    >
+                    {% endif %}
+                  </td>
+                  <td><code>{{ item.product.sku }}</code></td>
+                  <td><strong>{{ item.expected_quantity }}</strong></td>
+                  <td>
+                    {% if item.actual_quantity is not none %}
+                    <strong>{{ item.actual_quantity }}</strong>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if item.discrepancy is not none %} {% if item.discrepancy
+                    > 0 %}
+                    <span class="badge bg-success"
+                      >+{{ item.discrepancy }}</span
+                    >
+                    {% elif item.discrepancy < 0 %}
+                    <span class="badge bg-danger">{{ item.discrepancy }}</span>
+                    {% else %}
+                    <span class="badge bg-secondary">0</span>
+                    {% endif %} {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if item.discrepancy is not none and
+                    item.expected_quantity > 0 %} {% set percentage =
+                    (item.discrepancy / item.expected_quantity) * 100 %} {% if
+                    percentage > 0 %}
+                    <span class="text-success"
+                      >+{{ "%.1f"|format(percentage) }}%</span
+                    >
+                    {% elif percentage < 0 %}
+                    <span class="text-danger"
+                      >{{ "%.1f"|format(percentage) }}%</span
+                    >
+                    {% else %}
+                    <span class="text-muted">0%</span>
+                    {% endif %} {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {% if act.status == 'completed' %}
+      <div class="card mt-4">
+        <div class="card-header">
+          <h5>Підсумки інвентаризації</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-4">
+              <div class="text-center">
+                <h3 class="text-success">
+                  {{ act.items|selectattr('discrepancy', 'gt', 0)|list|length }}
+                </h3>
+                <p class="text-muted">Надлишки</p>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="text-center">
+                <h3 class="text-danger">
+                  {{ act.items|selectattr('discrepancy', 'lt', 0)|list|length }}
+                </h3>
+                <p class="text-muted">Нестачі</p>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="text-center">
+                <h3 class="text-secondary">
+                  {{ act.items|selectattr('discrepancy', 'equalto',
+                  0)|list|length }}
+                </h3>
+                <p class="text-muted">Без розбіжностей</p>
+              </div>
+            </div>
+          </div>
+
+          {% if act.total_discrepancy != 0 %}
+          <div
+            class="alert {% if act.total_discrepancy > 0 %}alert-success{% else %}alert-danger{% endif %} mt-3"
+            role="alert"
+          >
+            <h4 class="alert-heading">
+              {% if act.total_discrepancy > 0 %} Загальний надлишок: +{{
+              act.total_discrepancy }} одиниць {% else %} Загальна нестача: {{
+              act.total_discrepancy }} одиниць {% endif %}
+            </h4>
+            <p class="mb-0">
+              Залишки товарів було оновлено відповідно до результатів
+              інвентаризації.
+            </p>
+          </div>
+          {% else %}
+          <div class="alert alert-info mt-3" role="alert">
+            <h4 class="alert-heading">Відмінний результат!</h4>
+            <p class="mb-0">
+              Розбіжностей не виявлено. Фактичні залишки повністю відповідають
+              обліковим.
+            </p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

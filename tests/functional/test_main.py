@@ -88,9 +88,7 @@ def test_index_route_with_no_completed_appointments(session, client, admin_user)
     assert response.status_code == 200
 
 
-def test_stats_route_with_december_month(
-    session, client, admin_user, regular_user, test_client
-):
+def test_stats_route_with_december_month(session, client, admin_user, regular_user, test_client):
     """
     Test stats route specifically for December to verify year rollover logic.
     Tests the edge case where end_of_month calculation needs to handle December->January transition.
@@ -156,9 +154,7 @@ def test_stats_route_with_december_month(
         assert "150.00" in response.text
 
 
-def test_stats_route_with_none_values(
-    session, client, admin_user, regular_user, test_client
-):
+def test_stats_route_with_none_values(session, client, admin_user, regular_user, test_client):
     """
     Test stats route with some None values in revenue calculations.
     Verifies that the stats page handles None values in revenue calculations correctly.
@@ -309,9 +305,7 @@ def test_index_view_admin(admin_auth_client):
         # Get response data
         response_text = response.get_data(as_text=True)
         print(f"DEBUG: Response contains 'Головна': {'Головна' in response_text}")
-        print(
-            f"DEBUG: Response contains 'Загалом по салону': {'Загалом по салону' in response_text}"
-        )
+        print(f"DEBUG: Response contains 'Загалом по салону': {'Загалом по салону' in response_text}")
         print(f"DEBUG: First 200 chars: {response_text[:200]}")
 
         assert response.status_code == 200
@@ -338,21 +332,15 @@ def test_index_view_master(auth_client):
 
     response_text = response.get_data(as_text=True)
     print(f"DEBUG: Response contains 'Головна': {'Головна' in response_text}")
-    print(
-        f"DEBUG: Response contains 'Загальна сума за день': {'Загальна сума за день' in response_text}"
-    )
-    print(
-        f"DEBUG: Response contains 'Ваші записи на сьогодні': {'Ваші записи на сьогодні' in response_text}"
-    )
+    print(f"DEBUG: Response contains 'Загальна сума за день': {'Загальна сума за день' in response_text}")
+    print(f"DEBUG: Response contains 'Ваші записи на сьогодні': {'Ваші записи на сьогодні' in response_text}")
 
     # Знайти контекст рядка "Загальна сума за день"
     if "Загальна сума за день" in response_text:
         index = response_text.find("Загальна сума за день")
         start_index = max(0, index - 100)
         end_index = min(len(response_text), index + 100)
-        print(
-            f"DEBUG: Context around 'Загальна сума за день': {response_text[start_index:end_index]}"
-        )
+        print(f"DEBUG: Context around 'Загальна сума за день': {response_text[start_index:end_index]}")
 
     # Print a substring of the response for inspection
     print(f"DEBUG: Partial response text: {response_text[:200]}...")
@@ -360,13 +348,8 @@ def test_index_view_master(auth_client):
     assert response.status_code == 200
     assert "Головна" in response_text
     # Master should only see their own appointments
-    assert (
-        "Ваші записи на сьогодні" in response_text
-        or "Записи на сьогодні" in response_text
-    )
-    assert (
-        "Загальна сума за день" not in response_text
-    )  # Admin-specific content not visible
+    assert "Ваші записи на сьогодні" in response_text or "Записи на сьогодні" in response_text
+    assert "Загальна сума за день" not in response_text  # Admin-specific content not visible
 
 
 def test_schedule_view_admin(admin_auth_client):
@@ -463,9 +446,7 @@ def test_stats_view_master(client, db):
     db.session.commit()
 
     # Add service to the appointment
-    appointment_service = AppointmentService(
-        appointment_id=appointment.id, service_id=test_service.id, price=100.0
-    )
+    appointment_service = AppointmentService(appointment_id=appointment.id, service_id=test_service.id, price=100.0)
     db.session.add(appointment_service)
     db.session.commit()
 
@@ -492,10 +473,7 @@ def test_stats_view_master(client, db):
 
     # Verify that an AppointmentService exists for our appointment
     service_exists = (
-        db.session.query(AppointmentService)
-        .filter(AppointmentService.appointment_id == appointment.id)
-        .count()
-        > 0
+        db.session.query(AppointmentService).filter(AppointmentService.appointment_id == appointment.id).count() > 0
     )
 
     assert service_exists, "The appointment service should exist in the database"
@@ -514,16 +492,13 @@ def test_protected_routes_redirect_when_not_logged_in(client):
         assert response.status_code == 200
         assert "Вхід" in response.get_data(as_text=True)
         assert (
-            "Будь ласка, увійдіть, щоб отримати доступ до цієї сторінки"
-            in response.get_data(as_text=True)
+            "Будь ласка, увійдіть, щоб отримати доступ до цієї сторінки" in response.get_data(as_text=True)
             or "login" in response.request.path
         )
 
 
 # Test for is_active_master functionality
-def test_main_page_only_shows_active_masters(
-    auth_client, active_master, inactive_master
-):
+def test_main_page_only_shows_active_masters(auth_client, active_master, inactive_master):
     """
     Test that the main page only shows active masters in any master listings or filters.
     Uses an authenticated client since the index route requires login.
@@ -538,9 +513,7 @@ def test_main_page_only_shows_active_masters(
         assert inactive_master.full_name not in response.text
 
 
-def test_schedule_doesnt_modify_is_active_master(
-    session, client, admin_user, regular_user
-):
+def test_schedule_doesnt_modify_is_active_master(session, client, admin_user, regular_user):
     """
     Test that viewing the schedule doesn't modify the is_active_master status of users.
 
@@ -611,9 +584,7 @@ def test_schedule_doesnt_modify_is_active_master(
 
     # Verify that the user's is_active_master status is still False
     session.refresh(regular_user)
-    assert (
-        not regular_user.is_active_master
-    ), "is_active_master was incorrectly modified by viewing the schedule"
+    assert not regular_user.is_active_master, "is_active_master was incorrectly modified by viewing the schedule"
 
     # Create another user and verify it's also not affected
     another_user = User(
@@ -633,9 +604,5 @@ def test_schedule_doesnt_modify_is_active_master(
     # Verify that neither user's is_active_master status was changed
     session.refresh(regular_user)
     session.refresh(another_user)
-    assert (
-        not regular_user.is_active_master
-    ), "is_active_master of regular_user was incorrectly modified"
-    assert (
-        not another_user.is_active_master
-    ), "is_active_master of another_user was incorrectly modified"
+    assert not regular_user.is_active_master, "is_active_master of regular_user was incorrectly modified"
+    assert not another_user.is_active_master, "is_active_master of another_user was incorrectly modified"

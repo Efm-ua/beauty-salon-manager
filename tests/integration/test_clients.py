@@ -79,25 +79,17 @@ def auth_client_for_clients(client, session):
     )
 
     # Перевірка успішності автентифікації
-    assert (
-        response.status_code == 200
-    ), f"Login failed: status code {response.status_code}"
+    assert response.status_code == 200, f"Login failed: status code {response.status_code}"
 
     # Перевірка наявності ознак успішного входу в систему
     # 1. Перевірка наявності елементу, який видно тільки після входу (посилання на вихід)
-    assert (
-        "/auth/logout" in response.text
-    ), "Login failed: Logout link not found in response"
+    assert "/auth/logout" in response.text, "Login failed: Logout link not found in response"
 
     # 2. Перевірка наявності імені користувача у відповіді
-    assert (
-        "Test User For Clients" in response.text
-    ), "Login failed: User name not found in response"
+    assert "Test User For Clients" in response.text, "Login failed: User name not found in response"
 
     # 3. Перевірка наявності мітки "Адміністратор" у відповіді
-    assert (
-        "Адміністратор" in response.text
-    ), "Login failed: Admin label not found in response"
+    assert "Адміністратор" in response.text, "Login failed: Admin label not found in response"
 
     yield client
 
@@ -127,9 +119,7 @@ def test_client_list_unauthorized(client):
     # Перевірка, що перенаправлення веде на сторінку входу
     response = client.get("/clients/", follow_redirects=True)
     assert response.status_code == 200
-    assert "Увійти в систему" in response.data.decode(
-        "utf-8"
-    ) or "Вхід - Салон краси" in response.data.decode("utf-8")
+    assert "Увійти в систему" in response.data.decode("utf-8") or "Вхід - Салон краси" in response.data.decode("utf-8")
 
 
 def test_client_create_page_accessible(auth_client_for_clients):
@@ -158,9 +148,7 @@ def test_client_create_success(auth_client_for_clients, session):
         "submit": "Зберегти",
     }
 
-    response = auth_client_for_clients.post(
-        "/clients/create", data=client_data, follow_redirects=True
-    )
+    response = auth_client_for_clients.post("/clients/create", data=client_data, follow_redirects=True)
     assert response.status_code == 200
     assert "Клієнт успішно доданий!" in response.data.decode("utf-8")
 
@@ -198,9 +186,7 @@ def test_client_create_duplicate_phone(auth_client_for_clients, session):
         "submit": "Зберегти",
     }
 
-    response = auth_client_for_clients.post(
-        "/clients/create", data=client_data, follow_redirects=True
-    )
+    response = auth_client_for_clients.post("/clients/create", data=client_data, follow_redirects=True)
     assert response.status_code == 200
     assert "Клієнт з таким номером телефону вже існує" in response.data.decode("utf-8")
 
@@ -220,9 +206,7 @@ def test_client_create_invalid_email(auth_client_for_clients):
         "submit": "Зберегти",
     }
 
-    response = auth_client_for_clients.post(
-        "/clients/create", data=client_data, follow_redirects=True
-    )
+    response = auth_client_for_clients.post("/clients/create", data=client_data, follow_redirects=True)
     assert response.status_code == 200
     # Перевірка наявності повідомлення про помилку валідації email
     decoded_response = response.data.decode("utf-8")
@@ -338,9 +322,7 @@ def test_client_edit_success(auth_client_for_clients, session):
         "submit": "Зберегти",
     }
 
-    response = auth_client_for_clients.post(
-        f"/clients/{client_id}/edit", data=updated_data, follow_redirects=True
-    )
+    response = auth_client_for_clients.post(f"/clients/{client_id}/edit", data=updated_data, follow_redirects=True)
     assert response.status_code == 200
     assert "Інформацію про клієнта успішно оновлено!" in response.data.decode("utf-8")
 
@@ -388,9 +370,7 @@ def test_client_edit_duplicate_phone(auth_client_for_clients, session):
         "submit": "Зберегти",
     }
 
-    response = auth_client_for_clients.post(
-        f"/clients/{client1_id}/edit", data=updated_data, follow_redirects=True
-    )
+    response = auth_client_for_clients.post(f"/clients/{client1_id}/edit", data=updated_data, follow_redirects=True)
     assert response.status_code == 200
     assert "Клієнт з таким номером телефону вже існує" in response.data.decode("utf-8")
 
@@ -497,9 +477,7 @@ def test_client_delete_with_appointments(auth_client_for_clients, session):
 
     client_id = test_client.id
 
-    response = auth_client_for_clients.post(
-        f"/clients/{client_id}/delete", follow_redirects=True
-    )
+    response = auth_client_for_clients.post(f"/clients/{client_id}/delete", follow_redirects=True)
     assert response.status_code == 200
     assert "Не можна видалити клієнта" in response.data.decode("utf-8")
     assert "запланованих записів" in response.data.decode("utf-8")
@@ -528,9 +506,7 @@ def test_client_delete_success(auth_client_for_clients, session):
 
     client_id = client_to_delete.id
 
-    response = auth_client_for_clients.post(
-        f"/clients/{client_id}/delete", follow_redirects=True
-    )
+    response = auth_client_for_clients.post(f"/clients/{client_id}/delete", follow_redirects=True)
     assert response.status_code == 200
     assert "Клієнт успішно видалений!" in response.data.decode("utf-8")
 
@@ -701,9 +677,7 @@ def test_client_search_cyrillic_case_insensitive(auth_client_for_clients, sessio
     print("\nTesting direct SQL query with UPPER():")
     from sqlalchemy import func
 
-    sql_result = Client.query.filter(
-        func.UPPER(Client.name).like(f"%{('анна').upper()}%")
-    ).all()
+    sql_result = Client.query.filter(func.UPPER(Client.name).like(f"%{('анна').upper()}%")).all()
     print(f"SQL Query direct result (length: {len(sql_result)}):")
     for c in sql_result:
         print(f"  - {c.id}: {c.name}")
@@ -731,9 +705,7 @@ def test_client_search_cyrillic_case_insensitive(auth_client_for_clients, sessio
         print(content[:1000])
 
         # Додаємо спрощену перевірку, щоб побачити, чи є клієнт на сторінці
-        assert (
-            "Клієнтів не знайдено" not in content
-        ), "No clients found message displayed"
+        assert "Клієнтів не знайдено" not in content, "No clients found message displayed"
         # Перевіряємо, чи є унікальний ідентифікатор в контенті
         assert unique_id in content, f"Unique ID {unique_id} not found in response"
 

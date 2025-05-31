@@ -1,0 +1,235 @@
+{% extends "base.html" %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="flex-grow-1"></div>
+  <a href="{{ url_for('sales.index') }}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-1"></i>Назад до списку
+  </a>
+</div>
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-shopping-cart me-1"></i>Інформація про продаж
+        </h5>
+      </div>
+      <div class="card-body">
+        <form method="POST" id="sale-form">
+          {{ form.hidden_tag() }}
+
+          <!-- Basic sale info -->
+          <div class="row mb-3">
+            <div class="col-md-3">
+              <label for="{{ form.client_id.id }}" class="form-label"
+                >{{ form.client_id.label.text }}</label
+              >
+              {{ form.client_id(class="form-select") }} {% if
+              form.client_id.errors %}
+              <div class="text-danger small">
+                {% for error in form.client_id.errors %} {{ error }} {% endfor
+                %}
+              </div>
+              {% endif %}
+            </div>
+            <div class="col-md-3">
+              <label for="{{ form.user_id.id }}" class="form-label"
+                >{{ form.user_id.label.text }} *</label
+              >
+              {{ form.user_id(class="form-select") }} {% if form.user_id.errors
+              %}
+              <div class="text-danger small">
+                {% for error in form.user_id.errors %} {{ error }} {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            <div class="col-md-3">
+              <label for="{{ form.appointment_id.id }}" class="form-label"
+                >{{ form.appointment_id.label.text }}</label
+              >
+              {{ form.appointment_id(class="form-select") }} {% if
+              form.appointment_id.errors %}
+              <div class="text-danger small">
+                {% for error in form.appointment_id.errors %} {{ error }} {%
+                endfor %}
+              </div>
+              {% endif %}
+            </div>
+            <div class="col-md-3">
+              <label for="{{ form.payment_method_id.id }}" class="form-label"
+                >{{ form.payment_method_id.label.text }} *</label
+              >
+              {{ form.payment_method_id(class="form-select") }} {% if
+              form.payment_method_id.errors %}
+              <div class="text-danger small">
+                {% for error in form.payment_method_id.errors %} {{ error }} {%
+                endfor %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Sale items section -->
+          <div class="mb-3">
+            <label class="form-label fw-bold">Товари *</label>
+            <div id="sale-items-container">
+              {% for item_form in form.sale_items %}
+              <div
+                class="sale-item border rounded p-3 mb-2"
+                data-item-index="{{ loop.index0 }}"
+              >
+                <div
+                  class="d-flex justify-content-between align-items-center mb-2"
+                >
+                  <h6 class="mb-0">Товар {{ loop.index }}</h6>
+                  {% if loop.index > 1 %}
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-danger remove-item"
+                  >
+                    <i class="fas fa-trash"></i>
+                  </button>
+                  {% endif %}
+                </div>
+                <div class="row">
+                  <div class="col-md-8">
+                    <label
+                      for="{{ item_form.product_id.id }}"
+                      class="form-label"
+                      >{{ item_form.product_id.label.text }}</label
+                    >
+                    <select class="form-select product-select" id="{{ item_form.product_id.id }}" name="{{ item_form.product_id.name }}" onchange="updateItemTotal(this)">
+                      <option value="">Оберіть товар</option>
+                      {% for choice in item_form.product_id.choices %}
+                        {% if choice[0] %}
+                          <option value="{{ choice[0] }}" 
+                                  data-price="{{ product_prices.get(choice[0], 0.00) }}"
+                                  {% if item_form.product_id.data == choice[0] %}selected{% endif %}>
+                            {{ choice[1] }}
+                          </option>
+                        {% endif %}
+                      {% endfor %}
+                    </select>
+                    {% if item_form.product_id.errors %}
+                    <div class="text-danger small">
+                      {% for error in item_form.product_id.errors %} {{ error }}
+                      {% endfor %}
+                    </div>
+                    {% endif %}
+                  </div>
+                  <div class="col-md-4">
+                    <label for="{{ item_form.quantity.id }}" class="form-label"
+                      >{{ item_form.quantity.label.text }}</label
+                    >
+                    {{ item_form.quantity(class="form-control quantity-input",
+                    onchange="updateItemTotal(this.closest('.sale-item'))") }}
+                    {% if item_form.quantity.errors %}
+                    <div class="text-danger small">
+                      {% for error in item_form.quantity.errors %} {{ error }}
+                      {% endfor %}
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="mt-2">
+                  <small class="text-muted item-total"
+                    >Сума: <span class="fw-bold">0.00 грн</span></small
+                  >
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+
+            <button
+              type="button"
+              id="add-item"
+              class="btn btn-outline-primary btn-sm"
+            >
+              <i class="fas fa-plus me-1"></i>Додати товар
+            </button>
+          </div>
+
+          <!-- Notes -->
+          <div class="mb-3">
+            <label for="{{ form.notes.id }}" class="form-label"
+              >{{ form.notes.label.text }}</label
+            >
+            {{ form.notes(class="form-control") }} {% if form.notes.errors %}
+            <div class="text-danger small">
+              {% for error in form.notes.errors %} {{ error }} {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Submit button -->
+          <div class="d-flex justify-content-between">
+            <div>
+              <small class="text-muted">* - обов'язкові поля</small>
+            </div>
+            <div>
+              <a
+                href="{{ url_for('sales.index') }}"
+                class="btn btn-secondary me-2"
+                >Скасувати</a
+              >
+              {{ form.submit(class="btn btn-primary") }}
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary sidebar -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-calculator me-1"></i>Підсумок
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="total-summary">
+          <div class="d-flex justify-content-between mb-2">
+            <span>Кількість позицій:</span>
+            <span id="total-items">1</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <span>Загальна кількість:</span>
+            <span id="total-quantity">0</span>
+          </div>
+          <hr />
+          <div class="d-flex justify-content-between">
+            <strong>Загальна сума:</strong>
+            <strong id="total-amount">0.00 грн</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help info -->
+    <div class="card mt-3">
+      <div class="card-body">
+        <h6 class="card-title">
+          <i class="fas fa-info-circle me-1"></i>Довідка
+        </h6>
+        <ul class="small mb-0">
+          <li>
+            Оберіть клієнта або залиште поле порожнім для анонімного продажу
+          </li>
+          <li>Продавець - користувач, який здійснює продаж</li>
+          <li>Можна додавати кілька товарів до одного продажу</li>
+          <li>Система автоматично перевірить наявність товарів на складі</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Include JavaScript with product prices -->
+<script>
+  window.productPrices = {{ product_prices|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/sales_form.js') }}"></script>
+
+{% endblock %}

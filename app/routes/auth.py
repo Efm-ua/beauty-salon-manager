@@ -4,21 +4,12 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_wtf import FlaskForm
 from werkzeug.security import check_password_hash, generate_password_hash
-from wtforms import (
-    BooleanField,
-    IntegerField,
-    PasswordField,
-    StringField,  # type: ignore
-    SubmitField,
-)
-from wtforms.validators import (
-    DataRequired,
-    EqualTo,
-    Length,
-    NumberRange,  # type: ignore
-    Optional,
-    ValidationError,
-)
+from wtforms import StringField  # type: ignore
+from wtforms import BooleanField, IntegerField, PasswordField, SubmitField
+from wtforms.fields import DecimalField
+from wtforms.validators import NumberRange  # type: ignore
+from wtforms.validators import (DataRequired, EqualTo, Length, Optional,
+                                ValidationError)
 
 from app.models import User, db
 
@@ -80,6 +71,13 @@ class UserEditForm(FlaskForm):
         validators=[
             Optional(),
             NumberRange(min=1, message="Порядок відображення повинен бути позитивним числом"),
+        ],
+    )
+    configurable_commission_rate = DecimalField(
+        "Комісійна ставка (%)",
+        validators=[
+            Optional(),
+            NumberRange(min=0, max=100, message="Комісійна ставка повинна бути від 0 до 100 відсотків"),
         ],
     )
     submit = SubmitField("Зберегти")
@@ -249,6 +247,9 @@ def edit_user(id: int) -> Any:
         else:
             # Якщо користувач не є активним майстром, встановлюємо None
             user.schedule_display_order = None
+
+        # Встановлюємо configurable_commission_rate
+        user.configurable_commission_rate = form.configurable_commission_rate.data
 
         db.session.commit()
         flash(f"Користувач {user.full_name} успішно оновлений!", "success")

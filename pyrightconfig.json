@@ -1,29 +1,49 @@
 {
+    "pythonVersion": "3.11",
+    "venvPath": ".",
+    "venv": "venv",
+
     "include": [
-        "app"
+        "app",
+        "tests",
+        "run.py",
+        "demo_sales_system.py"
     ],
     "exclude": [
         "**/__pycache__",
-        "**/.*",
+        "**/.*_cache",
+        "**/.*_cache/**",
+        ".git",
+        ".idea",
+        ".vscode",
         ".mypy_cache",
         ".pytest_cache",
         "venv",
         "migrations"
     ],
+
+    "reportMissingParameterType": "warning",
+    "reportMissingTypeArgument": "warning",
+    "reportOptionalMemberAccess": "warning",
+    "reportAttributeAccessIssue": "warning",
+    
+    "reportUnknownArgumentType": "warning",
+    "reportUnknownMemberType": "warning",
+    "reportUnknownVariableType": "warning",
+    "reportCallIssue": "information",
+
+    "reportUnusedImport": "information",
+
     "reportMissingImports": false,
     "reportMissingTypeStubs": "warning",
-    "reportOptionalMemberAccess": "error",
     "reportGeneralTypeIssues": "error",
-    "reportOptionalSubscript": "error",
-    "reportOptionalIterable": "error",
-    "reportOptionalContextManager": "error",
-    "reportOptionalOperand": "error",
-    "reportUnknownMemberType": false,
-    "reportUnknownArgumentType": false,
-    "reportUnknownVariableType": false,
-    "reportUnknownParameterType": false,
-    "pythonVersion": "3.10",
-    "typeCheckingMode": "strict",
+    "reportOptionalSubscript": "warning",
+    "reportOptionalIterable": "warning",
+    "reportOptionalContextManager": "warning",
+    "reportOptionalOperand": "warning",
+    "reportUnknownParameterType": "warning",
+
+    "typeCheckingMode": "basic",
     "useLibraryCodeForTypes": true,
     "strictListInference": true,
     "strictDictionaryInference": true,

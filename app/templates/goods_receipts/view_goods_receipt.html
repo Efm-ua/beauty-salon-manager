@@ -1,0 +1,83 @@
+{% extends "base.html" %} {% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>{{ title }}</h1>
+    <a
+      href="{{ url_for('products.goods_receipts_list') }}"
+      class="btn btn-secondary"
+    >
+      <i class="fas fa-arrow-left"></i> До списку
+    </a>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-6">
+          <p>
+            <strong>Дата надходження:</strong> {{
+            receipt.receipt_date.strftime('%d.%m.%Y') }}
+          </p>
+          <p>
+            <strong>Номер накладної:</strong> {{ receipt.receipt_number or '—'
+            }}
+          </p>
+        </div>
+        <div class="col-md-6">
+          <p><strong>Створив:</strong> {{ receipt.user.username }}</p>
+          <p>
+            <strong>Дата створення:</strong> {{
+            receipt.created_at.strftime('%d.%m.%Y %H:%M') }}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0">Товари</h5>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Товар</th>
+              <th>Артикул</th>
+              <th>Кількість</th>
+              <th>Закупівельна ціна</th>
+              <th>Сума</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set total = 0 %} {% for item in receipt.items %}
+            <tr>
+              <td>{{ item.product.brand.name }} - {{ item.product.name }}</td>
+              <td>{{ item.product.sku }}</td>
+              <td>{{ item.quantity_received }}</td>
+              <td>{{ "%.2f"|format(item.cost_price_per_unit) }} грн</td>
+              <td>
+                {% set item_total = item.quantity_received *
+                item.cost_price_per_unit %} {{ "%.2f"|format(item_total) }} грн
+                {% set total = total + item_total %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4" class="text-end">
+                <strong>Загальна сума:</strong>
+              </td>
+              <td>
+                <strong> {{ "%.2f"|format(total) }} грн </strong>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

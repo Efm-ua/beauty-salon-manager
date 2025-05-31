@@ -3,28 +3,28 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
-from flask import Flask
-from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect
 
-# Завантаження змінних із .env файлу
+# Завантаження змінних із .env файлу - має бути перед усіма імпортами
 load_dotenv()
+
+from flask import Flask  # noqa: E402
+from flask_login import LoginManager  # noqa: E402
+from flask_wtf.csrf import CSRFProtect  # noqa: E402
 
 # Imports after load_dotenv to ensure environment variables are loaded
 from .config import Config  # noqa: E402
 
 # Import all models to ensure they are registered with SQLAlchemy
-from .models import (  # noqa: E402
-    Appointment,  # noqa: F401
-    AppointmentService,  # noqa: F401
-    Brand,  # noqa: F401
-    Client,  # noqa: F401
-    Product,  # noqa: F401
-    Service,  # noqa: F401
-    StockLevel,  # noqa: F401
-    User,
-    db,
-)
+from .models import Appointment  # noqa: F401, E402
+from .models import AppointmentService  # noqa: F401, E402
+from .models import Brand  # noqa: F401, E402
+from .models import Client  # noqa: F401, E402
+from .models import Product  # noqa: F401, E402
+from .models import Service  # noqa: F401, E402
+from .models import StockLevel  # noqa: F401, E402
+from .models import User, db  # noqa: E402
+from .models import WriteOffReason, ProductWriteOff, ProductWriteOffItem  # noqa: F401, E402
+from .models import GoodsReceipt, GoodsReceiptItem  # noqa: F401, E402
 
 # Mark imports as used for SQLAlchemy model registration
 __all__ = [
@@ -36,6 +36,11 @@ __all__ = [
     "Service",
     "StockLevel",
     "User",
+    "WriteOffReason",
+    "ProductWriteOff",
+    "ProductWriteOffItem",
+    "GoodsReceipt",
+    "GoodsReceiptItem",
     "db",
     "create_app",
 ]
@@ -53,6 +58,12 @@ def create_app(test_config: Optional[Dict[str, Any]] = None) -> Flask:
 
     # Ініціалізація розширень
     db.init_app(app)
+
+    # Налаштування foreign key constraints для SQLite
+    with app.app_context():
+        from .models import setup_foreign_key_constraints
+
+        setup_foreign_key_constraints(app)
 
     # Ініціалізація міграцій після ініціалізації SQLAlchemy
     from flask_migrate import Migrate
@@ -81,24 +92,25 @@ def create_app(test_config: Optional[Dict[str, Any]] = None) -> Flask:
     @app.template_filter("format_currency")  # type: ignore[misc]
     def format_currency(value: Optional[float]) -> str:  # type: ignore[reportUnusedFunction]
         if value is None:
-            return "0.00"
-        return f"{float(value):.2f}"
+            return "0,00"
+        return f"{float(value):.2f}".replace(".", ",")
 
     # Реєстрація маршрутів (routes)
-    from .routes import appointments, auth, clients, main, products, reports, services
+    from .routes import appointments, auth, clients, main, products, reports, sales, services
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
-    app.register_blueprint(appointments.bp)
+    app.register_blueprint(appointments.bp)  # type: ignore[attr-defined]
     app.register_blueprint(clients.bp)
     app.register_blueprint(services.bp)
     app.register_blueprint(products.bp)
     app.register_blueprint(reports.bp)
+    app.register_blueprint(sales.bp)
 
     # Register CLI commands
     from . import commands
 
-    commands.init_app(app)
+    commands.init_app(app)  # type: ignore[attr-defined]
 
     @app.route("/ping")  # type: ignore[misc]
     def ping() -> str:  # type: ignore[reportUnusedFunction]

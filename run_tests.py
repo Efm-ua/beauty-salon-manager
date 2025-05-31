@@ -42,40 +42,24 @@ def parse_arguments():
 
     # Test category options
     test_category = parser.add_argument_group("Test Categories")
-    test_category.add_argument(
-        "--unit", action="store_true", help="Run only unit tests"
-    )
-    test_category.add_argument(
-        "--integration", action="store_true", help="Run only integration tests"
-    )
-    test_category.add_argument(
-        "--functional", action="store_true", help="Run only functional tests"
-    )
+    test_category.add_argument("--unit", action="store_true", help="Run only unit tests")
+    test_category.add_argument("--integration", action="store_true", help="Run only integration tests")
+    test_category.add_argument("--functional", action="store_true", help="Run only functional tests")
 
     # Coverage options
     coverage = parser.add_argument_group("Coverage Options")
-    coverage.add_argument(
-        "--cov", action="store_true", help="Enable code coverage measurement"
-    )
-    coverage.add_argument(
-        "--html", action="store_true", help="Generate HTML coverage report"
-    )
-    coverage.add_argument(
-        "--xml", action="store_true", help="Generate XML coverage report"
-    )
+    coverage.add_argument("--cov", action="store_true", help="Enable code coverage measurement")
+    coverage.add_argument("--html", action="store_true", help="Generate HTML coverage report")
+    coverage.add_argument("--xml", action="store_true", help="Generate XML coverage report")
 
     # Output options
     output = parser.add_argument_group("Output Options")
-    output.add_argument(
-        "-v", "--verbose", action="store_true", help="Show detailed test output"
-    )
+    output.add_argument("-v", "--verbose", action="store_true", help="Show detailed test output")
     output.add_argument("--quiet", action="store_true", help="Show minimal test output")
 
     # Maintenance options
     maintenance = parser.add_argument_group("Maintenance")
-    maintenance.add_argument(
-        "--clean", action="store_true", help="Remove temporary test files"
-    )
+    maintenance.add_argument("--clean", action="store_true", help="Remove temporary test files")
 
     return parser.parse_args()
 
@@ -180,9 +164,7 @@ def main():
 
     # Check if coverage reports are requested without --cov
     if (args.html or args.xml) and not args.cov:
-        print(
-            "Warning: HTML or XML reports requested but --cov not enabled. Adding --cov option."
-        )
+        print("Warning: HTML or XML reports requested but --cov not enabled. Adding --cov option.")
         args.cov = True
 
     # Run the tests

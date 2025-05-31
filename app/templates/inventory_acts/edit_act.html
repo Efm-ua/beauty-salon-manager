@@ -1,0 +1,288 @@
+{% extends "base.html" %} {% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ title }}</h2>
+        <div>
+          <a
+            href="{{ url_for('products.inventory_acts_list') }}"
+            class="btn btn-secondary"
+          >
+            <i class="fas fa-arrow-left"></i> Назад до списку
+          </a>
+          {% if act.status == 'completed' %}
+          <a
+            href="{{ url_for('products.inventory_acts_view', act_id=act.id) }}"
+            class="btn btn-info"
+          >
+            <i class="fas fa-eye"></i> Переглянути
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">
+              <h5>Інформація про акт</h5>
+            </div>
+            <div class="card-body">
+              <dl class="row">
+                <dt class="col-sm-4">№ Акту:</dt>
+                <dd class="col-sm-8">#{{ act.id }}</dd>
+
+                <dt class="col-sm-4">Дата акту:</dt>
+                <dd class="col-sm-8">
+                  {{ act.act_date.strftime('%d.%m.%Y') }}
+                </dd>
+
+                <dt class="col-sm-4">Статус:</dt>
+                <dd class="col-sm-8">
+                  {% if act.status == 'new' %}
+                  <span class="badge bg-secondary">Новий</span>
+                  {% elif act.status == 'in_progress' %}
+                  <span class="badge bg-warning">В процесі</span>
+                  {% elif act.status == 'completed' %}
+                  <span class="badge bg-success">Завершено</span>
+                  {% endif %}
+                </dd>
+
+                <dt class="col-sm-4">Створено:</dt>
+                <dd class="col-sm-8">
+                  {{ act.created_at.strftime('%d.%m.%Y %H:%M') }}
+                </dd>
+
+                <dt class="col-sm-4">Створив:</dt>
+                <dd class="col-sm-8">{{ act.user.full_name }}</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">
+              <h5>Статистика</h5>
+            </div>
+            <div class="card-body">
+              <dl class="row">
+                <dt class="col-sm-6">Всього позицій:</dt>
+                <dd class="col-sm-6">{{ act.items|length }}</dd>
+
+                {% if act.status == 'completed' %}
+                <dt class="col-sm-6">З розбіжностями:</dt>
+                <dd class="col-sm-6">{{ act.items_with_discrepancy }}</dd>
+
+                <dt class="col-sm-6">Загальна розбіжність:</dt>
+                <dd class="col-sm-6">
+                  {% if act.total_discrepancy > 0 %}
+                  <span class="text-success">+{{ act.total_discrepancy }}</span>
+                  {% elif act.total_discrepancy < 0 %}
+                  <span class="text-danger">{{ act.total_discrepancy }}</span>
+                  {% else %}
+                  <span class="text-muted">0</span>
+                  {% endif %}
+                </dd>
+                {% endif %}
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if act.status != 'completed' %}
+      <form
+        method="POST"
+        action="{{ url_for('products.inventory_acts_edit', act_id=act.id) }}"
+      >
+        {{ form.hidden_tag() }}
+
+        <div class="card">
+          <div
+            class="card-header d-flex justify-content-between align-items-center"
+          >
+            <h5>Примітки</h5>
+          </div>
+          <div class="card-body">{{ form.notes(class="form-control") }}</div>
+        </div>
+
+        <div class="card mt-4">
+          <div class="card-header">
+            <h5>Товари для інвентаризації</h5>
+            <small class="text-muted"
+              >Введіть фактичну кількість для кожного товару</small
+            >
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Товар</th>
+                    <th>Планова кількість</th>
+                    <th>Фактична кількість</th>
+                    <th>Розбіжність</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item_form in form.items %}
+                  <tr>
+                    <td>
+                      {{ item_form.product_id() }} {{
+                      item_form.product_name(class="form-control-plaintext",
+                      readonly=true) }}
+                    </td>
+                    <td>
+                      {{
+                      item_form.expected_quantity(class="form-control-plaintext",
+                      readonly=true) }}
+                    </td>
+                    <td>
+                      {{ item_form.actual_quantity(class="form-control") }}
+                    </td>
+                    <td>
+                      {% set product_id = item_form.product_id.data|int %} {%
+                      set act_item = act.items|selectattr('product_id',
+                      'equalto', product_id)|first %} {% if act_item and
+                      act_item.discrepancy is not none %} {% if
+                      act_item.discrepancy > 0 %}
+                      <span class="badge bg-success"
+                        >+{{ act_item.discrepancy }}</span
+                      >
+                      {% elif act_item.discrepancy < 0 %}
+                      <span class="badge bg-danger"
+                        >{{ act_item.discrepancy }}</span
+                      >
+                      {% else %}
+                      <span class="badge bg-secondary">0</span>
+                      {% endif %} {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between mt-4">
+          <div>{{ form.save_progress_submit(class="btn btn-primary") }}</div>
+          <div>
+            <button
+              type="button"
+              class="btn btn-success"
+              data-bs-toggle="modal"
+              data-bs-target="#completeActModal"
+            >
+              <i class="fas fa-check"></i> Провести інвентаризацію
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal для підтвердження проведення -->
+        <div
+          class="modal fade"
+          id="completeActModal"
+          tabindex="-1"
+          aria-labelledby="completeActModalLabel"
+          aria-hidden="true"
+        >
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="completeActModalLabel">
+                  Підтвердження проведення інвентаризації
+                </h5>
+                <button
+                  type="button"
+                  class="btn-close"
+                  data-bs-dismiss="modal"
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div class="modal-body">
+                <p>Ви впевнені, що хочете провести цей акт інвентаризації?</p>
+                <p class="text-warning">
+                  <strong>Увага!</strong> Після проведення залишки товарів
+                  будуть оновлені відповідно до введених фактичних кількостей, і
+                  акт не можна буде більше редагувати.
+                </p>
+              </div>
+              <div class="modal-footer">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  data-bs-dismiss="modal"
+                >
+                  Скасувати
+                </button>
+                {{ form.complete_act_submit(class="btn btn-success") }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+      {% else %}
+      <div class="alert alert-success" role="alert">
+        <h4 class="alert-heading">Акт завершено</h4>
+        <p>
+          Цей акт інвентаризації було успішно проведено і більше не може бути
+          відредагований.
+        </p>
+        <hr />
+        <p class="mb-0">
+          <a
+            href="{{ url_for('products.inventory_acts_view', act_id=act.id) }}"
+            class="btn btn-info"
+          >
+            <i class="fas fa-eye"></i> Переглянути деталі
+          </a>
+        </p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Автоматичний розрахунок розбіжностей при введенні фактичної кількості
+    const actualQuantityInputs = document.querySelectorAll(
+      'input[name$="-actual_quantity"]'
+    );
+
+    actualQuantityInputs.forEach(function (input, index) {
+      input.addEventListener("input", function () {
+        const row = this.closest("tr");
+        const expectedInput = row.querySelector(
+          'input[name$="-expected_quantity"]'
+        );
+        const discrepancyCell = row.querySelector("td:last-child");
+
+        if (this.value !== "" && expectedInput.value !== "") {
+          const actual = parseInt(this.value) || 0;
+          const expected = parseInt(expectedInput.value) || 0;
+          const discrepancy = actual - expected;
+
+          let badgeClass = "bg-secondary";
+          let sign = "";
+
+          if (discrepancy > 0) {
+            badgeClass = "bg-success";
+            sign = "+";
+          } else if (discrepancy < 0) {
+            badgeClass = "bg-danger";
+          }
+
+          discrepancyCell.innerHTML = `<span class="badge ${badgeClass}">${sign}${discrepancy}</span>`;
+        } else {
+          discrepancyCell.innerHTML = '<span class="text-muted">-</span>';
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

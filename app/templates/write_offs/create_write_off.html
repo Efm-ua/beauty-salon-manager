@@ -1,0 +1,140 @@
+{% extends "base.html" %} {% block content %}
+<div class="row">
+  <div class="col-md-8 mx-auto">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="mb-0">
+          <i class="fas fa-minus-circle me-2"></i>Нове списання товарів
+        </h4>
+      </div>
+      <div class="card-body">
+        <form method="POST" id="writeOffForm">
+          {{ form.hidden_tag() }}
+
+          <div class="row mb-3">
+            <div class="col-md-6">
+              {{ form.reason_id.label(class="form-label") }} {{
+              form.reason_id(class="form-select" + (" is-invalid" if
+              form.reason_id.errors else "")) }} {% if form.reason_id.errors %}
+              <div class="invalid-feedback">
+                {% for error in form.reason_id.errors %} {{ error }} {% endfor
+                %}
+              </div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              {{ form.write_off_date.label(class="form-label") }} {{
+              form.write_off_date(class="form-control" + (" is-invalid" if
+              form.write_off_date.errors else "")) }} {% if
+              form.write_off_date.errors %}
+              <div class="invalid-feedback">
+                {% for error in form.write_off_date.errors %} {{ error }} {%
+                endfor %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            {{ form.notes.label(class="form-label") }} {{
+            form.notes(class="form-control", rows="3") }}
+          </div>
+
+          <hr />
+
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5>Товари для списання</h5>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-primary"
+              id="addItemBtn"
+            >
+              <i class="fas fa-plus me-1"></i>Додати товар
+            </button>
+          </div>
+
+          <div id="itemsContainer">
+            {% for item_form in form.items %}
+            <div class="item-row border rounded p-3 mb-3">
+              <div class="row">
+                <div class="col-md-8">
+                  {{ item_form.product_id.label(class="form-label") }} {{
+                  item_form.product_id(class="form-select") }}
+                </div>
+                <div class="col-md-3">
+                  {{ item_form.quantity.label(class="form-label") }} {{
+                  item_form.quantity(class="form-control") }}
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                  <button
+                    type="button"
+                    class="btn btn-outline-danger btn-sm remove-item-btn"
+                  >
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <a
+              href="{{ url_for('products.write_offs_list') }}"
+              class="btn btn-secondary"
+            >
+              <i class="fas fa-arrow-left me-1"></i>Назад
+            </a>
+            {{ form.submit(class="btn btn-danger") }}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  $(document).ready(function() {
+      let itemIndex = {{ form.items|length }};
+
+      // Add new item
+      $('#addItemBtn').click(function() {
+          const newItem = `
+              <div class="item-row border rounded p-3 mb-3">
+                  <div class="row">
+                      <div class="col-md-8">
+                          <label class="form-label">Товар</label>
+                          <select name="items-${itemIndex}-product_id" class="form-select">
+                              <option value="">Виберіть товар...</option>
+                              {% for product in form.items[0].product_id.iter_choices() %}
+                                  <option value="{{ product[0] }}">{{ product[1] }}</option>
+                              {% endfor %}
+                          </select>
+                      </div>
+                      <div class="col-md-3">
+                          <label class="form-label">Кількість</label>
+                          <input type="number" name="items-${itemIndex}-quantity" class="form-control" value="1" min="1">
+                      </div>
+                      <div class="col-md-1 d-flex align-items-end">
+                          <button type="button" class="btn btn-outline-danger btn-sm remove-item-btn">
+                              <i class="fas fa-trash"></i>
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          `;
+          $('#itemsContainer').append(newItem);
+          itemIndex++;
+      });
+
+      // Remove item
+      $(document).on('click', '.remove-item-btn', function() {
+          if ($('.item-row').length > 1) {
+              $(this).closest('.item-row').remove();
+          } else {
+              alert('Повинен залишитися хоча б один товар');
+          }
+      });
+  });
+</script>
+{% endblock %}

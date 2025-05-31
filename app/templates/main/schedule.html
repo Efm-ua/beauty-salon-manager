@@ -93,6 +93,26 @@
     font-size: 0.9em;
     color: #6c757d;
   }
+
+  /* Стилі для множинних записів в одному слоті */
+  .schedule-appointment + .schedule-appointment {
+    margin-top: 2px;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  /* Стиль для комірки з множинними записами */
+  .main-slot-cell:has(.schedule-appointment + .schedule-appointment),
+  .sub-slot-cell:has(.schedule-appointment + .schedule-appointment) {
+    padding: 4px 2px;
+  }
+
+  /* Зменшуємо відступи для множинних записів */
+  .main-slot-cell .schedule-appointment,
+  .sub-slot-cell .schedule-appointment {
+    margin: 1px;
+    padding: 2px 4px;
+    font-size: 0.9em;
+  }
 </style>
 {% endblock %} {% block content %}
 <!-- Debug: Content block started -->
@@ -174,16 +194,17 @@
               {% if
               schedule_data[master.id][interval.main_time.strftime('%H:%M')] and
               schedule_data[master.id][interval.main_time.strftime('%H:%M')]|length
-              > 0 %} {# Process the first appointment data item in the slot #}
-              {% set item_data =
-              schedule_data[master.id][interval.main_time.strftime('%H:%M')][0]
-              %} {% set finance_info = item_data.finance_info %} {% set
+              > 0 %} {# Process ALL appointment data items in the slot #} {% for
+              item_data in
+              schedule_data[master.id][interval.main_time.strftime('%H:%M')] %}
+              {% set finance_info = item_data.finance_info %} {% set
               slot_css_class = item_data.css_class %} {% if
               item_data.display_type == "full" %}
               <!-- Debug: Appointment {{ item_data.id }} - CSS Class: {{ slot_css_class }} -->
               <div
                 class="schedule-appointment {{ slot_css_class }} {% if item_data.multi_booking %}multi-booking{% endif %}"
-                onclick="window.location.href='{{ url_for('appointments.view', id=item_data.id) }}'"
+                onclick="window.location.href='{{ url_for('appointments.view', id=item_data.id) }}?from_schedule=1'"
+                style="margin-bottom: 2px; {% if not loop.last %}border-bottom: 1px solid #ccc;{% endif %}"
               >
                 <strong>{{ item_data.client_name }}</strong><br />
                 <small>{{ interval.main_time.strftime('%H:%M') }}</small>
@@ -202,7 +223,7 @@
                 <small>{{ item_data.completion_info }}</small>
                 {% endif %}
               </div>
-              {% endif %} {% endif %}
+              {% endif %} {% endfor %} {% endif %}
             </td>
             {% endfor %}
           </tr>
@@ -225,15 +246,16 @@
             >
               {% if schedule_data[master.id][sub_slot.strftime('%H:%M')] and
               schedule_data[master.id][sub_slot.strftime('%H:%M')]|length > 0 %}
-              {# Process the first appointment data item in the sub-slot #} {%
-              set item_data =
-              schedule_data[master.id][sub_slot.strftime('%H:%M')][0] %} {% set
-              finance_info = item_data.finance_info %} {% set slot_css_class =
-              item_data.css_class %} {% if item_data.display_type == "full" %}
+              {# Process ALL appointment data items in the sub-slot #} {% for
+              item_data in schedule_data[master.id][sub_slot.strftime('%H:%M')]
+              %} {% set finance_info = item_data.finance_info %} {% set
+              slot_css_class = item_data.css_class %} {% if
+              item_data.display_type == "full" %}
               <!-- Debug: Appointment {{ item_data.id }} - CSS Class: {{ slot_css_class }} -->
               <div
                 class="schedule-appointment {{ slot_css_class }} {% if item_data.multi_booking %}multi-booking{% endif %}"
-                onclick="window.location.href='{{ url_for('appointments.view', id=item_data.id) }}'"
+                onclick="window.location.href='{{ url_for('appointments.view', id=item_data.id) }}?from_schedule=1'"
+                style="margin-bottom: 2px; {% if not loop.last %}border-bottom: 1px solid #ccc;{% endif %}"
               >
                 <strong>{{ item_data.client_name }}</strong><br />
                 <small>{{ sub_slot.strftime('%H:%M') }}</small>
@@ -252,7 +274,7 @@
                 <small>{{ item_data.completion_info }}</small>
                 {% endif %}
               </div>
-              {% endif %} {% endif %}
+              {% endif %} {% endfor %} {% endif %}
             </td>
             {% endfor %}
           </tr>

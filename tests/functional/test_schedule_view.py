@@ -3,7 +3,10 @@ from decimal import Decimal
 
 from werkzeug.security import generate_password_hash
 
-from app.models import Appointment, AppointmentService, PaymentMethod, User
+from app.models import Appointment, AppointmentService
+from app.models import PaymentMethod as PaymentMethodModel
+from app.models import PaymentMethodEnum as PaymentMethod
+from app.models import User
 
 
 def test_schedule_payment_status_display(
@@ -30,9 +33,7 @@ def test_schedule_payment_status_display(
     service_price = test_service_with_price.base_price  # e.g. 100.00
 
     # Clean up any existing appointments for this client/master/date to avoid interference
-    Appointment.query.filter_by(
-        client_id=test_client.id, master_id=regular_user.id, date=test_date
-    ).delete()
+    Appointment.query.filter_by(client_id=test_client.id, master_id=regular_user.id, date=test_date).delete()
     session.commit()
 
     # 1. Completed and Fully Paid
@@ -177,30 +178,20 @@ def test_schedule_payment_status_display(
     # Instead, just verify that all expected CSS classes are present
 
     html_content = response.text
-    assert (
-        "status-completed-paid" in html_content
-    ), "Expected CSS class 'status-completed-paid' not found"
-    assert (
-        "status-completed-debt" in html_content
-    ), "Expected CSS class 'status-completed-debt' not found"
-    assert (
-        "status-scheduled" in html_content
-    ), "Expected CSS class 'status-scheduled' not found"
+    assert "status-completed-paid" in html_content, "Expected CSS class 'status-completed-paid' not found"
+    assert "status-completed-debt" in html_content, "Expected CSS class 'status-completed-debt' not found"
+    assert "status-scheduled" in html_content, "Expected CSS class 'status-scheduled' not found"
 
     # Also verify that financial info is present
     assert "Сплачено:" in html_content, "Expected payment info 'Сплачено:' not found"
     assert "Борг:" in html_content, "Expected payment info 'Борг:' not found"
-    assert (
-        "Передоплата:" in html_content
-    ), "Expected payment info 'Передоплата:' not found"
+    assert "Передоплата:" in html_content, "Expected payment info 'Передоплата:' not found"
 
     # Original test used helper function but the HTML doesn't actually include notes
     # Removed detailed check for specific appointment content since notes aren't displayed
 
 
-def test_multi_booking_client_highlight(
-    session, client, admin_user, test_client, regular_user
-):
+def test_multi_booking_client_highlight(session, client, admin_user, test_client, regular_user):
     """
     Tests that clients with multiple bookings on the same day are highlighted correctly.
 
@@ -283,9 +274,7 @@ def test_multi_booking_client_highlight(
     html_content = response.text
 
     # More flexible check for multi-booking class and the test client name together
-    assert (
-        f"{test_client.name}</strong>" in html_content
-    ), "Test client name not found in response"
+    assert f"{test_client.name}</strong>" in html_content, "Test client name not found in response"
 
     # Find the div containing the test client's name
     client_index = html_content.find(f"{test_client.name}</strong>")
@@ -295,9 +284,7 @@ def test_multi_booking_client_highlight(
     div_class_attr = html_content[div_start:div_end]
 
     # Check that this div has the multi-booking class
-    assert (
-        "multi-booking" in div_class_attr
-    ), "multi-booking class not found for client with multiple bookings"
+    assert "multi-booking" in div_class_attr, "multi-booking class not found for client with multiple bookings"
 
     # Check that the appointment for the client with a single booking doesn't have the 'multi-booking' class
     # Find the div containing the single-booking client's name
@@ -309,14 +296,10 @@ def test_multi_booking_client_highlight(
     div_class_attr = html_content[div_start:div_end]
 
     # Check that this div doesn't have the multi-booking class
-    assert (
-        "multi-booking" not in div_class_attr
-    ), "multi-booking class found for client with only one booking"
+    assert "multi-booking" not in div_class_attr, "multi-booking class found for client with only one booking"
 
 
-def test_schedule_new_appointment_button_date_parameter(
-    session, client, admin_user, test_client, regular_user
-):
+def test_schedule_new_appointment_button_date_parameter(session, client, admin_user, test_client, regular_user):
     """
     Tests that the "New Appointment" button on the schedule page correctly includes the date parameter.
 
@@ -419,9 +402,7 @@ def test_masters_sorted_by_schedule_display_order(session, client):
     pos_master_a = response_text.find("Master A")
 
     # Verify masters appear in the correct order by schedule_display_order
-    assert (
-        pos_master_c < pos_master_b < pos_master_a
-    ), "Masters should be ordered by schedule_display_order"
+    assert pos_master_c < pos_master_b < pos_master_a, "Masters should be ordered by schedule_display_order"
 
 
 def test_masters_with_same_display_order_sorted_alphabetically(session, client):

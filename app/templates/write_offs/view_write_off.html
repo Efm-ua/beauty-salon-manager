@@ -1,0 +1,110 @@
+{% extends "base.html" %} {% block content %}
+<div class="row">
+  <div class="col-md-10 mx-auto">
+    <div class="card">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+          <h4 class="mb-0">
+            <i class="fas fa-minus-circle me-2"></i>Списання товарів №{{
+            write_off.id }}
+          </h4>
+          <span class="badge bg-danger fs-6">Списано</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <!-- Основна інформація -->
+        <div class="row mb-4">
+          <div class="col-md-3">
+            <strong>Дата списання:</strong><br />
+            {{ write_off.write_off_date.strftime('%d.%m.%Y') }}
+          </div>
+          <div class="col-md-3">
+            <strong>Причина:</strong><br />
+            {{ write_off.reason.name if write_off.reason else '-' }}
+          </div>
+          <div class="col-md-3">
+            <strong>Користувач:</strong><br />
+            {{ write_off.user.full_name if write_off.user else '-' }}
+          </div>
+          <div class="col-md-3">
+            <strong>Дата створення:</strong><br />
+            {{ write_off.created_at.strftime('%d.%m.%Y %H:%M') if
+            write_off.created_at else '-' }}
+          </div>
+        </div>
+
+        {% if write_off.notes %}
+        <div class="mb-4">
+          <strong>Примітки:</strong><br />
+          <div class="border rounded p-2 bg-light">{{ write_off.notes }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Товари -->
+        <h5 class="mb-3">Списані товари</h5>
+        <div class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Товар</th>
+                <th>Бренд</th>
+                <th>SKU</th>
+                <th>Кількість</th>
+                <th>Собівартість за од.</th>
+                <th>Загальна собівартість</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in write_off.items %}
+              <tr>
+                <td>{{ item.product.name if item.product else '-' }}</td>
+                <td>
+                  {{ item.product.brand.name if item.product and
+                  item.product.brand else '-' }}
+                </td>
+                <td>{{ item.product.sku if item.product else '-' }}</td>
+                <td>{{ item.quantity }} шт.</td>
+                <td>{{ "%.2f"|format(item.cost_price_per_unit) }} грн</td>
+                <td>{{ "%.2f"|format(item.total_cost) }} грн</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="table-warning">
+                <th colspan="5">Загальна собівартість списаних товарів:</th>
+                <th>{{ "%.2f"|format(write_off.total_cost) }} грн</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-between mt-4">
+          <a
+            href="{{ url_for('products.write_offs_list') }}"
+            class="btn btn-secondary"
+          >
+            <i class="fas fa-arrow-left me-1"></i>Назад до списку
+          </a>
+          <button onclick="window.print()" class="btn btn-outline-primary">
+            <i class="fas fa-print me-1"></i>Друк
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<style>
+  @media print {
+    .btn,
+    .navbar,
+    .card-header .badge {
+      display: none !important;
+    }
+    .card {
+      border: none !important;
+      box-shadow: none !important;
+    }
+  }
+</style>
+{% endblock %}

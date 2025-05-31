@@ -1,0 +1,16 @@
+{% macro render_field(field, class='', type='', min='', max='', step='',
+placeholder='') %}
+<div class="mb-3">
+  {% if field.label %} {{ field.label(class="form-label") }} {% endif %} {% if
+  field.errors %} {% set css_class = class + ' is-invalid' %} {{
+  field(class=css_class, type=type, min=min, max=max, step=step,
+  placeholder=placeholder) }}
+  <div class="invalid-feedback">
+    {% for error in field.errors %} {{ error }} {% endfor %}
+  </div>
+  {% else %} {{ field(class=class, type=type, min=min, max=max, step=step,
+  placeholder=placeholder) }} {% endif %} {% if field.description %}
+  <small class="form-text text-muted">{{ field.description }}</small>
+  {% endif %}
+</div>
+{% endmacro %}

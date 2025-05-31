@@ -1,0 +1,100 @@
+{% extends "base.html" %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2>Списання товарів</h2>
+  <a href="{{ url_for('products.write_offs_create') }}" class="btn btn-primary">
+    <i class="fas fa-plus me-1"></i>Нове списання
+  </a>
+</div>
+
+{% if write_offs.items %}
+<div class="card">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th>Дата списання</th>
+            <th>Причина</th>
+            <th>Користувач</th>
+            <th>Загальна собівартість</th>
+            <th>Дії</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for write_off in write_offs.items %}
+          <tr>
+            <td>{{ write_off.id }}</td>
+            <td>{{ write_off.write_off_date.strftime('%d.%m.%Y') }}</td>
+            <td>{{ write_off.reason.name if write_off.reason else '-' }}</td>
+            <td>{{ write_off.user.full_name if write_off.user else '-' }}</td>
+            <td>{{ "%.2f"|format(write_off.total_cost) }} грн</td>
+            <td>
+              <a
+                href="{{ url_for('products.write_offs_view', id=write_off.id) }}"
+                class="btn btn-sm btn-outline-info"
+              >
+                <i class="fas fa-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Пагінація -->
+    {% if write_offs.pages > 1 %}
+    <nav aria-label="Навігація по сторінках">
+      <ul class="pagination justify-content-center">
+        {% if write_offs.has_prev %}
+        <li class="page-item">
+          <a
+            class="page-link"
+            href="{{ url_for('products.write_offs_list', page=write_offs.prev_num) }}"
+          >
+            <i class="fas fa-chevron-left"></i>
+          </a>
+        </li>
+        {% endif %} {% for page_num in write_offs.iter_pages() %} {% if page_num
+        %} {% if page_num != write_offs.page %}
+        <li class="page-item">
+          <a
+            class="page-link"
+            href="{{ url_for('products.write_offs_list', page=page_num) }}"
+          >
+            {{ page_num }}
+          </a>
+        </li>
+        {% else %}
+        <li class="page-item active">
+          <span class="page-link">{{ page_num }}</span>
+        </li>
+        {% endif %} {% else %}
+        <li class="page-item disabled">
+          <span class="page-link">…</span>
+        </li>
+        {% endif %} {% endfor %} {% if write_offs.has_next %}
+        <li class="page-item">
+          <a
+            class="page-link"
+            href="{{ url_for('products.write_offs_list', page=write_offs.next_num) }}"
+          >
+            <i class="fas fa-chevron-right"></i>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+  <i class="fas fa-info-circle me-2"></i>
+  Документи списання не знайдені.
+  <a href="{{ url_for('products.write_offs_create') }}" class="alert-link"
+    >Створіть перший документ</a
+  >
+</div>
+{% endif %} {% endblock %}

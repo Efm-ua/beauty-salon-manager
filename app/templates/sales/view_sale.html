@@ -1,0 +1,231 @@
+{% extends "base.html" %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="flex-grow-1"></div>
+  <div>
+    <a href="{{ url_for('sales.index') }}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-1"></i>Назад до списку
+    </a>
+    <button onclick="window.print()" class="btn btn-outline-primary">
+      <i class="fas fa-print me-1"></i>Друк
+    </button>
+  </div>
+</div>
+
+<div class="row">
+  <!-- Sale Information -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-info-circle me-1"></i>Інформація про продаж
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless">
+          <tr>
+            <td class="fw-bold">Дата та час:</td>
+            <td>{{ sale.sale_date.strftime('%d.%m.%Y о %H:%M') }}</td>
+          </tr>
+          <tr>
+            <td class="fw-bold">Клієнт:</td>
+            <td>
+              {% if sale.client %} {{ sale.client.name }} {% if
+              sale.client.phone %}
+              <br /><small class="text-muted">{{ sale.client.phone }}</small>
+              {% endif %} {% else %}
+              <span class="text-muted fst-italic">Анонімний клієнт</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td class="fw-bold">Продавець:</td>
+            <td>{{ sale.seller.full_name }}</td>
+          </tr>
+          <tr>
+            <td class="fw-bold">Спосіб оплати:</td>
+            <td>
+              {% if sale.payment_method_ref %}
+              <span class="badge bg-info"
+                >{{ sale.payment_method_ref.name }}</span
+              >
+              {% else %}
+              <span class="text-muted">Не вказано</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% if sale.notes %}
+          <tr>
+            <td class="fw-bold">Примітки:</td>
+            <td>{{ sale.notes }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td class="fw-bold">Створив запис:</td>
+            <td>
+              {{ sale.creator.full_name }}
+              <br /><small class="text-muted"
+                >{{ sale.created_at.strftime('%d.%m.%Y о %H:%M') }}</small
+              >
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sale Summary -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-calculator me-1"></i>Фінансова інформація
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless">
+          <tr>
+            <td class="fw-bold">Кількість позицій:</td>
+            <td>{{ sale.items|length }}</td>
+          </tr>
+          <tr>
+            <td class="fw-bold">Загальна кількість товарів:</td>
+            <td>{{ sale.items|sum(attribute='quantity') }}</td>
+          </tr>
+          <tr>
+            <td class="fw-bold">Загальна собівартість:</td>
+            <td>
+              {% set total_cost = sale.items|sum(attribute='total_cost') %} {{
+              "%.2f"|format(total_cost) }} грн
+            </td>
+          </tr>
+          <tr class="table-success">
+            <td class="fw-bold fs-5">Загальна сума продажу:</td>
+            <td class="fw-bold fs-5">
+              {{ "%.2f"|format(sale.total_amount) }} грн
+            </td>
+          </tr>
+          <tr class="table-info">
+            <td class="fw-bold">Прибуток:</td>
+            <td class="fw-bold">
+              {% set total_cost = sale.items|sum(attribute='total_cost') %} {%
+              set profit = sale.total_amount - total_cost %} {{
+              "%.2f"|format(profit) }} грн {% if sale.total_amount > 0 %}
+              <small class="text-muted"
+                >({{ "%.1f"|format((profit / sale.total_amount) * 100)
+                }}%)</small
+              >
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sale Items -->
+<div class="card mt-4">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="fas fa-shopping-cart me-1"></i>Продані товари
+    </h5>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover">
+        <thead class="table-dark">
+          <tr>
+            <th>№</th>
+            <th>Товар</th>
+            <th>SKU</th>
+            <th>Кількість</th>
+            <th>Ціна за одиницю</th>
+            <th>Собівартість за одиницю</th>
+            <th>Загальна ціна</th>
+            <th>Загальна собівартість</th>
+            <th>Прибуток</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in sale.items %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>
+              <strong>{{ item.product.name }}</strong>
+              {% if item.product.brand %}
+              <br /><small class="text-muted"
+                >{{ item.product.brand.name }}</small
+              >
+              {% endif %}
+            </td>
+            <td>
+              <code>{{ item.product.sku }}</code>
+            </td>
+            <td>
+              <span class="badge bg-secondary">{{ item.quantity }}</span>
+            </td>
+            <td>{{ "%.2f"|format(item.price_per_unit) }} грн</td>
+            <td>{{ "%.2f"|format(item.cost_price_per_unit) }} грн</td>
+            <td class="fw-bold">{{ "%.2f"|format(item.total_price) }} грн</td>
+            <td>{{ "%.2f"|format(item.total_cost) }} грн</td>
+            <td class="fw-bold text-success">
+              {{ "%.2f"|format(item.profit) }} грн
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-secondary">
+          <tr>
+            <th colspan="6">Разом:</th>
+            <th>{{ "%.2f"|format(sale.total_amount) }} грн</th>
+            <th>
+              {% set total_cost = sale.items|sum(attribute='total_cost') %} {{
+              "%.2f"|format(total_cost) }} грн
+            </th>
+            <th class="text-success">
+              {% set profit = sale.total_amount - total_cost %} {{
+              "%.2f"|format(profit) }} грн
+            </th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if sale.appointment %}
+<!-- Related Appointment -->
+<div class="card mt-4">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="fas fa-calendar-alt me-1"></i>Пов'язаний запис
+    </h5>
+  </div>
+  <div class="card-body">
+    <p>
+      <strong>Запис №{{ sale.appointment.id }}</strong> - {{
+      sale.appointment.date.strftime('%d.%m.%Y') }} о {{
+      sale.appointment.start_time.strftime('%H:%M') }}
+    </p>
+    <a
+      href="{{ url_for('appointments.view', id=sale.appointment.id) }}"
+      class="btn btn-sm btn-outline-primary"
+    >
+      <i class="fas fa-external-link-alt me-1"></i>Переглянути запис
+    </a>
+  </div>
+</div>
+{% endif %} {% endblock %} {% block scripts %}
+<style>
+  @media print {
+    .btn,
+    .card-header {
+      display: none !important;
+    }
+    .card {
+      border: none !important;
+      box-shadow: none !important;
+    }
+  }
+</style>
+{% endblock %}

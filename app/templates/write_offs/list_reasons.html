@@ -1,0 +1,112 @@
+{% extends "base.html" %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2>Причини списання</h2>
+  <a
+    href="{{ url_for('products.write_off_reasons_create') }}"
+    class="btn btn-primary"
+  >
+    <i class="fas fa-plus me-1"></i>Додати причину
+  </a>
+</div>
+
+{% if reasons.items %}
+<div class="card">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Назва</th>
+            <th>Статус</th>
+            <th>Дата створення</th>
+            <th>Дії</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for reason in reasons.items %}
+          <tr>
+            <td>{{ reason.id }}</td>
+            <td>{{ reason.name }}</td>
+            <td>
+              {% if reason.is_active %}
+              <span class="badge bg-success">Активна</span>
+              {% else %}
+              <span class="badge bg-secondary">Неактивна</span>
+              {% endif %}
+            </td>
+            <td>
+              {{ reason.created_at.strftime('%d.%m.%Y %H:%M') if
+              reason.created_at else '-' }}
+            </td>
+            <td>
+              <a
+                href="{{ url_for('products.write_off_reasons_edit', id=reason.id) }}"
+                class="btn btn-sm btn-outline-primary"
+              >
+                <i class="fas fa-edit"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Пагінація -->
+    {% if reasons.pages > 1 %}
+    <nav aria-label="Навігація по сторінках">
+      <ul class="pagination justify-content-center">
+        {% if reasons.has_prev %}
+        <li class="page-item">
+          <a
+            class="page-link"
+            href="{{ url_for('products.write_off_reasons_list', page=reasons.prev_num) }}"
+          >
+            <i class="fas fa-chevron-left"></i>
+          </a>
+        </li>
+        {% endif %} {% for page_num in reasons.iter_pages() %} {% if page_num %}
+        {% if page_num != reasons.page %}
+        <li class="page-item">
+          <a
+            class="page-link"
+            href="{{ url_for('products.write_off_reasons_list', page=page_num) }}"
+          >
+            {{ page_num }}
+          </a>
+        </li>
+        {% else %}
+        <li class="page-item active">
+          <span class="page-link">{{ page_num }}</span>
+        </li>
+        {% endif %} {% else %}
+        <li class="page-item disabled">
+          <span class="page-link">…</span>
+        </li>
+        {% endif %} {% endfor %} {% if reasons.has_next %}
+        <li class="page-item">
+          <a
+            class="page-link"
+            href="{{ url_for('products.write_off_reasons_list', page=reasons.next_num) }}"
+          >
+            <i class="fas fa-chevron-right"></i>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+  <i class="fas fa-info-circle me-2"></i>
+  Причини списання не знайдені.
+  <a
+    href="{{ url_for('products.write_off_reasons_create') }}"
+    class="alert-link"
+    >Створіть першу причину</a
+  >
+</div>
+{% endif %} {% endblock %}

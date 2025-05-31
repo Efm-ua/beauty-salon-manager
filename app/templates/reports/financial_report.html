@@ -9,24 +9,28 @@
       <div class="row g-3">
         <div class="col-md-6">
           <div class="form-group">
-            {{ form.report_date.label(class="form-label") }} {{
-            form.report_date(class="form-control", type="date") }} {% if
-            form.report_date.errors %}
+            {{ form.start_date.label(class="form-label") }} {{
+            form.start_date(class="form-control", type="date") }} {% if
+            form.start_date.errors %}
             <div class="text-danger">
-              {% for error in form.report_date.errors %} {{ error }} {% endfor
-              %}
+              {% for error in form.start_date.errors %} {{ error }} {% endfor %}
             </div>
             {% endif %}
           </div>
         </div>
-        <div class="col-md-6" style="display: none">
-          <!-- Hidden master field, not needed for this report -->
-          {{ form.master_id() }}
+        <div class="col-md-6">
+          <div class="form-group">
+            {{ form.end_date.label(class="form-label") }} {{
+            form.end_date(class="form-control", type="date") }} {% if
+            form.end_date.errors %}
+            <div class="text-danger">
+              {% for error in form.end_date.errors %} {{ error }} {% endfor %}
+            </div>
+            {% endif %}
+          </div>
         </div>
       </div>
-      <div class="mt-3">
-        {{ form.submit(class="btn btn-primary", value="Сформувати звіт") }}
-      </div>
+      <div class="mt-3">{{ form.submit(class="btn btn-primary") }}</div>
     </form>
   </div>
 </div>
@@ -35,48 +39,125 @@
 <div class="alert alert-danger">
   <h5 class="mb-0">{{ error }}</h5>
 </div>
-{% endif %} {% if selected_date %}
+{% endif %} {% if selected_start_date and selected_end_date %}
 <div class="alert alert-info">
   <h5 class="mb-0">
-    Фінансовий звіт за {{ selected_date.strftime('%d.%m.%Y') }}
+    Фінансовий звіт з {{ selected_start_date.strftime('%d.%m.%Y') }} по {{
+    selected_end_date.strftime('%d.%m.%Y') }}
   </h5>
 </div>
 
-{% if payment_breakdown %}
 <div class="row">
-  <div class="col-md-6">
+  <!-- Основні показники -->
+  <div class="col-md-8">
     <div class="card mb-4">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">
-          Загальна сума: {{ total_amount | format_currency }}
-        </h5>
+        <h5 class="mb-0">Фінансові показники</h5>
       </div>
       <div class="card-body">
         <div class="table-responsive">
           <table class="table table-striped table-bordered">
             <thead class="table-primary">
               <tr>
-                <th>Тип оплати</th>
+                <th>Показник</th>
                 <th class="text-end">Сума</th>
-                <th class="text-end">Відсоток</th>
               </tr>
             </thead>
             <tbody>
-              {% for method_name, amount in payment_breakdown %}
+              <tr>
+                <td><strong>Доходи від послуг</strong></td>
+                <td class="text-end">
+                  {{ service_revenue | format_currency }}
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Доходи від продажу товарів</strong></td>
+                <td class="text-end">
+                  {{ product_revenue | format_currency }}
+                </td>
+              </tr>
+              <tr class="table-light">
+                <td><strong>Загальний дохід</strong></td>
+                <td class="text-end">
+                  <strong>{{ total_revenue | format_currency }}</strong>
+                </td>
+              </tr>
+              <tr class="table-secondary">
+                <td colspan="2">
+                  <strong>Витрати та прибутковість товарів</strong>
+                </td>
+              </tr>
+              <tr>
+                <td>Собівартість проданих товарів (COGS)</td>
+                <td class="text-end text-danger">
+                  {{ total_cogs | format_currency }}
+                </td>
+              </tr>
+              <tr>
+                <td>Валовий прибуток від товарів</td>
+                <td class="text-end text-success">
+                  {{ product_gross_profit | format_currency }}
+                </td>
+              </tr>
+              <tr class="table-success">
+                <td><strong>Загальний валовий прибуток</strong></td>
+                <td class="text-end">
+                  <strong>{{ total_gross_profit | format_currency }}</strong>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Додаткова інформація про товари -->
+        {% if product_revenue > 0 %}
+        <div class="mt-3">
+          <small class="text-muted">
+            <strong>Товарна маржа:</strong>
+            {% set margin_percentage = (product_gross_profit / product_revenue *
+            100) if product_revenue > 0 else 0 %} {{
+            "%.1f"|format(margin_percentage) }}%
+          </small>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Розподіл за типами оплати -->
+  {% if payment_breakdown %}
+  <div class="col-md-4">
+    <div class="card mb-4">
+      <div class="card-header bg-success text-white">
+        <h5 class="mb-0">Розподіл за типами оплати</h5>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped">
+            <thead>
+              <tr>
+                <th>Тип оплати</th>
+                <th class="text-end">Сума</th>
+                <th class="text-end">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for method_name, amount in payment_breakdown %} {% if amount >
+              0 %}
               <tr>
                 <td>{{ method_name }}</td>
                 <td class="text-end">{{ amount | format_currency }}</td>
                 <td class="text-end">
-                  {% if total_amount > 0 %} {{ "%.1f"|format((amount /
-                  total_amount) * 100) }}% {% else %} 0% {% endif %}
+                  {% if total_revenue > 0 %} {{ "%.1f"|format((amount /
+                  total_revenue) * 100) }}% {% else %} 0% {% endif %}
                 </td>
               </tr>
-              {% endfor %}
+              {% endif %} {% endfor %}
             </tbody>
             <tfoot>
               <tr class="table-secondary">
-                <th>Загалом:</th>
-                <th class="text-end">{{ total_amount | format_currency }}</th>
+                <th>Разом:</th>
+                <th class="text-end">{{ total_revenue | format_currency }}</th>
                 <th class="text-end">100%</th>
               </tr>
             </tfoot>
@@ -85,16 +166,78 @@
       </div>
     </div>
   </div>
+  {% endif %}
+</div>
+
+<!-- Детальна аналітика -->
+{% if total_revenue > 0 %}
+<div class="row">
   <div class="col-md-6">
     <div class="card mb-4">
-      <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Графічне представлення</h5>
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Структура доходів</h5>
       </div>
-      <div class="card-body text-center">
-        <!-- В майбутньому тут можна додати графік розподілу надходжень за типами оплати -->
-        <div class="alert alert-secondary">
-          <i class="fas fa-chart-pie fa-3x mb-3"></i>
-          <p>Графічне представлення буде доступно в майбутньому</p>
+      <div class="card-body">
+        <div class="progress mb-2" style="height: 25px">
+          {% set service_percentage = (service_revenue / total_revenue * 100) if
+          total_revenue > 0 else 0 %} {% set product_percentage =
+          (product_revenue / total_revenue * 100) if total_revenue > 0 else 0 %}
+
+          <div
+            class="progress-bar bg-primary"
+            role="progressbar"
+            style="width: {{ service_percentage }}%"
+            aria-valuenow="{{ service_percentage }}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            Послуги {{ "%.1f"|format(service_percentage) }}%
+          </div>
+          <div
+            class="progress-bar bg-warning"
+            role="progressbar"
+            style="width: {{ product_percentage }}%"
+            aria-valuenow="{{ product_percentage }}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            Товари {{ "%.1f"|format(product_percentage) }}%
+          </div>
+        </div>
+        <small class="text-muted">
+          Послуги: {{ service_revenue | format_currency }} ({{
+          "%.1f"|format(service_percentage) }}%)
+          <br />
+          Товари: {{ product_revenue | format_currency }} ({{
+          "%.1f"|format(product_percentage) }}%)
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">Ключові показники</h5>
+      </div>
+      <div class="card-body">
+        <div class="row text-center">
+          <div class="col-6">
+            <h6 class="text-muted">Середній чек</h6>
+            <h5 class="text-primary">
+              {% set total_transactions = (payment_breakdown | selectattr('1',
+              'gt', 0) | list | length) or 1 %} {{ (total_revenue /
+              total_transactions) | format_currency }}
+            </h5>
+          </div>
+          <div class="col-6">
+            <h6 class="text-muted">Валова маржа</h6>
+            <h5 class="text-success">
+              {% set overall_margin = (total_gross_profit / total_revenue * 100)
+              if total_revenue > 0 else 0 %} {{ "%.1f"|format(overall_margin)
+              }}%
+            </h5>
+          </div>
         </div>
       </div>
     </div>
@@ -103,12 +246,12 @@
 {% else %}
 <div class="alert alert-warning">
   <h5 class="mb-0">
-    Немає виконаних записів за обрану дату або записи не мають правильно
-    оформлених платежів.
+    Немає доходів за обраний період. Перевірте наявність завершених записів та
+    продажів товарів.
   </h5>
 </div>
 {% endif %} {% elif form.is_submitted() and not error %}
 <div class="alert alert-warning">
-  <h5 class="mb-0">Немає даних для відображення. Перевірте вибрану дату.</h5>
+  <h5 class="mb-0">Оберіть діапазон дат для формування звіту.</h5>
 </div>
 {% endif %} {% endblock %}

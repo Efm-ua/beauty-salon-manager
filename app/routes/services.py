@@ -3,7 +3,8 @@ from typing import Any
 from flask import Blueprint, flash, jsonify, redirect, render_template, url_for
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import FloatField, IntegerField, StringField, SubmitField, TextAreaField
+from wtforms import (FloatField, IntegerField, StringField, SubmitField,
+                     TextAreaField)
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
 from app.models import AppointmentService, Service, db

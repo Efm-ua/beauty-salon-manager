@@ -16,9 +16,7 @@ from app.models import (Appointment, AppointmentService, Client, Service, User,
 class TestAppointmentCreateParameterHandling:
     """Тесты обработки параметров при создании записей."""
 
-    def test_create_appointment_with_master_id_parameter(
-        self, client, admin_user, test_client, test_service
-    ):
+    def test_create_appointment_with_master_id_parameter(self, client, admin_user, test_client, test_service):
         """Тест создания записи с передачей master_id как параметра."""
         # Логинимся как администратор
         response = client.post(
@@ -36,9 +34,7 @@ class TestAppointmentCreateParameterHandling:
         response = client.get(f"/appointments/create?master_id={admin_user.id}")
         assert response.status_code == 200
 
-    def test_create_appointment_with_invalid_master_id_parameter(
-        self, client, admin_user, test_client, test_service
-    ):
+    def test_create_appointment_with_invalid_master_id_parameter(self, client, admin_user, test_client, test_service):
         """Тест создания записи с неверным master_id параметром."""
         # Логинимся как администратор
         response = client.post(
@@ -56,9 +52,7 @@ class TestAppointmentCreateParameterHandling:
         response = client.get("/appointments/create?master_id=invalid")
         assert response.status_code == 200
 
-    def test_create_appointment_with_date_parameter(
-        self, client, admin_user, test_client, test_service
-    ):
+    def test_create_appointment_with_date_parameter(self, client, admin_user, test_client, test_service):
         """Тест создания записи с передачей даты как параметра."""
         # Логинимся как администратор
         response = client.post(
@@ -77,9 +71,7 @@ class TestAppointmentCreateParameterHandling:
         response = client.get(f"/appointments/create?date={tomorrow}")
         assert response.status_code == 200
 
-    def test_create_appointment_with_invalid_date_parameter(
-        self, client, admin_user, test_client, test_service
-    ):
+    def test_create_appointment_with_invalid_date_parameter(self, client, admin_user, test_client, test_service):
         """Тест создания записи с неверным форматом даты."""
         # Логинимся как администратор
         response = client.post(
@@ -97,9 +89,7 @@ class TestAppointmentCreateParameterHandling:
         response = client.get("/appointments/create?date=invalid-date")
         assert response.status_code == 200
 
-    def test_create_appointment_with_time_parameter(
-        self, client, admin_user, test_client, test_service
-    ):
+    def test_create_appointment_with_time_parameter(self, client, admin_user, test_client, test_service):
         """Тест создания записи с передачей времени как параметра."""
         # Логинимся как администратор
         response = client.post(
@@ -117,9 +107,7 @@ class TestAppointmentCreateParameterHandling:
         response = client.get("/appointments/create?time=14:30")
         assert response.status_code == 200
 
-    def test_create_appointment_with_invalid_time_parameter(
-        self, client, admin_user, test_client, test_service
-    ):
+    def test_create_appointment_with_invalid_time_parameter(self, client, admin_user, test_client, test_service):
         """Тест создания записи с неверным форматом времени."""
         # Логинимся как администратор
         response = client.post(
@@ -170,15 +158,11 @@ class TestAppointmentDeletionCoverage:
         assert response.status_code == 200
 
         # Попытка удалить чужую запись
-        response = client.post(
-            f"/appointments/{appointment.id}/delete", follow_redirects=True
-        )
+        response = client.post(f"/appointments/{appointment.id}/delete", follow_redirects=True)
         assert response.status_code == 200
         assert "Ви можете видаляти тільки свої записи".encode() in response.data
 
-    def test_delete_completed_appointment_non_admin(
-        self, client, regular_user, test_client, test_service
-    ):
+    def test_delete_completed_appointment_non_admin(self, client, regular_user, test_client, test_service):
         """Тест запрета удаления завершенной записи для не-админа."""
         # Создаем завершенную запись для обычного пользователя
         appointment = Appointment(
@@ -205,15 +189,11 @@ class TestAppointmentDeletionCoverage:
         assert response.status_code == 200
 
         # Попытка удалить завершенную запись
-        response = client.post(
-            f"/appointments/{appointment.id}/delete", follow_redirects=True
-        )
+        response = client.post(f"/appointments/{appointment.id}/delete", follow_redirects=True)
         assert response.status_code == 200
         assert "Ви не можете видаляти завершені записи".encode() in response.data
 
-    def test_delete_appointment_from_schedule_redirect(
-        self, client, admin_user, test_appointment
-    ):
+    def test_delete_appointment_from_schedule_redirect(self, client, admin_user, test_appointment):
         """Тест редиректа на расписание после удаления записи."""
         # Логинимся как администратор
         response = client.post(
@@ -234,9 +214,7 @@ class TestAppointmentDeletionCoverage:
         )
         assert response.status_code == 200
 
-    def test_delete_appointment_database_error(
-        self, client, admin_user, test_appointment
-    ):
+    def test_delete_appointment_database_error(self, client, admin_user, test_appointment):
         """Тест обработки ошибки базы данных при удалении записи."""
         # Логинимся как администратор
         response = client.post(
@@ -251,18 +229,14 @@ class TestAppointmentDeletionCoverage:
         assert response.status_code == 200
 
         # Удаляем запись (без мока - просто проверяем, что код работает)
-        response = client.post(
-            f"/appointments/{test_appointment.id}/delete", follow_redirects=True
-        )
+        response = client.post(f"/appointments/{test_appointment.id}/delete", follow_redirects=True)
         assert response.status_code == 200
 
 
 class TestAppointmentCreatePostRequests:
     """Тесты POST запросов для создания записей."""
 
-    def test_create_appointment_regular_user_for_self(
-        self, client, regular_user, test_client, test_service
-    ):
+    def test_create_appointment_regular_user_for_self(self, client, regular_user, test_client, test_service):
         """Тест создания записи обычным пользователем для себя."""
         # Логинимся как обычный пользователь
         response = client.post(

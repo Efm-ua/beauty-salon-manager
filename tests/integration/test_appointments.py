@@ -47,7 +47,10 @@ from decimal import Decimal
 import pytest
 from werkzeug.security import generate_password_hash
 
-from app.models import Appointment, AppointmentService, Client, PaymentMethod, Service, User, db
+from app.models import Appointment, AppointmentService, Client
+from app.models import PaymentMethod as PaymentMethodModel
+from app.models import PaymentMethodEnum as PaymentMethod
+from app.models import Service, User, db
 
 
 @pytest.fixture
@@ -198,8 +201,10 @@ def test_appointment_filter_by_master(appointments_auth_client, appointment_test
     Тест фільтрації записів за майстром.
     Перевіряє, що при застосуванні фільтра за майстром відображаються правильні записи.
     """
-    from app.models import Appointment, AppointmentService, Client, Service, User, db
     from datetime import date, time
+
+    from app.models import (Appointment, AppointmentService, Client, Service,
+                            User, db)
 
     # Створюємо другого майстра для тестування фільтрації
     master2 = User(
@@ -1413,7 +1418,9 @@ def test_edit_service_price_updates_total_price(appointments_auth_client, sessio
 
 
 # Test payment logic when completing an appointment
-def test_appointment_completion_payment_methods(app, appointments_auth_client, appointment_test_data, session):
+def test_appointment_completion_payment_methods(
+    app, appointments_auth_client, appointment_test_data, session, payment_methods
+):
     """
     Тест обробки оплати при завершенні запису з різними методами оплати.
     Перевіряє коректність встановлення amount_paid та payment_status.

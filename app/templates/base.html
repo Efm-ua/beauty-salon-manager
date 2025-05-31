@@ -66,6 +66,13 @@
                 <i class="fas fa-list-alt me-1"></i>Послуги
               </a>
             </li>
+            {% if current_user.is_admin %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('sales.index') }}">
+                <i class="fas fa-shopping-cart me-1"></i>Продажі
+              </a>
+            </li>
+            {% endif %}
             <li class="nav-item dropdown">
               <a
                 class="nav-link dropdown-toggle"
@@ -101,6 +108,40 @@
                     <i class="fas fa-warehouse me-1"></i>Склад
                   </a>
                 </li>
+                {% if current_user.is_admin %}
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('products.goods_receipts_list') }}"
+                  >
+                    <i class="fas fa-truck-loading me-1"></i>Надходження товарів
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('products.write_offs_list') }}"
+                  >
+                    <i class="fas fa-minus-circle me-1"></i>Списання товарів
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('products.write_off_reasons_list') }}"
+                  >
+                    <i class="fas fa-list-ul me-1"></i>Причини списання
+                  </a>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('products.inventory_acts_list') }}"
+                  >
+                    <i class="fas fa-clipboard-list me-1"></i>Інвентаризація
+                  </a>
+                </li>
+                {% endif %}
               </ul>
             </li>
             <li class="nav-item dropdown">
@@ -131,6 +172,14 @@
                   </a>
                 </li>
                 {% if current_user.is_admin %}
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href="{{ url_for('reports.admin_salary_report') }}"
+                  >
+                    <i class="fas fa-user-tie me-1"></i>Звіт ЗП адміністратора
+                  </a>
+                </li>
                 <li>
                   <a
                     class="dropdown-item"

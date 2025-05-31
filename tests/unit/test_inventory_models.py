@@ -1,9 +1,10 @@
-import pytest
 from decimal import Decimal
-from unittest.mock import patch
 from typing import Any
+from unittest.mock import patch
 
-from app.models import Brand, Product, StockLevel, db
+import pytest
+
+from app.models import Brand, Product, StockLevel
 
 
 class TestBrandModel:
@@ -59,7 +60,7 @@ class TestBrandModel:
             # Refresh the brand to get updated relationships
             db.session.refresh(brand)
             assert len(brand.products) == 1
-            assert brand.products[0] == product
+            assert brand.products[0] == product  # type: ignore[index]
             assert product.brand == brand
 
 
@@ -292,8 +293,8 @@ class TestProductStockLevelIntegration:
             stock_level = StockLevel.query.filter_by(product_id=product.id).first()
 
             # Test relationships
-            assert len(product.stock_records) == 1
-            assert product.stock_records[0] == stock_level
+            assert len(product.stock_records) == 1  # type: ignore[arg-type]
+            assert product.stock_records[0] == stock_level  # type: ignore[index]
             assert stock_level.product == product
 
     def test_cascade_delete_stock_level(self, app: Any, db: Any) -> None:

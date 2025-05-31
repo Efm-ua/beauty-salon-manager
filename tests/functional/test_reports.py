@@ -1,10 +1,14 @@
 from datetime import date, datetime, timedelta
 from unittest.mock import patch
+from decimal import Decimal
 
 import pytest
 from werkzeug.security import generate_password_hash
 
-from app.models import Appointment, AppointmentService, Client, PaymentMethod, Service, User, db
+from app.models import Appointment, AppointmentService, Client
+from app.models import PaymentMethod as PaymentMethodModel
+from app.models import PaymentMethodEnum as PaymentMethod
+from app.models import Service, User, db, Sale, Product, Brand, SaleItem
 
 
 def test_salary_report_access_without_login(client):
@@ -993,3 +997,1669 @@ def test_report_form_validation(auth_client):
         },
         follow_redirects=True,
     )
+
+
+def test_salary_report_services_commission_calculation(client, auth, app, test_db):
+    """Test salary report calculation for services commission based on configurable_commission_rate."""
+    with app.app_context():
+        # Create a test user with specific commission rate
+        commission_rate = Decimal("15.50")  # 15.5%
+        test_user_dict = {
+            "username": "commission_test_user",
+            "password": "test_password",
+            "full_name": "Commission Test User",
+            "is_admin": False,
+            "configurable_commission_rate": commission_rate,
+        }
+
+        user = User(
+            username=test_user_dict["username"],
+            password=generate_password_hash(test_user_dict["password"]),
+            full_name=test_user_dict["full_name"],
+            is_admin=test_user_dict["is_admin"],
+            configurable_commission_rate=commission_rate,
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        # Create client
+        client_obj = Client(name="Commission Test Client", phone="0991234568")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        # Create service
+        service = Service(name="Commission Test Service", duration=60, description="Test service for commission")
+        test_db.add(service)
+        test_db.commit()
+
+        # Create appointment with "completed" status
+        today = datetime.now().date()
+        current_time = datetime.now().time()
+        appointment = Appointment(
+            client_id=client_obj.id,
+            master_id=user.id,
+            date=today,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment)
+        test_db.commit()
+
+        # Add service to appointment with specific price
+        service_price = 200.0
+        appointment_service = AppointmentService(
+            appointment_id=appointment.id, service_id=service.id, price=service_price
+        )
+        test_db.add(appointment_service)
+        test_db.commit()
+
+        # Login
+        auth.login(username=test_user_dict["username"], password=test_user_dict["password"])
+
+        # Send request for report
+        response = client.post(
+            "/reports/salary",
+            data={
+                "report_date": today.strftime("%Y-%m-%d"),
+                "master_id": str(user.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        # Check that report was successfully generated
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check if commission rate is displayed correctly
+        assert "15.5%" in html_content
+
+        # Check if service commission calculation is correct (200 * 15.5% = 31.00)
+        expected_commission = service_price * float(commission_rate) / 100  # 200 * 0.155 = 31.0
+        assert f"{expected_commission:.2f}" in html_content
+
+
+def test_salary_report_products_commission_calculation(client, auth, app, test_db):
+    """Test salary report calculation for products commission (fixed 9%)."""
+    with app.app_context():
+        # Create a test user
+        test_user_dict = {
+            "username": "products_test_user",
+            "password": "test_password",
+            "full_name": "Products Test User",
+            "is_admin": False,
+            "configurable_commission_rate": Decimal("10.00"),
+        }
+
+        user = User(
+            username=test_user_dict["username"],
+            password=generate_password_hash(test_user_dict["password"]),
+            full_name=test_user_dict["full_name"],
+            is_admin=test_user_dict["is_admin"],
+            configurable_commission_rate=Decimal("10.00"),
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        # Create brand and product for sale
+        brand = Brand(name="Test Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        product = Product(
+            name="Test Product",
+            sku="TEST001",
+            brand_id=brand.id,
+            current_sale_price=Decimal("50.00"),
+        )
+        test_db.add(product)
+        test_db.commit()
+
+        # Create sale with total amount
+        today = datetime.now().date()
+        sale_amount = Decimal("300.00")
+        sale = Sale(
+            sale_date=datetime.combine(today, datetime.min.time()),
+            user_id=user.id,  # Master who made the sale
+            total_amount=sale_amount,
+            created_by_user_id=user.id,
+        )
+        test_db.add(sale)
+        test_db.commit()
+
+        # Login
+        auth.login(username=test_user_dict["username"], password=test_user_dict["password"])
+
+        # Send request for report
+        response = client.post(
+            "/reports/salary",
+            data={
+                "report_date": today.strftime("%Y-%m-%d"),
+                "master_id": str(user.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        # Check that report was successfully generated
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check if products commission is calculated correctly (300 * 9% = 27.00)
+        expected_products_commission = float(sale_amount) * 0.09  # 300 * 0.09 = 27.0
+        assert f"{expected_products_commission:.2f}" in html_content
+
+        # Check if fixed 9% rate is displayed
+        assert "9.0% (fixed)" in html_content
+
+
+def test_salary_report_combined_commission_calculation(client, auth, app, test_db):
+    """Test salary report calculation combining services and products commission."""
+    with app.app_context():
+        # Create a test user with commission rate
+        commission_rate = Decimal("12.00")  # 12%
+        test_user_dict = {
+            "username": "combined_test_user",
+            "password": "test_password",
+            "full_name": "Combined Test User",
+            "is_admin": False,
+            "configurable_commission_rate": commission_rate,
+        }
+
+        user = User(
+            username=test_user_dict["username"],
+            password=generate_password_hash(test_user_dict["password"]),
+            full_name=test_user_dict["full_name"],
+            is_admin=test_user_dict["is_admin"],
+            configurable_commission_rate=commission_rate,
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        # Create client and service for appointment
+        client_obj = Client(name="Combined Test Client", phone="0991234569")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        service = Service(name="Combined Test Service", duration=60, description="Test service")
+        test_db.add(service)
+        test_db.commit()
+
+        # Create completed appointment
+        today = datetime.now().date()
+        current_time = datetime.now().time()
+        appointment = Appointment(
+            client_id=client_obj.id,
+            master_id=user.id,
+            date=today,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment)
+        test_db.commit()
+
+        # Add service to appointment
+        service_price = 150.0
+        appointment_service = AppointmentService(
+            appointment_id=appointment.id, service_id=service.id, price=service_price
+        )
+        test_db.add(appointment_service)
+        test_db.commit()
+
+        # Create brand and product for sale
+        brand = Brand(name="Combined Test Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        product = Product(
+            name="Combined Test Product",
+            sku="COMB001",
+            brand_id=brand.id,
+            current_sale_price=Decimal("75.00"),
+        )
+        test_db.add(product)
+        test_db.commit()
+
+        # Create sale
+        sale_amount = Decimal("250.00")
+        sale = Sale(
+            sale_date=datetime.combine(today, datetime.min.time()),
+            user_id=user.id,
+            total_amount=sale_amount,
+            created_by_user_id=user.id,
+        )
+        test_db.add(sale)
+        test_db.commit()
+
+        # Login
+        auth.login(username=test_user_dict["username"], password=test_user_dict["password"])
+
+        # Send request for report
+        response = client.post(
+            "/reports/salary",
+            data={
+                "report_date": today.strftime("%Y-%m-%d"),
+                "master_id": str(user.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        # Check that report was successfully generated
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Calculate expected commissions
+        expected_services_commission = service_price * float(commission_rate) / 100  # 150 * 0.12 = 18.0
+        expected_products_commission = float(sale_amount) * 0.09  # 250 * 0.09 = 22.5
+        expected_total_salary = expected_services_commission + expected_products_commission  # 18.0 + 22.5 = 40.5
+
+        # Check calculations in HTML
+        assert f"{expected_services_commission:.2f}" in html_content
+        assert f"{expected_products_commission:.2f}" in html_content
+        assert f"{expected_total_salary:.2f}" in html_content
+
+
+def test_salary_report_zero_commission_rate(client, auth, app, test_db):
+    """Test salary report when master has zero commission rate."""
+    with app.app_context():
+        # Create a test user with zero commission rate
+        test_user_dict = {
+            "username": "zero_commission_user",
+            "password": "test_password",
+            "full_name": "Zero Commission User",
+            "is_admin": False,
+            "configurable_commission_rate": Decimal("0.00"),
+        }
+
+        user = User(
+            username=test_user_dict["username"],
+            password=generate_password_hash(test_user_dict["password"]),
+            full_name=test_user_dict["full_name"],
+            is_admin=test_user_dict["is_admin"],
+            configurable_commission_rate=Decimal("0.00"),
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        # Create client and service
+        client_obj = Client(name="Zero Commission Client", phone="0991234570")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        service = Service(name="Zero Commission Service", duration=60, description="Test service")
+        test_db.add(service)
+        test_db.commit()
+
+        # Create completed appointment
+        today = datetime.now().date()
+        current_time = datetime.now().time()
+        appointment = Appointment(
+            client_id=client_obj.id,
+            master_id=user.id,
+            date=today,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment)
+        test_db.commit()
+
+        # Add service to appointment
+        service_price = 100.0
+        appointment_service = AppointmentService(
+            appointment_id=appointment.id, service_id=service.id, price=service_price
+        )
+        test_db.add(appointment_service)
+        test_db.commit()
+
+        # Login
+        auth.login(username=test_user_dict["username"], password=test_user_dict["password"])
+
+        # Send request for report
+        response = client.post(
+            "/reports/salary",
+            data={
+                "report_date": today.strftime("%Y-%m-%d"),
+                "master_id": str(user.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        # Check that report was successfully generated
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check that commission rate is 0.0%
+        assert "0.0%" in html_content
+        # Check that services commission is 0.00
+        assert "Services Commission:</strong></p>" in html_content and "0.00" in html_content
+
+
+def test_salary_report_display_elements(client, auth, app, test_db):
+    """Test that salary report displays all required elements including individual appointment totals."""
+    with app.app_context():
+        # Create test user with commission rate
+        test_user = User(
+            username="display_test_user",
+            password=generate_password_hash("test_password"),
+            full_name="Display Test User",
+            is_admin=False,
+            configurable_commission_rate=Decimal("15.00"),  # 15% commission rate
+        )
+        test_db.add(test_user)
+        test_db.commit()
+
+        # Create client
+        client_obj = Client(name="Display Test Client", phone="0991234568")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        # Create services
+        service1 = Service(name="Service 1", duration=60, description="Test service 1")
+        service2 = Service(name="Service 2", duration=30, description="Test service 2")
+        test_db.add_all([service1, service2])
+        test_db.commit()
+
+        # Create appointment
+        today = datetime.now().date()
+        current_time = datetime.now().time()
+        appointment = Appointment(
+            client_id=client_obj.id,
+            master_id=test_user.id,
+            date=today,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment)
+        test_db.commit()
+
+        # Add services to appointment with specific prices
+        appointment_service1 = AppointmentService(appointment_id=appointment.id, service_id=service1.id, price=100.0)
+        appointment_service2 = AppointmentService(appointment_id=appointment.id, service_id=service2.id, price=50.0)
+        test_db.add_all([appointment_service1, appointment_service2])
+        test_db.commit()
+
+        # Login
+        auth.login(username="display_test_user", password="test_password")
+
+        # Generate report
+        response = client.post(
+            "/reports/salary",
+            data={
+                "report_date": today.strftime("%Y-%m-%d"),
+                "master_id": str(test_user.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check that the report displays individual appointment totals correctly
+        assert "150.00" in html_content  # Total price for the appointment (100 + 50)
+        assert "22.50" in html_content  # Commission for the appointment (150 * 15% = 22.50)
+        assert "Service 1" in html_content
+        assert "Service 2" in html_content
+        assert "100.00" in html_content  # Individual service 1 price
+        assert "50.00" in html_content  # Individual service 2 price
+
+        # Check commission rate display
+        assert "15.0%" in html_content
+
+        # Check that the overall totals are also correct
+        assert "Display Test Client" in html_content
+
+
+def test_salary_report_individual_appointment_calculations(client, auth, app, test_db):
+    """Test that each appointment shows correct individual totals and commissions."""
+    with app.app_context():
+        # Create test user with commission rate
+        test_user = User(
+            username="calc_test_user",
+            password=generate_password_hash("test_password"),
+            full_name="Calculation Test User",
+            is_admin=False,
+            configurable_commission_rate=Decimal("20.00"),  # 20% commission rate
+        )
+        test_db.add(test_user)
+        test_db.commit()
+
+        # Create client
+        client_obj = Client(name="Calc Test Client", phone="0991234569")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        # Create service
+        service = Service(name="Test Service", duration=60, description="Test service")
+        test_db.add(service)
+        test_db.commit()
+
+        # Create two appointments with different service prices
+        today = datetime.now().date()
+        current_time = datetime.now().time()
+
+        # First appointment
+        appointment1 = Appointment(
+            client_id=client_obj.id,
+            master_id=test_user.id,
+            date=today,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment1)
+        test_db.commit()
+
+        # Second appointment
+        appointment2 = Appointment(
+            client_id=client_obj.id,
+            master_id=test_user.id,
+            date=today,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment2)
+        test_db.commit()
+
+        # Add services with different prices
+        appointment_service1 = AppointmentService(
+            appointment_id=appointment1.id, service_id=service.id, price=200.0  # Price for first appointment
+        )
+        appointment_service2 = AppointmentService(
+            appointment_id=appointment2.id, service_id=service.id, price=300.0  # Price for second appointment
+        )
+        test_db.add_all([appointment_service1, appointment_service2])
+        test_db.commit()
+
+        # Login
+        auth.login(username="calc_test_user", password="test_password")
+
+        # Generate report
+        response = client.post(
+            "/reports/salary",
+            data={
+                "report_date": today.strftime("%Y-%m-%d"),
+                "master_id": str(test_user.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check individual appointment totals
+        assert "200.00" in html_content  # First appointment total
+        assert "300.00" in html_content  # Second appointment total
+
+        # Check individual commissions (20% of each)
+        assert "40.00" in html_content  # Commission for first appointment (200 * 20% = 40)
+        assert "60.00" in html_content  # Commission for second appointment (300 * 20% = 60)
+
+        # Check overall totals
+        assert "500.00" in html_content  # Total services cost (200 + 300)
+        assert "100.00" in html_content  # Total commission (40 + 60)
+
+
+# Admin Salary Report Tests
+
+
+def test_admin_salary_report_access_non_admin(client, auth, test_user):
+    """Test that non-admin users cannot access admin salary report."""
+    auth.login(username=test_user.username, password="test_password")
+    response = client.get("/reports/admin_salary")
+    assert response.status_code == 200
+    html_content = response.data.decode("utf-8")
+    assert "Only administrators can access this report" in html_content
+
+
+def test_admin_salary_report_access_admin(client, auth, admin_user):
+    """Test that admin users can access admin salary report."""
+    auth.login(username=admin_user.username, password="admin_password")
+    response = client.get("/reports/admin_salary", follow_redirects=True)
+    assert response.status_code == 200
+    html_content = response.data.decode("utf-8")
+    assert "Administrator Salary Report" in html_content
+    assert "Report Parameters" in html_content
+
+
+def test_admin_salary_report_personal_services_commission(client, auth, app, test_db):
+    """Test admin salary calculation with personal services only."""
+    with app.app_context():
+        # Create admin user
+        admin = User(
+            username="admin_services_test",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Services Test",
+            is_admin=True,
+            configurable_commission_rate=Decimal("15.0"),  # 15% commission
+        )
+        test_db.add(admin)
+        test_db.commit()
+
+        # Create client and service
+        client_obj = Client(name="Admin Test Client", phone="0991234567")
+        test_db.add(client_obj)
+
+        service = Service(name="Admin Test Service", duration=60, description="Test service")
+        test_db.add(service)
+        test_db.commit()
+
+        # Create completed appointment where admin is the master
+        today = datetime.now().date()
+        current_time = datetime.now().time()
+        appointment = Appointment(
+            client_id=client_obj.id,
+            master_id=admin.id,
+            date=today,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment)
+        test_db.commit()
+
+        # Add service to appointment
+        appointment_service = AppointmentService(appointment_id=appointment.id, service_id=service.id, price=200.0)
+        test_db.add(appointment_service)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username="admin_services_test", password="admin_password")
+
+        # Generate report
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check that service appears in the report
+        assert "Admin Test Client" in html_content
+        assert "Admin Test Service" in html_content
+        assert "200.00" in html_content  # Service price
+        assert "30.00" in html_content  # 15% of 200 = 30.00 commission
+
+
+def test_admin_salary_report_personal_products_commission(client, auth, app, test_db):
+    """Test admin salary calculation with personal product sales only."""
+    with app.app_context():
+        # Create admin user
+        admin = User(
+            username="admin_products_test",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Products Test",
+            is_admin=True,
+            configurable_commission_rate=Decimal("10.0"),  # 10% commission
+        )
+        test_db.add(admin)
+
+        # Create client
+        client_obj = Client(name="Product Test Client", phone="0991234567")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        # Create brand and product
+        brand = Brand(name="Test Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        product = Product(name="Test Product", sku="TEST-001", brand_id=brand.id, current_sale_price=Decimal("50.00"))
+        test_db.add(product)
+        test_db.commit()
+
+        # Create sale by admin
+        today = datetime.now().date()
+        sale = Sale(
+            sale_date=datetime.combine(today, datetime.now().time()),
+            client_id=client_obj.id,
+            user_id=admin.id,  # Admin is the seller
+            created_by_user_id=admin.id,
+            total_amount=Decimal("100.00"),
+        )
+        test_db.add(sale)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username="admin_products_test", password="admin_password")
+
+        # Generate report
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check personal products commission (10% + 1% = 11% of 100 = 11.00)
+        assert "100.00" in html_content  # Sale amount
+        assert "11.00" in html_content  # 11% of 100 = 11.00 commission
+
+
+def test_admin_salary_report_masters_products_share(client, auth, app, test_db):
+    """Test admin salary calculation with 1% share from masters' product sales."""
+    with app.app_context():
+        # Create admin user
+        admin = User(
+            username="admin_share_test",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Share Test",
+            is_admin=True,
+            configurable_commission_rate=Decimal("10.0"),
+        )
+        test_db.add(admin)
+
+        # Create master user
+        master = User(
+            username="master_share_test",
+            password=generate_password_hash("master_password"),
+            full_name="Master Share Test",
+            is_admin=False,
+            is_active_master=True,
+        )
+        test_db.add(master)
+
+        # Create client
+        client_obj = Client(name="Share Test Client", phone="0991234567")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        # Create sale by master
+        today = datetime.now().date()
+        sale = Sale(
+            sale_date=datetime.combine(today, datetime.now().time()),
+            client_id=client_obj.id,
+            user_id=master.id,  # Master is the seller
+            created_by_user_id=master.id,
+            total_amount=Decimal("500.00"),  # Master's sale
+        )
+        test_db.add(sale)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username="admin_share_test", password="admin_password")
+
+        # Generate report
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check 1% share from masters' sales (1% of 500 = 5.00)
+        assert "500.00" in html_content  # Masters' total
+        assert "5.00" in html_content  # 1% of 500 = 5.00 share
+
+
+def test_admin_salary_report_combined_calculation(client, auth, app, test_db):
+    """Test admin salary calculation with all three components: services, personal products, masters' share."""
+    with app.app_context():
+        # Create admin user
+        admin = User(
+            username="admin_combined_test",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Combined Test",
+            is_admin=True,
+            configurable_commission_rate=Decimal("12.0"),  # 12% commission
+        )
+        test_db.add(admin)
+
+        # Create master user
+        master = User(
+            username="master_combined_test",
+            password=generate_password_hash("master_password"),
+            full_name="Master Combined Test",
+            is_admin=False,
+            is_active_master=True,
+        )
+        test_db.add(master)
+
+        # Create client
+        client_obj = Client(name="Combined Test Client", phone="0991234567")
+        test_db.add(client_obj)
+
+        # Create service
+        service = Service(name="Combined Test Service", duration=60, description="Test service")
+        test_db.add(service)
+        test_db.commit()
+
+        today = datetime.now().date()
+        current_time = datetime.now().time()
+
+        # 1. Create appointment where admin provides service
+        appointment = Appointment(
+            client_id=client_obj.id,
+            master_id=admin.id,
+            date=today,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment)
+        test_db.commit()
+
+        appointment_service = AppointmentService(
+            appointment_id=appointment.id, service_id=service.id, price=150.0  # Service by admin
+        )
+        test_db.add(appointment_service)
+
+        # 2. Create personal product sale by admin
+        admin_sale = Sale(
+            sale_date=datetime.combine(today, current_time),
+            client_id=client_obj.id,
+            user_id=admin.id,  # Admin is the seller
+            created_by_user_id=admin.id,
+            total_amount=Decimal("80.00"),  # Admin's product sale
+        )
+        test_db.add(admin_sale)
+
+        # 3. Create product sale by master
+        master_sale = Sale(
+            sale_date=datetime.combine(today, current_time),
+            client_id=client_obj.id,
+            user_id=master.id,  # Master is the seller
+            created_by_user_id=master.id,
+            total_amount=Decimal("300.00"),  # Master's product sale
+        )
+        test_db.add(master_sale)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username="admin_combined_test", password="admin_password")
+
+        # Generate report
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Expected calculations:
+        # Services commission: 12% of 150.00 = 18.00
+        # Personal products commission: 13% of 80.00 = 10.40 (12% + 1%)
+        # Masters' products share: 1% of 300.00 = 3.00
+        # Total: 18.00 + 10.40 + 3.00 = 31.40
+
+        assert "150.00" in html_content  # Service price
+        assert "18.00" in html_content  # Services commission
+        assert "80.00" in html_content  # Personal products
+        assert "10.40" in html_content  # Personal products commission
+        assert "300.00" in html_content  # Masters' products total
+        assert "3.00" in html_content  # Masters' share
+        assert "31.40" in html_content  # Total salary
+
+
+def test_admin_salary_report_date_filtering(client, auth, app, test_db):
+    """Test that admin salary report correctly filters by date range."""
+    with app.app_context():
+        # Create admin user
+        admin = User(
+            username="admin_date_test",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Date Test",
+            is_admin=True,
+            configurable_commission_rate=Decimal("10.0"),
+        )
+        test_db.add(admin)
+
+        # Create client and service
+        client_obj = Client(name="Date Test Client", phone="0991234567")
+        test_db.add(client_obj)
+
+        service = Service(name="Date Test Service", duration=60, description="Test service")
+        test_db.add(service)
+        test_db.commit()
+
+        today = datetime.now().date()
+        yesterday = today - timedelta(days=1)
+        day_before_yesterday = today - timedelta(days=2)
+        current_time = datetime.now().time()
+
+        # Create appointment for day before yesterday
+        appointment1 = Appointment(
+            client_id=client_obj.id,
+            master_id=admin.id,
+            date=day_before_yesterday,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment1)
+        test_db.commit()
+
+        service1 = AppointmentService(appointment_id=appointment1.id, service_id=service.id, price=100.0)
+        test_db.add(service1)
+
+        # Create appointment for yesterday
+        appointment2 = Appointment(
+            client_id=client_obj.id,
+            master_id=admin.id,
+            date=yesterday,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment2)
+        test_db.commit()
+
+        service2 = AppointmentService(appointment_id=appointment2.id, service_id=service.id, price=150.0)
+        test_db.add(service2)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username="admin_date_test", password="admin_password")
+
+        # Test 1: Generate report for single day (yesterday)
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": yesterday.strftime("%Y-%m-%d"),
+                "end_date": yesterday.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Should show only yesterday's data (150.00)
+        assert "Date Test Client" in html_content
+        assert "150.00" in html_content
+        assert "100.00" not in html_content or html_content.count("100.00") == 0
+
+        # Test 2: Generate report for date range (day before yesterday to yesterday)
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": day_before_yesterday.strftime("%Y-%m-%d"),
+                "end_date": yesterday.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Should show both appointments (both 100.00 and 150.00)
+        assert "Date Test Client" in html_content
+        assert "100.00" in html_content
+        assert "150.00" in html_content
+
+        # Test 3: Generate report for today (should show no data)
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Should show no data for today
+        assert "No completed services or sales found" in html_content or "0.00" in html_content
+
+
+def test_admin_salary_report_date_range_validation(client, auth, app, test_db):
+    """Test that admin salary report validates date range correctly."""
+    with app.app_context():
+        # Create admin user
+        admin = User(
+            username="admin_validation_test",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Validation Test",
+            is_admin=True,
+            configurable_commission_rate=Decimal("10.0"),
+        )
+        test_db.add(admin)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username="admin_validation_test", password="admin_password")
+
+        today = datetime.now().date()
+        yesterday = today - timedelta(days=1)
+
+        # Test invalid date range (end_date before start_date)
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": yesterday.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Should show validation error
+        assert "End date must be after or equal to start date" in html_content
+
+
+def test_admin_salary_report_multi_day_calculation(client, auth, app, test_db):
+    """Test that admin salary report correctly calculates totals across multiple days."""
+    with app.app_context():
+        # Create admin user
+        admin = User(
+            username="admin_multi_day_test",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Multi Day Test",
+            is_admin=True,
+            configurable_commission_rate=Decimal("15.0"),  # 15% commission
+        )
+        test_db.add(admin)
+
+        # Create master for products share test
+        master = User(
+            username="master_multi_day_test",
+            password=generate_password_hash("master_password"),
+            full_name="Master Multi Day Test",
+            is_admin=False,
+            is_active_master=True,
+        )
+        test_db.add(master)
+
+        # Create client and service
+        client_obj = Client(name="Multi Day Client", phone="0991234567")
+        test_db.add(client_obj)
+
+        service = Service(name="Multi Day Service", duration=60, description="Test service")
+        test_db.add(service)
+        test_db.commit()
+
+        today = datetime.now().date()
+        yesterday = today - timedelta(days=1)
+        day_before_yesterday = today - timedelta(days=2)
+        current_time = datetime.now().time()
+
+        # Day 1: Admin provides service (200.00) and sells products (100.00)
+        appointment1 = Appointment(
+            client_id=client_obj.id,
+            master_id=admin.id,
+            date=day_before_yesterday,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment1)
+        test_db.commit()
+
+        service1 = AppointmentService(appointment_id=appointment1.id, service_id=service.id, price=200.0)
+        test_db.add(service1)
+
+        admin_sale1 = Sale(
+            sale_date=datetime.combine(day_before_yesterday, current_time),
+            client_id=client_obj.id,
+            user_id=admin.id,
+            created_by_user_id=admin.id,
+            total_amount=Decimal("100.00"),
+        )
+        test_db.add(admin_sale1)
+
+        # Day 2: Admin provides service (300.00) and master sells products (500.00)
+        appointment2 = Appointment(
+            client_id=client_obj.id,
+            master_id=admin.id,
+            date=yesterday,
+            start_time=current_time,
+            end_time=current_time,
+            status="completed",
+            payment_status="paid",
+        )
+        test_db.add(appointment2)
+        test_db.commit()
+
+        service2 = AppointmentService(appointment_id=appointment2.id, service_id=service.id, price=300.0)
+        test_db.add(service2)
+
+        master_sale = Sale(
+            sale_date=datetime.combine(yesterday, current_time),
+            client_id=client_obj.id,
+            user_id=master.id,
+            created_by_user_id=master.id,
+            total_amount=Decimal("500.00"),
+        )
+        test_db.add(master_sale)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username="admin_multi_day_test", password="admin_password")
+
+        # Generate report for 2-day range
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": day_before_yesterday.strftime("%Y-%m-%d"),
+                "end_date": yesterday.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Expected calculations:
+        # Services: (200.00 + 300.00) * 15% = 500.00 * 0.15 = 75.00
+        # Personal products: 100.00 * 16% = 16.00 (15% + 1%)
+        # Masters' share: 500.00 * 1% = 5.00
+        # Total: 75.00 + 16.00 + 5.00 = 96.00
+
+        assert "500.00" in html_content  # Total services
+        assert "75.00" in html_content  # Services commission
+        assert "100.00" in html_content  # Personal products
+        assert "16.00" in html_content  # Personal products commission
+        assert "5.00" in html_content  # Masters' share
+        assert "96.00" in html_content  # Total salary
+
+
+def test_admin_salary_report_empty_date_range(client, auth, app, test_db):
+    """Test admin salary report behavior with empty date ranges."""
+    with app.app_context():
+        # Create admin user
+        admin = User(
+            username="admin_empty_test",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Empty Test",
+            is_admin=True,
+            configurable_commission_rate=Decimal("10.0"),
+        )
+        test_db.add(admin)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username="admin_empty_test", password="admin_password")
+
+        # Use a future date range to ensure no data
+        future_date = datetime.now().date() + timedelta(days=30)
+        future_end_date = future_date + timedelta(days=5)
+
+        response = client.post(
+            "/reports/admin_salary",
+            data={
+                "start_date": future_date.strftime("%Y-%m-%d"),
+                "end_date": future_end_date.strftime("%Y-%m-%d"),
+                "admin_id": str(admin.id),
+                "submit": "Generate Report",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Should show appropriate message or zero values
+        assert "No completed services or sales found" in html_content or (
+            "0.00" in html_content and "Total Salary" in html_content
+        )
+
+
+# ==============================================
+# НОВЫЕ ТЕСТЫ ДЛЯ ОБНОВЛЕННОГО ФИНАНСОВОГО ОТЧЕТА
+# ==============================================
+
+
+def test_financial_report_new_form_date_range_access(client, auth, admin_user):
+    """Проверяем доступность обновленного финансового отчета с фильтрацией по диапазону дат."""
+    auth.login(username=admin_user.username, password="admin_password")
+    response = client.get("/reports/financial")
+    assert response.status_code == 200
+    html_content = response.data.decode("utf-8")
+    assert "Дата з" in html_content
+    assert "Дата по" in html_content
+    assert "Сформувати звіт" in html_content
+
+
+def test_financial_report_with_product_sales_data(client, auth, app, test_db):
+    """Проверяем корректный расчет и отображение доходов от товаров, COGS и валового прибутка."""
+    with app.app_context():
+        # Создаем админа
+        admin_user = User(
+            username="admin_financial_test",
+            password=generate_password_hash("test_password"),
+            full_name="Admin User",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Создаем клиента
+        client_obj = Client(name="Test Client Product", phone="0997777777")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        # Создаем способ оплаты
+        payment_method = PaymentMethodModel(name="Готівка", is_active=True)
+        test_db.add(payment_method)
+        test_db.commit()
+
+        # Создаем бренд и товар
+        brand = Brand(name="Test Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        product = Product(
+            name="Test Product",
+            sku="TST001",
+            brand_id=brand.id,
+            current_sale_price=Decimal("100.00"),
+            last_cost_price=Decimal("60.00"),
+        )
+        test_db.add(product)
+        test_db.commit()
+
+        # Создаем продажу
+        today = date.today()
+        sale = Sale(
+            sale_date=datetime.combine(today, datetime.min.time()),
+            client_id=client_obj.id,
+            user_id=admin_user.id,
+            total_amount=Decimal("200.00"),
+            payment_method_id=payment_method.id,
+            created_by_user_id=admin_user.id,
+        )
+        test_db.add(sale)
+        test_db.commit()
+
+        # Создаем элементы продажи
+        sale_item = SaleItem(
+            sale_id=sale.id,
+            product_id=product.id,
+            quantity=2,
+            price_per_unit=Decimal("100.00"),
+            cost_price_per_unit=Decimal("60.00"),
+        )
+        test_db.add(sale_item)
+        test_db.commit()
+
+        # Логинимся
+        auth.login(username=admin_user.username, password="test_password")
+
+        # Отправляем запрос на отчет
+        response = client.post(
+            "/reports/financial",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "submit": "Сформувати звіт",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Проверяем наличие товарных данных
+        assert "Доходи від продажу товарів" in html_content
+        assert "Собівартість проданих товарів (COGS)" in html_content
+        assert "Валовий прибуток від товарів" in html_content
+        assert "Загальний валовий прибуток" in html_content
+
+        # Проверяем значения
+        assert "200,00" in html_content  # Доход от товаров
+        assert "120,00" in html_content  # COGS (60 * 2)
+        assert "80,00" in html_content  # Валовый прибуток от товаров (200 - 120)
+
+
+def test_financial_report_with_services_and_products_combined(client, auth, app, test_db):
+    """Проверяем интеграцию данных о услугах и товарах в едином отчете."""
+    with app.app_context():
+        # Создаем админа
+        admin_user = User(
+            username="admin_combined_test",
+            password=generate_password_hash("test_password"),
+            full_name="Admin Combined User",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Создаем майстера
+        master_user = User(
+            username="master_combined_test",
+            password=generate_password_hash("test_password"),
+            full_name="Master Combined User",
+            is_admin=False,
+        )
+        test_db.add(master_user)
+        test_db.commit()
+
+        # Создаем клиента
+        client_obj = Client(name="Combined Test Client", phone="0998888888")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        # Создаем услугу
+        service = Service(name="Combined Test Service", duration=60, base_price=150.0)
+        test_db.add(service)
+        test_db.commit()
+
+        # Создаем способ оплаты
+        payment_method = PaymentMethodModel(name="Картка", is_active=True)
+        test_db.add(payment_method)
+        test_db.commit()
+
+        # Создаем запись на услугу
+        today = date.today()
+        appointment = Appointment(
+            client_id=client_obj.id,
+            master_id=master_user.id,
+            date=today,
+            start_time=datetime.now().time(),
+            end_time=datetime.now().time(),
+            status="completed",
+            payment_status="paid",
+            amount_paid=Decimal("150.00"),
+            payment_method_id=payment_method.id,
+        )
+        test_db.add(appointment)
+        test_db.commit()
+
+        # Добавляем услугу к записи
+        appointment_service = AppointmentService(appointment_id=appointment.id, service_id=service.id, price=150.0)
+        test_db.add(appointment_service)
+        test_db.commit()
+
+        # Создаем бренд и товар
+        brand = Brand(name="Combined Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        product = Product(
+            name="Combined Product",
+            sku="CMB001",
+            brand_id=brand.id,
+            current_sale_price=Decimal("50.00"),
+            last_cost_price=Decimal("30.00"),
+        )
+        test_db.add(product)
+        test_db.commit()
+
+        # Создаем продажу товара
+        sale = Sale(
+            sale_date=datetime.combine(today, datetime.min.time()),
+            client_id=client_obj.id,
+            user_id=admin_user.id,
+            total_amount=Decimal("100.00"),
+            payment_method_id=payment_method.id,
+            created_by_user_id=admin_user.id,
+        )
+        test_db.add(sale)
+        test_db.commit()
+
+        sale_item = SaleItem(
+            sale_id=sale.id,
+            product_id=product.id,
+            quantity=2,
+            price_per_unit=Decimal("50.00"),
+            cost_price_per_unit=Decimal("30.00"),
+        )
+        test_db.add(sale_item)
+        test_db.commit()
+
+        # Логинимся
+        auth.login(username=admin_user.username, password="test_password")
+
+        # Отправляем запрос на отчет
+        response = client.post(
+            "/reports/financial",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "submit": "Сформувати звіт",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Проверяем услуги: 150.00
+        assert "Доходи від послуг" in html_content
+        assert "150,00" in html_content
+
+        # Проверяем товары: доход 100.00, COGS 60.00, прибыль 40.00
+        assert "Доходи від продажу товарів" in html_content
+        assert "100,00" in html_content
+        assert "60,00" in html_content  # COGS
+        assert "40,00" in html_content  # Прибыль от товаров
+
+        # Проверяем общие показатели: доход 250.00, валовый прибуток 190.00
+        assert "Загальний дохід" in html_content
+        assert "250,00" in html_content
+        assert "Загальний валовий прибуток" in html_content
+        assert "190,00" in html_content  # 150 (услуги) + 40 (прибыль от товаров)
+
+
+def test_financial_report_zero_values_when_no_sales(client, auth, app, test_db):
+    """Проверяем корректное отображение нулевых значений при отсутствии продаж."""
+    with app.app_context():
+        # Создаем админа
+        admin_user = User(
+            username="admin_zero_test",
+            password=generate_password_hash("test_password"),
+            full_name="Admin Zero User",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Логинимся
+        auth.login(username=admin_user.username, password="test_password")
+
+        # Используем будущую дату, когда точно нет продаж
+        future_date = (datetime.now() + timedelta(days=30)).date()
+
+        response = client.post(
+            "/reports/financial",
+            data={
+                "start_date": future_date.strftime("%Y-%m-%d"),
+                "end_date": future_date.strftime("%Y-%m-%d"),
+                "submit": "Сформувати звіт",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Проверяем, что показывается сообщение об отсутствии доходов
+        assert "Немає доходів за обраний період" in html_content or "0,00" in html_content
+
+
+def test_financial_report_date_range_filtering(client, auth, app, test_db):
+    """Проверяем работу фильтрации по диапазону дат."""
+    with app.app_context():
+        # Создаем админа
+        admin_user = User(
+            username="admin_range_test",
+            password=generate_password_hash("test_password"),
+            full_name="Admin Range User",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Создаем клиента
+        client_obj = Client(name="Range Test Client", phone="0999999999")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        # Создаем способ оплаты
+        payment_method = PaymentMethodModel(name="Готівка", is_active=True)
+        test_db.add(payment_method)
+        test_db.commit()
+
+        # Создаем бренд и товар
+        brand = Brand(name="Range Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        product = Product(
+            name="Range Product",
+            sku="RNG001",
+            brand_id=brand.id,
+            current_sale_price=Decimal("100.00"),
+            last_cost_price=Decimal("50.00"),
+        )
+        test_db.add(product)
+        test_db.commit()
+
+        # Создаем продажи в разные дни
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+
+        # Продажа сегодня
+        sale_today = Sale(
+            sale_date=datetime.combine(today, datetime.min.time()),
+            client_id=client_obj.id,
+            user_id=admin_user.id,
+            total_amount=Decimal("100.00"),
+            payment_method_id=payment_method.id,
+            created_by_user_id=admin_user.id,
+        )
+        test_db.add(sale_today)
+        test_db.commit()
+
+        sale_item_today = SaleItem(
+            sale_id=sale_today.id,
+            product_id=product.id,
+            quantity=1,
+            price_per_unit=Decimal("100.00"),
+            cost_price_per_unit=Decimal("50.00"),
+        )
+        test_db.add(sale_item_today)
+
+        # Продажа вчера
+        sale_yesterday = Sale(
+            sale_date=datetime.combine(yesterday, datetime.min.time()),
+            client_id=client_obj.id,
+            user_id=admin_user.id,
+            total_amount=Decimal("200.00"),
+            payment_method_id=payment_method.id,
+            created_by_user_id=admin_user.id,
+        )
+        test_db.add(sale_yesterday)
+        test_db.commit()
+
+        sale_item_yesterday = SaleItem(
+            sale_id=sale_yesterday.id,
+            product_id=product.id,
+            quantity=2,
+            price_per_unit=Decimal("100.00"),
+            cost_price_per_unit=Decimal("50.00"),
+        )
+        test_db.add(sale_item_yesterday)
+        test_db.commit()
+
+        # Логинимся
+        auth.login(username=admin_user.username, password="test_password")
+
+        # Тест 1: Отчет только за сегодня
+        response_today = client.post(
+            "/reports/financial",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "submit": "Сформувати звіт",
+            },
+            follow_redirects=True,
+        )
+
+        assert response_today.status_code == 200
+        html_today = response_today.data.decode("utf-8")
+        assert "100,00" in html_today  # Только продажа на сегодня
+
+        # Тест 2: Отчет за два дня
+        response_range = client.post(
+            "/reports/financial",
+            data={
+                "start_date": yesterday.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "submit": "Сформувати звіт",
+            },
+            follow_redirects=True,
+        )
+
+        assert response_range.status_code == 200
+        html_range = response_range.data.decode("utf-8")
+        assert "300,00" in html_range  # Общая сумма за два дня
+
+
+def test_financial_report_date_validation(client, auth, app, test_db):
+    """Проверяем валидацию дат в форме."""
+    with app.app_context():
+        # Создаем админа
+        admin_user = User(
+            username="admin_validation_test",
+            password=generate_password_hash("test_password"),
+            full_name="Admin Validation User",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Логинимся
+        auth.login(username=admin_user.username, password="test_password")
+
+        # Пытаемся отправить форму с неправильными датами (конечная дата раньше начальной)
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
+
+        response = client.post(
+            "/reports/financial",
+            data={
+                "start_date": tomorrow.strftime("%Y-%m-%d"),  # Начальная дата позже
+                "end_date": today.strftime("%Y-%m-%d"),  # Конечная дата раньше
+                "submit": "Сформувати звіт",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+        # Проверяем наличие сообщения об ошибке валидации
+        assert "Кінцева дата має бути пізніше або дорівнювати початковій даті" in html_content
+
+
+def test_financial_report_product_margin_calculation(client, auth, app, test_db):
+    """Проверяем корректность расчета товарной маржи."""
+    with app.app_context():
+        # Создаем админа
+        admin_user = User(
+            username="admin_margin_test",
+            password=generate_password_hash("test_password"),
+            full_name="Admin Margin User",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Создаем клиента
+        client_obj = Client(name="Margin Test Client", phone="0991111111")
+        test_db.add(client_obj)
+        test_db.commit()
+
+        # Создаем способ оплаты
+        payment_method = PaymentMethodModel(name="Готівка", is_active=True)
+        test_db.add(payment_method)
+        test_db.commit()
+
+        # Создаем бренд и товар с маржой 50%
+        brand = Brand(name="Margin Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        product = Product(
+            name="Margin Product",
+            sku="MGN001",
+            brand_id=brand.id,
+            current_sale_price=Decimal("200.00"),
+            last_cost_price=Decimal("100.00"),  # 50% маржа
+        )
+        test_db.add(product)
+        test_db.commit()
+
+        # Создаем продажу
+        today = date.today()
+        sale = Sale(
+            sale_date=datetime.combine(today, datetime.min.time()),
+            client_id=client_obj.id,
+            user_id=admin_user.id,
+            total_amount=Decimal("200.00"),
+            payment_method_id=payment_method.id,
+            created_by_user_id=admin_user.id,
+        )
+        test_db.add(sale)
+        test_db.commit()
+
+        sale_item = SaleItem(
+            sale_id=sale.id,
+            product_id=product.id,
+            quantity=1,
+            price_per_unit=Decimal("200.00"),
+            cost_price_per_unit=Decimal("100.00"),
+        )
+        test_db.add(sale_item)
+        test_db.commit()
+
+        # Логинимся
+        auth.login(username=admin_user.username, password="test_password")
+
+        response = client.post(
+            "/reports/financial",
+            data={
+                "start_date": today.strftime("%Y-%m-%d"),
+                "end_date": today.strftime("%Y-%m-%d"),
+                "submit": "Сформувати звіт",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Проверяем наличие показателя товарной маржи
+        assert "Товарна маржа" in html_content
+        assert "50.0%" in html_content  # 50% маржа

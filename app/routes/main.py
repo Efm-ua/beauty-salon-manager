@@ -2,17 +2,9 @@ import logging
 from collections import Counter
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, List, NamedTuple, Dict
+from typing import Any, Dict, List, NamedTuple
 
-from flask import (
-    Blueprint,
-    current_app,
-    flash,
-    redirect,
-    render_template,
-    request,
-    url_for,
-)
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import text
 
@@ -346,6 +338,7 @@ def schedule() -> Any:
     try:
         selected_date = None
         date_str = request.args.get("date")  # Отримуємо дату з GET параметра
+        selected_date_str = date_str  # Зберігаємо для логування
 
         if date_str:
             try:
@@ -359,6 +352,12 @@ def schedule() -> Any:
             selected_date = date.today()
 
         today = date.today()
+
+        # 1. Логування на початку функції
+        current_app.logger.info(
+            f"[SCHEDULE DIAGNOSIS] Function start - selected_date_str: {selected_date_str}, "
+            f"selected_date: {selected_date}, today: {today}"
+        )
 
         # --- Визначаємо майстрів для відображення ---
         masters_to_display = []
@@ -384,24 +383,48 @@ def schedule() -> Any:
                 .distinct()
                 .all()
             )
-            master_ids_on_date = {mid[0] for mid in master_ids_on_date if mid[0] is not None}  # Множина ID
 
-            if master_ids_on_date:
+            # 3. Логування для блоку минулих дат
+            current_app.logger.info(
+                f"[SCHEDULE DIAGNOSIS] Past date logic - master_ids_on_date raw query result: {master_ids_on_date}"
+            )
+            actual_master_ids = {mid[0] for mid in master_ids_on_date if mid[0] is not None}  # Множина ID
+            current_app.logger.info(f"[SCHEDULE DIAGNOSIS] Past date logic - actual_master_ids: {actual_master_ids}")
+
+            if actual_master_ids:
                 # Отримуємо користувачів для цих ID
                 masters_to_display = (
-                    User.query.filter(User.id.in_(master_ids_on_date))
+                    User.query.filter(User.id.in_(actual_master_ids))
                     .order_by(User.schedule_display_order, User.full_name)
                     .all()
                 )
                 active_master_ids_set = {m.id for m in masters_to_display}  # Нам потрібні ID всіх, хто відображається
+
+                current_app.logger.info(
+                    f"[SCHEDULE DIAGNOSIS] Past date logic - masters_to_display count: "
+                    f"{len(masters_to_display)}, IDs: {[m.id for m in masters_to_display]}"
+                )
             else:
                 masters_to_display = []  # Якщо записів не було, список майстрів порожній
+                current_app.logger.info(
+                    "[SCHEDULE DIAGNOSIS] Past date logic - No masters found with appointments, "
+                    "masters_to_display count: 0"
+                )
         else:
             # СЬОГОДНІ або МАЙБУТНЯ ДАТА: отримуємо тільки активних майстрів
             masters_to_display = (
                 User.query.filter_by(is_active_master=True).order_by(User.schedule_display_order, User.full_name).all()
             )
             active_master_ids_set = {m.id for m in masters_to_display}  # Множина ID активних майстрів
+
+            # 4. Логування для блоку поточних/майбутніх дат
+            current_app.logger.info(
+                f"[SCHEDULE DIAGNOSIS] Current/future date logic - masters_to_display count: "
+                f"{len(masters_to_display)}, IDs: {[m.id for m in masters_to_display]}"
+            )
+
+        # 5. Логування після формування active_master_ids_set
+        current_app.logger.info(f"[SCHEDULE DIAGNOSIS] active_master_ids_set: {active_master_ids_set}")
 
         # Для тестів: спочатку отримуємо всіх майстрів з призначеннями на цю дату
         masters_with_appointments = (
@@ -453,6 +476,9 @@ def schedule() -> Any:
         else:
             appointments_for_day = base_query.order_by(Appointment.start_time).all()
 
+        # 6. Логування після запиту appointments_for_day
+        current_app.logger.info(f"[SCHEDULE DIAGNOSIS] appointments_for_day count: {len(appointments_for_day)}")
+
         # --- Debug logging for appointments ---
         current_app.logger.debug(f"Found {len(appointments_for_day)} appointments for {selected_date}")
         for apt in appointments_for_day:
@@ -466,11 +492,15 @@ def schedule() -> Any:
         for appointment in appointments_for_day:
             if isinstance(appointment.payment_method, str):
                 try:
-                    enum_member = PaymentMethod[appointment.payment_method.upper()]
-                    appointment.payment_method = enum_member
+                    # Use SQLAlchemy model instead of Enum lookup
+                    payment_method = PaymentMethod.query.filter_by(name=appointment.payment_method.upper()).first()
+                    if payment_method:
+                        appointment.payment_method_id = payment_method.id
+                    else:
+                        appointment.payment_method_id = None
                     needs_commit = True
                 except (KeyError, ValueError, AttributeError):
-                    appointment.payment_method = None
+                    appointment.payment_method_id = None
                     needs_commit = True
                     db.session.add(appointment)
         if needs_commit:
@@ -500,6 +530,13 @@ def schedule() -> Any:
         time_intervals = generate_time_intervals()
         all_15min_slots = generate_time_slots(interval_minutes=15)
 
+        # 2. Логування після визначення company_work_start_time, company_work_end_time
+        # (Оскільки часи роботи не вказані явно в коді, логуємо з використаних функцій)
+        current_app.logger.info(
+            f"[SCHEDULE DIAGNOSIS] Generated time intervals count: {len(time_intervals)}, "
+            f"15min slots count: {len(all_15min_slots)}"
+        )
+
         # --- Ініціалізація schedule_data ЛИШЕ для masters_to_display ---
         schedule_data: Dict[int, Dict[str, List[Dict[str, Any]]]] = {}
         for master in masters_to_display:
@@ -509,75 +546,102 @@ def schedule() -> Any:
         all_15min_slots_str = {slot.strftime("%H:%M") for slot in all_15min_slots}
 
         # --- Заповнення розкладу записами ---
-        for appointment in appointments_for_day:
+        for appointment_item in appointments_for_day:
+            # 7. Логування всередині циклу для кожного appointment_item
+            current_app.logger.info(
+                f"[SCHEDULE DIAGNOSIS] Processing appointment_item - ID: {appointment_item.id}, "
+                f"master_id: {appointment_item.master_id}, date: {appointment_item.date}, "
+                f"start_time: {appointment_item.start_time}, status: {appointment_item.status}"
+            )
+
+            # Особливе логування для appointment ID 205
+            if appointment_item.id == 205:
+                current_app.logger.info(
+                    f"[SCHEDULE DIAGNOSIS] *** FOUND TARGET APPOINTMENT 205 *** - "
+                    f"master_id: {appointment_item.master_id}, date: {appointment_item.date}, "
+                    f"start_time: {appointment_item.start_time}, status: {appointment_item.status}"
+                )
+
             # Перевірка, чи майстер є у списку для відображення
-            if appointment.master_id not in active_master_ids_set:
+            master_not_in_active_set = appointment_item.master_id not in active_master_ids_set
+            current_app.logger.info(
+                f"[SCHEDULE DIAGNOSIS] Appointment {appointment_item.id} - "
+                f"master_not_in_active_set: {master_not_in_active_set}"
+            )
+
+            if master_not_in_active_set:
+                current_app.logger.info(
+                    f"[SCHEDULE DIAGNOSIS] Appointment {appointment_item.id} SKIPPED - "
+                    f"master {appointment_item.master_id} not in active_master_ids_set: {active_master_ids_set}"
+                )
                 continue
 
             # --- Розрахунок фінансів та CSS класу ---
-            expected_price = appointment.get_discounted_price()
+            expected_price = appointment_item.get_discounted_price()
             expected_price = max(Decimal("0.00"), expected_price)
-            amount_paid_val = appointment.amount_paid if appointment.amount_paid is not None else Decimal("0.00")
+            amount_paid_val = (
+                appointment_item.amount_paid if appointment_item.amount_paid is not None else Decimal("0.00")
+            )
             finance_info = ""
             css_class = ""
 
             # Debug: Log payment status and values
             current_app.logger.debug(
-                f"Appointment {appointment.id} - Status: '{appointment.status}', "
-                f"Payment Status: '{appointment.payment_status}', "
+                f"Appointment {appointment_item.id} - Status: '{appointment_item.status}', "
+                f"Payment Status: '{appointment_item.payment_status}', "
                 f"Expected Price: {expected_price}, Amount Paid: {amount_paid_val}"
             )
 
-            if appointment.status == "completed":
-                if appointment.payment_status == "paid":
+            if appointment_item.status == "completed":
+                if appointment_item.payment_status == "paid":
                     css_class = "status-completed-paid"
                     finance_info = f"Сплачено: {amount_paid_val:.2f} грн"
                     current_app.logger.debug(
-                        f"Setting CSS class to 'status-completed-paid' for appointment {appointment.id}"
+                        f"Setting CSS class to 'status-completed-paid' for appointment {appointment_item.id}"
                     )
-                elif appointment.payment_status in ["unpaid", "partially_paid"]:
+                elif appointment_item.payment_status in ["unpaid", "partially_paid"]:
                     css_class = "status-completed-debt"
                     debt_val = expected_price - amount_paid_val
                     finance_info = f"Сплачено: {amount_paid_val:.2f} грн, Борг: {debt_val:.2f} грн"
                     current_app.logger.debug(
-                        f"Setting CSS class to 'status-completed-debt' for appointment {appointment.id}"
+                        f"Setting CSS class to 'status-completed-debt' for appointment {appointment_item.id}"
                     )
             else:
                 # All non-completed statuses (scheduled, etc)
-                if appointment.payment_status == "paid":
+                if appointment_item.payment_status == "paid":
                     css_class = "status-scheduled-paid"
                     finance_info = f"Передоплата: {amount_paid_val:.2f} грн"
                     current_app.logger.debug(
-                        f"Setting CSS class to 'status-scheduled-paid' for appointment {appointment.id}"
+                        f"Setting CSS class to 'status-scheduled-paid' for appointment {appointment_item.id}"
                     )
-                elif appointment.payment_status == "partially_paid" and amount_paid_val > Decimal("0.00"):
+                elif appointment_item.payment_status == "partially_paid" and amount_paid_val > Decimal("0.00"):
                     css_class = "status-scheduled-prepaid"
                     finance_info = f"Передоплата: {amount_paid_val:.2f} грн"
                     current_app.logger.debug(
-                        f"Setting CSS class to 'status-scheduled-prepaid' for appointment {appointment.id}"
+                        f"Setting CSS class to 'status-scheduled-prepaid' for appointment {appointment_item.id}"
                     )
                 else:  # unpaid
                     css_class = "status-scheduled"
                     finance_info = f"Вартість: {expected_price:.2f} грн"
                     current_app.logger.debug(
-                        f"Setting CSS class to 'status-scheduled' for appointment {appointment.id}"
+                        f"Setting CSS class to 'status-scheduled' for appointment {appointment_item.id}"
                     )
 
             # Add debug logging for CSS class assignment
             current_app.logger.debug(
-                f"Appointment ID: {appointment.id}, Status: {appointment.status}, "
-                f"Payment Status: {appointment.payment_status}, CSS Class: {css_class}"
+                f"Appointment ID: {appointment_item.id}, Status: {appointment_item.status}, "
+                f"Payment Status: {appointment_item.payment_status}, CSS Class: {css_class}"
             )
 
             # --- Визначення can_edit ---
-            can_edit = current_user.is_admin or appointment.master_id == current_user.id
+            can_edit = current_user.is_admin or appointment_item.master_id == current_user.id
 
             # --- Визначення completion_info ---
-            completion_info = "(Завершено)" if appointment.status == "completed" else ""
+            completion_info = "(Завершено)" if appointment_item.status == "completed" else ""
 
             # Get service names manually to avoid relationship issues
             service_names = []
-            for appointment_service in appointment.services:
+            for appointment_service in appointment_item.services:
                 service = (
                     db.session.get(Service, appointment_service.service_id) if appointment_service.service_id else None
                 )
@@ -586,42 +650,42 @@ def schedule() -> Any:
 
             # --- Підготовка базових деталей запису ---
             appointment_details_base = {
-                "id": appointment.id,
-                "client_name": appointment.client.name if appointment.client else "N/A",
-                "phone": appointment.client.phone if appointment.client else "N/A",
+                "id": appointment_item.id,
+                "client_name": appointment_item.client.name if appointment_item.client else "N/A",
+                "phone": appointment_item.client.phone if appointment_item.client else "N/A",
                 "services": service_names,
                 "css_class": css_class,
-                "multi_booking": appointment.client_id in multi_booking_client_ids,
+                "multi_booking": appointment_item.client_id in multi_booking_client_ids,
                 "finance_info": finance_info,
                 "completion_info": completion_info,
                 "can_edit": can_edit,
-                "status": appointment.status,
-                "is_completed": appointment.status == "completed",
+                "status": appointment_item.status,
+                "is_completed": appointment_item.status == "completed",
             }
 
             # --- Додавання запису до слотів ---
-            start_slot_str = appointment.start_time.strftime("%H:%M")
+            start_slot_str = appointment_item.start_time.strftime("%H:%M")
             slot_added_to = set()  # Щоб не дублювати
 
             for current_slot_time_obj in all_15min_slots:  # Використовуємо вже згенеровані слоти
                 current_slot_str = current_slot_time_obj.strftime("%H:%M")
 
                 # Перевіряємо, чи поточний слот потрапляє в інтервал запису
-                if appointment.start_time <= current_slot_time_obj < appointment.end_time:
+                if appointment_item.start_time <= current_slot_time_obj < appointment_item.end_time:
                     # Перевіряємо наявність майстра та слота
                     if (
-                        appointment.master_id in schedule_data
-                        and current_slot_str in schedule_data[appointment.master_id]
+                        appointment_item.master_id in schedule_data
+                        and current_slot_str in schedule_data[appointment_item.master_id]
                     ):
                         if current_slot_str == start_slot_str and start_slot_str not in slot_added_to:
                             details = appointment_details_base.copy()
                             details["display_type"] = "full"
-                            schedule_data[appointment.master_id][current_slot_str].append(details)
+                            schedule_data[appointment_item.master_id][current_slot_str].append(details)
                             slot_added_to.add(start_slot_str)
                         elif current_slot_str not in slot_added_to:
-                            schedule_data[appointment.master_id][current_slot_str].append(
+                            schedule_data[appointment_item.master_id][current_slot_str].append(
                                 {
-                                    "id": appointment.id,
+                                    "id": appointment_item.id,
                                     "display_type": "continuation",
                                     "css_class": css_class,
                                 }
@@ -631,13 +695,13 @@ def schedule() -> Any:
                         current_app.logger.error(
                             "Logic error: "
                             f"Slot {current_slot_str} or "
-                            f"master {appointment.master_id} "
+                            f"master {appointment_item.master_id} "
                             "not found in initialized schedule_data"
                         )
 
             # --- Логіка 'expanded' для інтервалів ---
-            starts_at_15_or_45 = appointment.start_time.minute in [15, 45]
-            ends_at_15_or_45 = appointment.end_time and appointment.end_time.minute in [
+            starts_at_15_or_45 = appointment_item.start_time.minute in [15, 45]
+            ends_at_15_or_45 = appointment_item.end_time and appointment_item.end_time.minute in [
                 15,
                 45,
             ]  # Перевірка на None
@@ -647,11 +711,24 @@ def schedule() -> Any:
                     should_expand = False
                     for sub_slot in interval["sub_slots"]:
                         # Перевірка, чи слот потрапляє в інтервал запису
-                        if appointment.start_time <= sub_slot < appointment.end_time:
+                        if appointment_item.start_time <= sub_slot < appointment_item.end_time:
                             should_expand = True
                             break
                     if should_expand:
                         interval["expanded"] = True
+
+        # 8. Логування після циклу формування schedule_data, перед return render_template
+        current_app.logger.info(f"[SCHEDULE DIAGNOSIS] schedule_data keys (master IDs): {list(schedule_data.keys())}")
+
+        # Спроба вивести частину schedule_data для майстра ID 3
+        if 3 in schedule_data:
+            master_3_data = schedule_data[3]
+            # Знаходимо слоти з записами для майстра 3
+            non_empty_slots = {slot: appointments for slot, appointments in master_3_data.items() if appointments}
+            current_app.logger.info(f"[SCHEDULE DIAGNOSIS] Master ID 3 - non-empty slots count: {len(non_empty_slots)}")
+            current_app.logger.info(f"[SCHEDULE DIAGNOSIS] Master ID 3 - non-empty slots: {non_empty_slots}")
+        else:
+            current_app.logger.info("[SCHEDULE DIAGNOSIS] Master ID 3 NOT FOUND in schedule_data")
 
         # Передача даних до шаблону
         # Debug: Log the structure of schedule_data and check for appointments

@@ -35,21 +35,15 @@ def update_appointments_table(db_path):
         # Додавання колонок, якщо їх ще немає
         if "payment_status" not in column_names:
             print("Додавання колонки payment_status...")
-            cursor.execute(
-                "ALTER TABLE appointment ADD COLUMN payment_status VARCHAR(10) NOT NULL DEFAULT 'unpaid'"
-            )
+            cursor.execute("ALTER TABLE appointment ADD COLUMN payment_status VARCHAR(10) NOT NULL DEFAULT 'unpaid'")
 
         if "amount_paid" not in column_names:
             print("Додавання колонки amount_paid...")
-            cursor.execute(
-                "ALTER TABLE appointment ADD COLUMN amount_paid DECIMAL(10, 2)"
-            )
+            cursor.execute("ALTER TABLE appointment ADD COLUMN amount_paid DECIMAL(10, 2)")
 
         if "payment_method" not in column_names:
             print("Додавання колонки payment_method...")
-            cursor.execute(
-                "ALTER TABLE appointment ADD COLUMN payment_method VARCHAR(50)"
-            )
+            cursor.execute("ALTER TABLE appointment ADD COLUMN payment_method VARCHAR(50)")
 
         # Збереження змін
         conn.commit()

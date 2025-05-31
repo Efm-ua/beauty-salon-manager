@@ -3,7 +3,9 @@ from datetime import date, datetime, time, timedelta
 from flask import url_for
 
 
-def test_appointment_complete_flow(session, client, test_client, test_service, regular_user, additional_service, db):
+def test_appointment_complete_flow(
+    session, client, test_client, test_service, regular_user, additional_service, db, payment_methods
+):
     """
     Tests a complete appointment flow from creation to completion.
 
@@ -176,7 +178,8 @@ def test_appointment_complete_flow(session, client, test_client, test_service, r
 
     # Since updating through the endpoint may have issues with payment_method,
     # directly set it in the database for testing purposes
-    from app.models import PaymentMethod
+    from app.models import PaymentMethod as PaymentMethodModel
+    from app.models import PaymentMethodEnum as PaymentMethod
 
     appointment = Appointment.query.get(appointment_id)
     if appointment.payment_method is None:
@@ -642,8 +645,8 @@ def test_appointment_back_to_schedule_button_includes_date(
 
     # View the appointment details with a from_schedule parameter
     response = client.get(
-        f"/appointments/{appointment.id}?from_schedule=1",
-        follow_redirects=False,
+        f"/appointments/view/{appointment.id}?from_schedule=1",
+        follow_redirects=True,
     )
 
     # Check that the page includes a back button with the correct date

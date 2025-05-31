@@ -272,9 +272,7 @@ def test_register_user_success(app, db):
             "password2": "test_password123",
         }
 
-        response = client.post(
-            "/auth/register", data=new_user_data, follow_redirects=True
-        )
+        response = client.post("/auth/register", data=new_user_data, follow_redirects=True)
 
         assert response.status_code == 200
 
@@ -336,9 +334,7 @@ def test_register_duplicate_username(app, regular_user, db):
         # Перевіряємо кількість користувачів до спроби реєстрації дубліката
         count_before = User.query.filter_by(username=regular_user.username).count()
 
-        response = client.post(
-            "/auth/register", data=duplicate_user_data, follow_redirects=True
-        )
+        response = client.post("/auth/register", data=duplicate_user_data, follow_redirects=True)
 
         assert response.status_code == 200
 
@@ -395,9 +391,7 @@ def test_initialize_success(app, client, db):
             "password2": "admin_password",
         }
 
-        response = client.post(
-            "/auth/initialize", data=admin_data, follow_redirects=True
-        )
+        response = client.post("/auth/initialize", data=admin_data, follow_redirects=True)
         assert response.status_code == 200
 
         # Перевірка, що адміністратор створений
@@ -500,9 +494,7 @@ def test_register_password_mismatch(app, db):
             "password2": "different_password",  # Пароль, що не збігається
         }
 
-        response = client.post(
-            "/auth/register", data=mismatch_user_data, follow_redirects=True
-        )
+        response = client.post("/auth/register", data=mismatch_user_data, follow_redirects=True)
 
         assert response.status_code == 200
 
@@ -585,9 +577,7 @@ def test_register_short_password(app, db):
             "password2": "12345",
         }
 
-        response = client.post(
-            "/auth/register", data=short_pass_data, follow_redirects=True
-        )
+        response = client.post("/auth/register", data=short_pass_data, follow_redirects=True)
 
         assert response.status_code == 200
 

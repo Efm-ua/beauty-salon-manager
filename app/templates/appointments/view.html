@@ -214,6 +214,30 @@
           {% endfor %}
         </ul>
 
+        {% if appointment.sales %}
+        <h6>Продані товари:</h6>
+        <ul class="list-group mb-3">
+          {% for sale in appointment.sales %} {% for item in sale.items %}
+          <li
+            class="list-group-item d-flex justify-content-between align-items-center"
+          >
+            <div>
+              {{ item.product.name }} ({{ item.product.sku }})
+              <small class="text-muted">- Продаж №{{ sale.id }}</small>
+            </div>
+            <div>
+              <span class="text-muted me-2"
+                >{{ item.quantity }} × {{ item.price_per_unit }} грн</span
+              >
+              <span class="badge bg-success rounded-pill"
+                >{{ item.total_price }} грн</span
+              >
+            </div>
+          </li>
+          {% endfor %} {% endfor %}
+        </ul>
+        {% endif %}
+
         <div
           class="alert {% if appointment.payment_status == 'paid' %}alert-success{% elif appointment.payment_status == 'partially_paid' %}alert-warning{% else %}alert-info{% endif %}"
         >

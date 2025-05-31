@@ -7,7 +7,10 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 
-from app.models import Appointment, AppointmentService, Client, PaymentMethod, Service, User
+from app.models import Appointment, AppointmentService, Client
+from app.models import PaymentMethod as PaymentMethodModel
+from app.models import PaymentMethodEnum as PaymentMethod
+from app.models import Product, Service, User, db
 
 
 class TestUserModel:
@@ -131,6 +134,41 @@ class TestUserModel:
         # Перевіряємо оновлене значення
         updated_user = session.query(User).filter_by(username=username).first()
         assert updated_user.is_active_master is True
+
+    def test_user_configurable_commission_rate_field(self, session):
+        """Перевірка поля configurable_commission_rate в моделі User."""
+        username = f"testuser_{uuid.uuid4().hex[:8]}"
+        user = User(
+            username=username,
+            password=generate_password_hash("password123"),
+            full_name="Test User",
+            is_admin=False,
+        )
+        session.add(user)
+        session.commit()
+
+        # Перевіряємо, що поле існує та має значення за замовчуванням 0.00
+        saved_user = session.query(User).filter_by(username=username).first()
+        assert hasattr(
+            saved_user, "configurable_commission_rate"
+        ), "User model doesn't have configurable_commission_rate attribute"
+        assert saved_user.configurable_commission_rate == Decimal("0.00")
+
+        # Змінюємо значення комісійної ставки
+        saved_user.configurable_commission_rate = Decimal("15.50")
+        session.commit()
+
+        # Перевіряємо оновлене значення
+        updated_user = session.query(User).filter_by(username=username).first()
+        assert updated_user.configurable_commission_rate == Decimal("15.50")
+
+        # Перевіряємо, що можна встановити None
+        updated_user.configurable_commission_rate = None
+        session.commit()
+
+        # Перевіряємо, що значення None збережено
+        final_user = session.query(User).filter_by(username=username).first()
+        assert final_user.configurable_commission_rate is None
 
 
 class TestClientModel:

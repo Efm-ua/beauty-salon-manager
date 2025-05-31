@@ -406,3 +406,116 @@ def test_toggle_admin_resets_schedule_display_order(admin_auth_client, regular_u
     assert updated_user.is_admin is True
     assert updated_user.is_active_master is False
     assert updated_user.schedule_display_order is None
+
+
+# Tests for configurable_commission_rate functionality
+def test_admin_can_view_commission_rate_field(admin_auth_client, regular_user):
+    """Test that an admin can see the commission rate field on the user edit page."""
+    response = admin_auth_client.get(url_for("auth.edit_user", id=regular_user.id))
+    assert response.status_code == 200
+    # Check if the commission rate field appears in the form
+    assert 'name="configurable_commission_rate"' in response.text
+    assert "Комісійна ставка (%)" in response.text
+
+
+def test_admin_can_set_commission_rate(admin_auth_client, regular_user, session):
+    """Test that an admin can set the commission rate for a user."""
+    from decimal import Decimal
+
+    response = admin_auth_client.post(
+        url_for("auth.edit_user", id=regular_user.id),
+        data={
+            "full_name": regular_user.full_name,
+            "is_admin": "",  # Not checked, remains a master
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 1,  # Required for active master
+            "configurable_commission_rate": "25.50",  # Set commission rate
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert f"Користувач {regular_user.full_name} успішно оновлений!" in response.get_data(as_text=True)
+
+    # Verify commission rate was updated
+    updated_user = session.get(User, regular_user.id)
+    assert updated_user.configurable_commission_rate == Decimal("25.50")
+
+
+def test_commission_rate_validation_maximum(admin_auth_client, regular_user):
+    """Test that commission rate validation works for maximum value."""
+    response = admin_auth_client.post(
+        url_for("auth.edit_user", id=regular_user.id),
+        data={
+            "full_name": regular_user.full_name,
+            "is_admin": "",  # Not checked, remains a master
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 1,  # Required for active master
+            "configurable_commission_rate": "101",  # Above maximum (100)
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    # Should show validation error
+    assert "Комісійна ставка повинна бути від 0 до 100 відсотків" in response.get_data(as_text=True)
+
+
+def test_commission_rate_validation_minimum(admin_auth_client, regular_user):
+    """Test that commission rate validation works for minimum value."""
+    response = admin_auth_client.post(
+        url_for("auth.edit_user", id=regular_user.id),
+        data={
+            "full_name": regular_user.full_name,
+            "is_admin": "",  # Not checked, remains a master
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 1,  # Required for active master
+            "configurable_commission_rate": "-1",  # Below minimum (0)
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    # Should show validation error
+    assert "Комісійна ставка повинна бути від 0 до 100 відсотків" in response.get_data(as_text=True)
+
+
+def test_commission_rate_can_be_empty(admin_auth_client, regular_user, session):
+    """Test that commission rate can be left empty (None)."""
+    response = admin_auth_client.post(
+        url_for("auth.edit_user", id=regular_user.id),
+        data={
+            "full_name": regular_user.full_name,
+            "is_admin": "",  # Not checked, remains a master
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 1,  # Required for active master
+            "configurable_commission_rate": "",  # Empty value
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert f"Користувач {regular_user.full_name} успішно оновлений!" in response.get_data(as_text=True)
+
+    # Verify commission rate was set to None
+    updated_user = session.get(User, regular_user.id)
+    assert updated_user.configurable_commission_rate is None
+
+
+def test_commission_rate_decimal_places(admin_auth_client, regular_user, session):
+    """Test that commission rate accepts decimal values with proper precision."""
+    from decimal import Decimal
+
+    response = admin_auth_client.post(
+        url_for("auth.edit_user", id=regular_user.id),
+        data={
+            "full_name": regular_user.full_name,
+            "is_admin": "",  # Not checked, remains a master
+            "is_active_master": "y",  # Active master
+            "schedule_display_order": 1,  # Required for active master
+            "configurable_commission_rate": "12.75",  # Decimal value
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert f"Користувач {regular_user.full_name} успішно оновлений!" in response.get_data(as_text=True)
+
+    # Verify commission rate was saved with correct precision
+    updated_user = session.get(User, regular_user.id)
+    assert updated_user.configurable_commission_rate == Decimal("12.75")
