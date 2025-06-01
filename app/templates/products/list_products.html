@@ -73,7 +73,7 @@
                 <tbody>
                     {% for product in products.items %}
                     {% set stock_level = product.stock_records[0] if product.stock_records else none %}
-                    <tr {% if stock_level and stock_level.quantity <= product.min_stock_level %}class="table-warning"{% endif %}>
+                    <tr {% if stock_level and product.min_stock_level and stock_level.quantity <= product.min_stock_level %}class="table-warning"{% endif %}>
                         <td>
                             <code>{{ product.sku }}</code>
                         </td>
@@ -102,9 +102,9 @@
                         </td>
                         <td>
                             {% if stock_level %}
-                            {% if stock_level.quantity <= product.min_stock_level %}
+                            {% if product.min_stock_level and stock_level.quantity <= product.min_stock_level %}
                             <span class="badge bg-danger">{{ stock_level.quantity }}</span>
-                            {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+                            {% elif product.min_stock_level and stock_level.quantity <= product.min_stock_level * 2 %}
                             <span class="badge bg-warning">{{ stock_level.quantity }}</span>
                             {% else %}
                             <span class="badge bg-success">{{ stock_level.quantity }}</span>
@@ -114,7 +114,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            <small class="text-muted">{{ product.min_stock_level }}</small>
+                            <small class="text-muted">{{ product.min_stock_level if product.min_stock_level else '—' }}</small>
                         </td>
                         {% if current_user.is_admin %}
                         <td>

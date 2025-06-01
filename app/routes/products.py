@@ -11,19 +11,30 @@ from wtforms import (
     FieldList,
     FloatField,
     FormField,
+    HiddenField,
     IntegerField,
     SelectField,
     StringField,
     SubmitField,
     TextAreaField,
-    HiddenField,
 )
 from wtforms.validators import DataRequired, Length, NumberRange, Optional, ValidationError
 from wtforms_sqlalchemy.fields import QuerySelectField
 
-from app.models import Brand, GoodsReceipt, GoodsReceiptItem, Product, StockLevel, db
-from app.models import InventoryAct, InventoryActItem, User
-from app.models import ProductWriteOff, WriteOffReason, ProductWriteOffItem
+from app.models import (
+    Brand,
+    GoodsReceipt,
+    GoodsReceiptItem,
+    InventoryAct,
+    InventoryActItem,
+    Product,
+    ProductWriteOff,
+    ProductWriteOffItem,
+    StockLevel,
+    User,
+    WriteOffReason,
+    db,
+)
 
 
 def admin_required(f):
@@ -544,8 +555,6 @@ class WriteOffReasonForm(FlaskForm):
 
     def validate_name(self, name: StringField) -> None:
         if name.data != self.original_reason_name:
-            from app.models import WriteOffReason
-
             reason = WriteOffReason.query.filter_by(name=name.data).first()
             if reason:
                 raise ValidationError("Причина списання з такою назвою вже існує.")
@@ -656,8 +665,6 @@ def write_off_reasons_create() -> Any:
 @admin_required
 def write_off_reasons_edit(id: int) -> Any:
     """Редагування причини списання"""
-    from app.models import WriteOffReason
-
     reason = db.session.get(WriteOffReason, id)
     if not reason:
         flash("Причину списання не знайдено", "danger")

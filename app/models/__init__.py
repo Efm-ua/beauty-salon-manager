@@ -362,7 +362,7 @@ class Product(db.Model):  # type: ignore[name-defined]
     volume_value = db.Column(db.Float, nullable=True)
     volume_unit = db.Column(db.String(20), nullable=True)  # мл, г, шт тощо
     description = db.Column(db.Text, nullable=True)
-    min_stock_level = db.Column(db.Integer, nullable=False, default=1)
+    min_stock_level = db.Column(db.Integer, nullable=True, default=None)
     current_sale_price = db.Column(Numeric(10, 2), nullable=True)
     last_cost_price = db.Column(Numeric(10, 2), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

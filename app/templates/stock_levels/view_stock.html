@@ -81,7 +81,7 @@
                 </thead>
                 <tbody>
                     {% for product, stock_level, brand in stock_data.items %}
-                    <tr {% if stock_level.quantity <= product.min_stock_level %}class="table-warning"{% endif %}>
+                    <tr {% if product.min_stock_level and stock_level.quantity <= product.min_stock_level %}class="table-warning"{% endif %}>
                         <td>
                             <code>{{ product.sku }}</code>
                         </td>
@@ -103,10 +103,10 @@
                         </td>
                         <td>
                             <div class="d-flex align-items-center">
-                                {% if stock_level.quantity <= product.min_stock_level %}
+                                {% if product.min_stock_level and stock_level.quantity <= product.min_stock_level %}
                                 <span class="badge bg-danger me-2">{{ stock_level.quantity }}</span>
                                 <i class="fas fa-exclamation-triangle text-danger" title="Критично низький залишок"></i>
-                                {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+                                {% elif product.min_stock_level and stock_level.quantity <= product.min_stock_level * 2 %}
                                 <span class="badge bg-warning me-2">{{ stock_level.quantity }}</span>
                                 <i class="fas fa-exclamation-circle text-warning" title="Низький залишок"></i>
                                 {% else %}
@@ -115,12 +115,12 @@
                             </div>
                         </td>
                         <td>
-                            <small class="text-muted">{{ product.min_stock_level }}</small>
+                            <small class="text-muted">{{ product.min_stock_level if product.min_stock_level else '—' }}</small>
                         </td>
                         <td>
-                            {% if stock_level.quantity <= product.min_stock_level %}
+                            {% if product.min_stock_level and stock_level.quantity <= product.min_stock_level %}
                             <span class="badge bg-danger">Критично низький</span>
-                            {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+                            {% elif product.min_stock_level and stock_level.quantity <= product.min_stock_level * 2 %}
                             <span class="badge bg-warning text-dark">Низький</span>
                             {% elif stock_level.quantity == 0 %}
                             <span class="badge bg-secondary">Відсутній</span>
@@ -236,7 +236,12 @@
                 <h6 class="card-title mb-3"><i class="fas fa-chart-pie me-2"></i>Статистика залишків</h6>
                 <div class="row text-center">
                     {% set critical_count = stock_data.items | selectattr('1.quantity', 'le', 0) | list | length %}
-                    {% set low_count = stock_data.items | selectattr('1.quantity', 'le', stock_data.items[0][0].min_stock_level) | list | length %}
+                    {% set low_count = 0 %}
+                    {% for product, stock_level, brand in stock_data.items %}
+                        {% if product.min_stock_level and stock_level.quantity <= product.min_stock_level %}
+                            {% set low_count = low_count + 1 %}
+                        {% endif %}
+                    {% endfor %}
                     {% set adequate_count = stock_data.items | length - low_count %}
                     
                     <div class="col-md-3">

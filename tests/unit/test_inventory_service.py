@@ -1,29 +1,18 @@
 """Tests for inventory service with FIFO write-off logic."""
 
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 
-from app.models import (
-    Brand,
-    GoodsReceipt,
-    GoodsReceiptItem,
-    Product,
-    ProductWriteOff,
-    ProductWriteOffItem,
-    StockLevel,
-    User,
-    WriteOffReason,
-    db,
-)
-from app.services.inventory_service import (
-    InsufficientStockError,
-    InventoryService,
-    ProductNotFoundError,
-    WriteOffItemData,
-    WriteOffReasonNotFoundError,
-)
+from app.models import (Brand, GoodsReceipt, GoodsReceiptItem, Product,
+                        ProductWriteOff, ProductWriteOffItem, StockLevel, User,
+                        WriteOffReason, db)
+from app.services.inventory_service import (InsufficientStockError,
+                                            InventoryService,
+                                            ProductNotFoundError,
+                                            WriteOffItemData,
+                                            WriteOffReasonNotFoundError)
 
 
 class TestWriteOffItemData:

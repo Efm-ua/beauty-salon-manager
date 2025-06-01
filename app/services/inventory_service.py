@@ -3,20 +3,13 @@ Inventory service module with FIFO write-off logic.
 Handles creation of product write-offs and proper inventory depletion using FIFO methodology.
 """
 
-from datetime import datetime, timezone, date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Optional, Tuple
 
-from app.models import (
-    GoodsReceiptItem,
-    Product,
-    ProductWriteOff,
-    ProductWriteOffItem,
-    StockLevel,
-    User,
-    WriteOffReason,
-    db,
-)
+from app.models import (GoodsReceiptItem, Product, ProductWriteOff,
+                        ProductWriteOffItem, StockLevel, User, WriteOffReason,
+                        db)
 
 
 class InsufficientStockError(Exception):

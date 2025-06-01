@@ -1,16 +1,18 @@
 from datetime import date
-from typing import Any, Dict, Optional
 from decimal import Decimal
+from typing import Any, Dict, Optional
 
-from flask import Blueprint, render_template
+from flask import Blueprint, abort, render_template
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from sqlalchemy import func, extract
+from sqlalchemy import and_, extract, func
 from wtforms import DateField, SelectField, SubmitField
-from wtforms.validators import DataRequired, Optional as OptionalValidator, ValidationError
+from wtforms.validators import DataRequired
+from wtforms.validators import Optional as OptionalValidator
+from wtforms.validators import ValidationError
 
 from app import db
-from app.models import Appointment, AppointmentService, PaymentMethod, User, Sale, SaleItem
+from app.models import Appointment, AppointmentService, Brand, PaymentMethod, Product, Sale, SaleItem, StockLevel, User
 
 
 # Helper function for calculating total with discount
@@ -516,4 +518,51 @@ def financial_report() -> str:
         total_gross_profit=total_gross_profit,
         payment_breakdown=payment_breakdown,
         error=error_message,
+    )
+
+
+# Low stock alerts route
+@bp.route("/low_stock_alerts", methods=["GET"])
+@login_required
+def low_stock_alerts() -> str:
+    """
+    Display products with low stock levels.
+    Only accessible to administrators.
+    """
+    # Check if user is admin
+    if not current_user.is_admin:
+        abort(403)
+
+    # Query products with low stock levels
+    # Join Product with StockLevel and Brand
+    # Filter where quantity <= min_stock_level and min_stock_level is not null
+    low_stock_products = (
+        db.session.query(Product, StockLevel, Brand)
+        .join(StockLevel, Product.id == StockLevel.product_id)
+        .join(Brand, Product.brand_id == Brand.id)
+        .filter(and_(StockLevel.quantity <= Product.min_stock_level, Product.min_stock_level.isnot(None)))
+        .order_by(Product.name)
+        .all()
+    )
+
+    # Prepare data for template
+    products_data = []
+    for product, stock_level, brand in low_stock_products:
+        # Calculate how much needs to be ordered (difference)
+        # Ensure min_stock_level is not None (it should not be due to filter, but for type safety)
+        min_stock_level = product.min_stock_level or 0
+        difference = min_stock_level - stock_level.quantity
+
+        product_info = {
+            "name": product.name,
+            "sku": product.sku,
+            "brand_name": brand.name,
+            "current_quantity": stock_level.quantity,
+            "min_stock_level": min_stock_level,
+            "difference": difference,
+        }
+        products_data.append(product_info)
+
+    return render_template(
+        "reports/low_stock_alerts.html", title="Сповіщення про низькі залишки товарів", products=products_data
     )

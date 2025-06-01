@@ -87,7 +87,10 @@
               </dd>
 
               <dt class="col-sm-5">Мін. рівень:</dt>
-              <dd class="col-sm-7">{{ product.min_stock_level }}</dd>
+              <dd class="col-sm-7">
+                {{ product.min_stock_level if product.min_stock_level else '—'
+                }}
+              </dd>
 
               {% if product.current_sale_price and product.last_cost_price %}
               <dt class="col-sm-5">Наценка:</dt>
@@ -120,7 +123,7 @@
     <!-- Інформація про залишки -->
     <div class="card">
       <div
-        class="card-header {% if stock_level and stock_level.quantity <= product.min_stock_level %}bg-danger text-white{% else %}bg-info text-white{% endif %}"
+        class="card-header {% if stock_level and product.min_stock_level and stock_level.quantity <= product.min_stock_level %}bg-danger text-white{% else %}bg-info text-white{% endif %}"
       >
         <h6 class="mb-0">
           <i class="fas fa-warehouse me-2"></i>Залишки на складі
@@ -129,9 +132,11 @@
       <div class="card-body text-center">
         {% if stock_level %}
         <div class="display-6 mb-2">
-          {% if stock_level.quantity <= product.min_stock_level %}
+          {% if product.min_stock_level and stock_level.quantity <=
+          product.min_stock_level %}
           <span class="text-danger">{{ stock_level.quantity }}</span>
-          {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+          {% elif product.min_stock_level and stock_level.quantity <=
+          product.min_stock_level * 2 %}
           <span class="text-warning">{{ stock_level.quantity }}</span>
           {% else %}
           <span class="text-success">{{ stock_level.quantity }}</span>
@@ -139,14 +144,16 @@
         </div>
         <p class="text-muted mb-2">одиниць в наявності</p>
 
-        {% if stock_level.quantity <= product.min_stock_level %}
+        {% if product.min_stock_level and stock_level.quantity <=
+        product.min_stock_level %}
         <div class="alert alert-danger py-2 px-3">
           <small>
             <i class="fas fa-exclamation-triangle me-1"></i>
             Критично низький залишок!
           </small>
         </div>
-        {% elif stock_level.quantity <= product.min_stock_level * 2 %}
+        {% elif product.min_stock_level and stock_level.quantity <=
+        product.min_stock_level * 2 %}
         <div class="alert alert-warning py-2 px-3">
           <small>
             <i class="fas fa-exclamation-circle me-1"></i>

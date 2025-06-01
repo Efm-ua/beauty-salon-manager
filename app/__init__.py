@@ -13,7 +13,6 @@ from flask_wtf.csrf import CSRFProtect  # noqa: E402
 
 # Imports after load_dotenv to ensure environment variables are loaded
 from .config import Config  # noqa: E402
-
 # Import all models to ensure they are registered with SQLAlchemy
 from .models import Appointment  # noqa: F401, E402
 from .models import AppointmentService  # noqa: F401, E402
@@ -22,9 +21,9 @@ from .models import Client  # noqa: F401, E402
 from .models import Product  # noqa: F401, E402
 from .models import Service  # noqa: F401, E402
 from .models import StockLevel  # noqa: F401, E402
-from .models import User, db  # noqa: E402
-from .models import WriteOffReason, ProductWriteOff, ProductWriteOffItem  # noqa: F401, E402
-from .models import GoodsReceipt, GoodsReceiptItem  # noqa: F401, E402
+from .models import (GoodsReceipt,  # noqa: E402; noqa: F401, E402
+                     GoodsReceiptItem, ProductWriteOff, ProductWriteOffItem,
+                     User, WriteOffReason, db)
 
 # Mark imports as used for SQLAlchemy model registration
 __all__ = [
@@ -96,7 +95,8 @@ def create_app(test_config: Optional[Dict[str, Any]] = None) -> Flask:
         return f"{float(value):.2f}".replace(".", ",")
 
     # Реєстрація маршрутів (routes)
-    from .routes import appointments, auth, clients, main, products, reports, sales, services
+    from .routes import (appointments, auth, clients, main, products, reports,
+                         sales, services)
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)

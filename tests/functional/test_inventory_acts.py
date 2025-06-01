@@ -2,11 +2,13 @@
 Функциональные тесты для инвентаризации товаров.
 """
 
-import pytest
 from datetime import date
+
+import pytest
 from flask import url_for
 
-from app.models import InventoryAct, InventoryActItem, Product, StockLevel, Brand, User, db
+from app.models import (Brand, InventoryAct, InventoryActItem, Product,
+                        StockLevel, User, db)
 
 
 class TestInventoryActsBasic:

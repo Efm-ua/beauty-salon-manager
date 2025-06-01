@@ -1,13 +1,15 @@
 """Functional tests for write-off functionality."""
 
-import pytest
 from datetime import date, datetime, timezone
 from decimal import Decimal
+
+import pytest
 from flask import url_for
 
-from app.models import WriteOffReason, ProductWriteOff, Product, Brand, User, StockLevel, GoodsReceipt, GoodsReceiptItem
-from app.services.inventory_service import InventoryService
 from app import db
+from app.models import (Brand, GoodsReceipt, GoodsReceiptItem, Product,
+                        ProductWriteOff, StockLevel, User, WriteOffReason)
+from app.services.inventory_service import InventoryService
 
 
 @pytest.fixture
@@ -245,7 +247,7 @@ class TestWriteOffReasonsFunctional:
 class TestWriteOffReasonServiceIntegration:
     """Integration tests for write-off reason service methods."""
 
-    def test_get_active_write_off_reasons_filters_correctly(self, app):
+    def test_get_active_write_off_reasons_filters_correctly(self, app, test_db):
         """Test that get_active_write_off_reasons returns only active reasons."""
         with app.app_context():
             # Create mixed active/inactive reasons
@@ -257,7 +259,7 @@ class TestWriteOffReasonServiceIntegration:
             # Set some to inactive
             inactive1.is_active = False
             inactive2.is_active = False
-            db.session.commit()
+            test_db.commit()
 
             # Get active reasons
             active_reasons = InventoryService.get_active_write_off_reasons()
@@ -270,14 +272,14 @@ class TestWriteOffReasonServiceIntegration:
             assert "Inactive 1" not in active_names
             assert "Inactive 2" not in active_names
 
-    def test_get_all_write_off_reasons_returns_all(self, app):
+    def test_get_all_write_off_reasons_returns_all(self, app, test_db):
         """Test that get_all_write_off_reasons returns both active and inactive reasons."""
         with app.app_context():
             # Create mixed active/inactive reasons
             active = InventoryService.create_write_off_reason("All Test Active")
             inactive = InventoryService.create_write_off_reason("All Test Inactive")
             inactive.is_active = False
-            db.session.commit()
+            test_db.commit()
 
             # Get all reasons
             all_reasons = InventoryService.get_all_write_off_reasons()

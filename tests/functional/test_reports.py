@@ -1,14 +1,14 @@
 from datetime import date, datetime, timedelta
-from unittest.mock import patch
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 from werkzeug.security import generate_password_hash
 
-from app.models import Appointment, AppointmentService, Client
+from app.models import Appointment, AppointmentService, Brand, Client
 from app.models import PaymentMethod as PaymentMethodModel
 from app.models import PaymentMethodEnum as PaymentMethod
-from app.models import Service, User, db, Sale, Product, Brand, SaleItem
+from app.models import Product, Sale, SaleItem, Service, User, db
 
 
 def test_salary_report_access_without_login(client):
@@ -2663,3 +2663,363 @@ def test_financial_report_product_margin_calculation(client, auth, app, test_db)
         # Проверяем наличие показателя товарной маржи
         assert "Товарна маржа" in html_content
         assert "50.0%" in html_content  # 50% маржа
+
+
+# Tests for Low Stock Alerts functionality
+def test_low_stock_alerts_access_without_login(client):
+    """Check that unauthorized user is redirected to login page."""
+    # First, make sure we're logged out
+    client.get("/auth/logout", follow_redirects=True)
+
+    # Now try to access the protected route
+    response = client.get("/reports/low_stock_alerts", follow_redirects=True)
+    assert response.status_code == 200
+
+    # Check if we're redirected to login page
+    html_content = response.data.decode("utf-8")
+    assert any(
+        text in html_content
+        for text in [
+            "login",
+            "password",
+            "username",
+            "Увійти",
+            "Вхід",
+            "Login",
+            "Password",
+            "Username",
+        ]
+    )
+
+
+def test_low_stock_alerts_access_non_admin(client, auth, test_user):
+    """Check that non-admin users get 403 error."""
+    auth.login(username=test_user.username, password="test_password")
+    response = client.get("/reports/low_stock_alerts")
+    assert response.status_code == 403
+
+
+def test_low_stock_alerts_access_admin(client, auth, admin_user):
+    """Check that admin user can access low stock alerts page."""
+    auth.login(username=admin_user.username, password="admin_password")
+    response = client.get("/reports/low_stock_alerts")
+    assert response.status_code == 200
+    assert "Сповіщення про низькі залишки товарів".encode("utf-8") in response.data
+
+
+def test_low_stock_alerts_with_no_low_stock_products(client, auth, app, test_db):
+    """Check display when there are no products with low stock."""
+    with app.app_context():
+        # Create admin user
+        admin_user = User(
+            username="admin_no_low_stock",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin No Low Stock",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Create brand and product with sufficient stock
+        brand = Brand(name="Test Brand No Low Stock")
+        test_db.add(brand)
+        test_db.commit()
+
+        product = Product(
+            name="Test Product No Low Stock",
+            sku="TST001_NO_LOW",
+            brand_id=brand.id,
+            min_stock_level=5,
+        )
+        test_db.add(product)
+        test_db.commit()
+
+        # Check if StockLevel already exists (auto-created by event listener)
+        from app.models import StockLevel
+
+        stock_level = StockLevel.query.filter_by(product_id=product.id).first()
+        if stock_level:
+            # Update existing stock level
+            stock_level.quantity = 10  # Above min_stock_level
+        else:
+            # Create new stock level if it doesn't exist
+            stock_level = StockLevel(
+                product_id=product.id,
+                quantity=10,  # Above min_stock_level
+            )
+            test_db.add(stock_level)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username=admin_user.username, password="admin_password")
+
+        response = client.get("/reports/low_stock_alerts")
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check for "no products need urgent ordering" message
+        assert "Наразі немає товарів, що потребують термінового" in html_content
+        assert "замовлення" in html_content
+        assert "Відмінно!" in html_content
+
+
+def test_low_stock_alerts_with_low_stock_products(client, auth, app, test_db):
+    """Check display when there are products with low stock."""
+    with app.app_context():
+        # Create admin user
+        admin_user = User(
+            username="admin_low_stock",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Low Stock",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Create brand
+        brand = Brand(name="Low Stock Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        # Create product with low stock
+        product1 = Product(
+            name="Low Stock Product 1",
+            sku="LST001_LOW",
+            brand_id=brand.id,
+            min_stock_level=10,
+        )
+        test_db.add(product1)
+        test_db.commit()
+
+        # Create another product with low stock
+        product2 = Product(
+            name="Low Stock Product 2",
+            sku="LST002_LOW",
+            brand_id=brand.id,
+            min_stock_level=5,
+        )
+        test_db.add(product2)
+        test_db.commit()
+
+        # Update stock levels with low quantities
+        from app.models import StockLevel
+
+        stock_level1 = StockLevel.query.filter_by(product_id=product1.id).first()
+        if stock_level1:
+            stock_level1.quantity = 3  # Below min_stock_level (10)
+        else:
+            stock_level1 = StockLevel(
+                product_id=product1.id,
+                quantity=3,  # Below min_stock_level (10)
+            )
+            test_db.add(stock_level1)
+
+        stock_level2 = StockLevel.query.filter_by(product_id=product2.id).first()
+        if stock_level2:
+            stock_level2.quantity = 5  # Equal to min_stock_level (5)
+        else:
+            stock_level2 = StockLevel(
+                product_id=product2.id,
+                quantity=5,  # Equal to min_stock_level (5)
+            )
+            test_db.add(stock_level2)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username=admin_user.username, password="admin_password")
+
+        response = client.get("/reports/low_stock_alerts")
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check for products in the table
+        assert "Low Stock Product 1" in html_content
+        assert "LST001_LOW" in html_content
+        assert "Low Stock Product 2" in html_content
+        assert "LST002_LOW" in html_content
+        assert "Low Stock Brand" in html_content
+
+        # Check for quantity and difference calculations
+        assert "3" in html_content  # Current quantity for product1
+        assert "5" in html_content  # Min stock level for product2 and current quantity
+        assert "7" in html_content  # Difference for product1 (10 - 3)
+        assert "0" in html_content  # Difference for product2 (5 - 5)
+
+
+def test_low_stock_alerts_excludes_products_without_min_stock_level(client, auth, app, test_db):
+    """Check that products without min_stock_level are excluded."""
+    with app.app_context():
+        # Create admin user
+        admin_user = User(
+            username="admin_no_min_stock",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin No Min Stock",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Create brand
+        brand = Brand(name="No Min Stock Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        # Create product without min_stock_level
+        product_no_min = Product(
+            name="Product Without Min Stock",
+            sku="NMS001_NO_MIN",
+            brand_id=brand.id,
+            min_stock_level=None,  # No minimum stock level set
+        )
+        test_db.add(product_no_min)
+        test_db.commit()
+
+        # Create product with min_stock_level but sufficient stock
+        product_sufficient = Product(
+            name="Product With Sufficient Stock",
+            sku="SUF001_SUFFICIENT",
+            brand_id=brand.id,
+            min_stock_level=5,
+        )
+        test_db.add(product_sufficient)
+        test_db.commit()
+
+        # Update stock levels
+        from app.models import StockLevel
+
+        stock_level_no_min = StockLevel.query.filter_by(product_id=product_no_min.id).first()
+        if stock_level_no_min:
+            stock_level_no_min.quantity = 1  # Very low, but no min_stock_level to compare
+        else:
+            stock_level_no_min = StockLevel(
+                product_id=product_no_min.id,
+                quantity=1,  # Very low, but no min_stock_level to compare
+            )
+            test_db.add(stock_level_no_min)
+
+        stock_level_sufficient = StockLevel.query.filter_by(product_id=product_sufficient.id).first()
+        if stock_level_sufficient:
+            stock_level_sufficient.quantity = 10  # Above min_stock_level
+        else:
+            stock_level_sufficient = StockLevel(
+                product_id=product_sufficient.id,
+                quantity=10,  # Above min_stock_level
+            )
+            test_db.add(stock_level_sufficient)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username=admin_user.username, password="admin_password")
+
+        response = client.get("/reports/low_stock_alerts")
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Product without min_stock_level should not appear
+        assert "Product Without Min Stock" not in html_content
+        assert "NMS001_NO_MIN" not in html_content
+
+        # Product with sufficient stock should not appear
+        assert "Product With Sufficient Stock" not in html_content
+        assert "SUF001_SUFFICIENT" not in html_content
+
+        # Should show "no products need urgent ordering" message
+        # The template splits this text across multiple lines, so check for key parts
+        assert "Наразі немає товарів, що потребують термінового" in html_content
+        assert "замовлення" in html_content
+
+
+def test_low_stock_alerts_data_accuracy(client, auth, app, test_db):
+    """Check accuracy of displayed data in low stock alerts."""
+    with app.app_context():
+        # Create admin user
+        admin_user = User(
+            username="admin_data_accuracy",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Data Accuracy",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Create brand
+        brand = Brand(name="Accuracy Test Brand")
+        test_db.add(brand)
+        test_db.commit()
+
+        # Create product with specific values for testing
+        product = Product(
+            name="Accuracy Test Product",
+            sku="ACC001_ACCURACY",
+            brand_id=brand.id,
+            min_stock_level=15,
+        )
+        test_db.add(product)
+        test_db.commit()
+
+        # Update stock level with specific quantity
+        from app.models import StockLevel
+
+        stock_level = StockLevel.query.filter_by(product_id=product.id).first()
+        if stock_level:
+            stock_level.quantity = 7  # Below min_stock_level (15)
+        else:
+            stock_level = StockLevel(
+                product_id=product.id,
+                quantity=7,  # Below min_stock_level (15)
+            )
+            test_db.add(stock_level)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username=admin_user.username, password="admin_password")
+
+        response = client.get("/reports/low_stock_alerts")
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check all data is correctly displayed
+        assert "Accuracy Test Product" in html_content
+        assert "ACC001_ACCURACY" in html_content
+        assert "Accuracy Test Brand" in html_content
+
+        # Check quantities (current quantity should be in danger badge - template splits across lines)
+        assert 'class="badge bg-danger"' in html_content
+        assert ">7</span" in html_content
+        assert "15" in html_content  # Min stock level
+
+        # Check difference calculation (15 - 7 = 8)
+        assert "8" in html_content
+
+        # Check that warning message is shown (template splits text across lines)
+        assert "товар(ів), що потребують" in html_content
+        assert "термінового поповнення запасів" in html_content
+
+
+def test_low_stock_alerts_navigation_links(client, auth, app, test_db):
+    """Check that navigation links are present and functional."""
+    with app.app_context():
+        # Create admin user
+        admin_user = User(
+            username="admin_navigation",
+            password=generate_password_hash("admin_password"),
+            full_name="Admin Navigation",
+            is_admin=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
+
+        # Login as admin
+        auth.login(username=admin_user.username, password="admin_password")
+
+        response = client.get("/reports/low_stock_alerts")
+        assert response.status_code == 200
+        html_content = response.data.decode("utf-8")
+
+        # Check for navigation links
+        assert "Перейти до складу" in html_content
+        assert "Додати надходження" in html_content
+
+        # Check for proper URLs in links
+        assert 'href="/products/stock"' in html_content
+        assert 'href="/products/goods_receipts"' in html_content
