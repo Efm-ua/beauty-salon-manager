@@ -15,3 +15,7 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
     REMEMBER_COOKIE_DURATION: timedelta = timedelta(days=14)
+
+    # Вимкнення DEBUG та TESTING режимів для production
+    DEBUG: bool = False
+    TESTING: bool = False

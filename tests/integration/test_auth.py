@@ -54,7 +54,7 @@ def test_login_success(client, regular_user, db):
     )
     assert response.status_code == 200
     # Перевірка, що ми на головній сторінці
-    assert "Салон краси" in response.data.decode("utf-8")
+    assert "Класіко" in response.data.decode("utf-8")
 
 
 def test_login_invalid_password(client, regular_user, db):
@@ -371,7 +371,7 @@ def test_initialize_blocked_with_users(client, regular_user, db):
     """
     response = client.get("/auth/initialize", follow_redirects=True)
     assert response.status_code == 200
-    assert "Салон краси" in response.data.decode("utf-8")
+    assert "Класіко" in response.data.decode("utf-8")
 
 
 def test_initialize_success(app, client, db):

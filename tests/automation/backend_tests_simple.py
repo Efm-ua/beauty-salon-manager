@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simplified backend testing script for beauty salon manager."""
+"""Simplified backend testing script for Класіко manager."""
 
 
 def test_user_validation():
@@ -167,7 +167,7 @@ def test_models_relationships():
 
 def run_backend_tests():
     """Run comprehensive backend tests."""
-    print("🧪 Starting Backend Tests for Beauty Salon Manager")
+    print("🧪 Starting Backend Tests for Класіко Manager")
     print("=" * 60)
 
     # Test database models and business logic

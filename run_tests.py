@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test Runner Script for Beauty Salon Manager
+Test Runner Script for Класіко Manager
 
 This script provides a command-line interface for running different types of tests
 and generating code coverage reports. It supports various options for controlling
@@ -38,7 +38,7 @@ import sys
 
 def parse_arguments():
     """Parse command line arguments for the test runner."""
-    parser = argparse.ArgumentParser(description="Run tests for Beauty Salon Manager")
+    parser = argparse.ArgumentParser(description="Run tests for Класіко Manager")
 
     # Test category options
     test_category = parser.add_argument_group("Test Categories")

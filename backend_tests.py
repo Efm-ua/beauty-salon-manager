@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Backend testing script for beauty salon manager."""
+"""Backend testing script for Класіко manager."""
 
 import requests
 import json
@@ -156,7 +156,7 @@ def test_payment_methods():
 
 def run_backend_tests():
     """Run comprehensive backend tests."""
-    print("🧪 Starting Backend Tests for Beauty Salon Manager")
+    print("🧪 Starting Backend Tests for Класіко Manager")
     print("=" * 60)
 
     # Test database models

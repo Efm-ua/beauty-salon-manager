@@ -119,7 +119,7 @@ def test_client_list_unauthorized(client):
     # Перевірка, що перенаправлення веде на сторінку входу
     response = client.get("/clients/", follow_redirects=True)
     assert response.status_code == 200
-    assert "Увійти в систему" in response.data.decode("utf-8") or "Вхід - Салон краси" in response.data.decode("utf-8")
+    assert "Увійти в систему" in response.data.decode("utf-8") or "Вхід - Класіко" in response.data.decode("utf-8")
 
 
 def test_client_create_page_accessible(auth_client_for_clients):
