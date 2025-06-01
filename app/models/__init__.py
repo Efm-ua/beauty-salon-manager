@@ -372,8 +372,10 @@ class Product(db.Model):  # type: ignore[name-defined]
 
     # Relationships
     stock_records = db.relationship("StockLevel", backref="product", lazy=True, cascade="all, delete-orphan")
-    goods_receipt_items = db.relationship("GoodsReceiptItem", back_populates="product", lazy=True)
-    sale_items = db.relationship("SaleItem", backref="product", lazy=True)
+    goods_receipt_items = db.relationship(
+        "GoodsReceiptItem", back_populates="product", lazy=True, cascade="all, delete-orphan"
+    )
+    sale_items = db.relationship("SaleItem", backref="product", lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Product {self.name} ({self.sku})>"

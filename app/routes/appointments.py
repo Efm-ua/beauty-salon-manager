@@ -4,16 +4,23 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, Union
 
-from flask import (Blueprint, flash, jsonify, redirect, render_template,
-                   request, url_for)
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from sqlalchemy import func
-from wtforms import (DateField, FloatField, HiddenField, IntegerField,
-                     SelectField, SelectMultipleField, StringField,
-                     SubmitField, TextAreaField, TimeField)
-from wtforms.validators import (DataRequired, NumberRange, Optional,
-                                ValidationError)
+from wtforms import (
+    DateField,
+    FloatField,
+    HiddenField,
+    IntegerField,
+    SelectField,
+    SelectMultipleField,
+    StringField,
+    SubmitField,
+    TextAreaField,
+    TimeField,
+)
+from wtforms.validators import DataRequired, NumberRange, Optional, ValidationError
 
 from app.models import Appointment, AppointmentService, Client
 from app.models import PaymentMethod as PaymentMethodModel
@@ -718,16 +725,25 @@ def daily_summary() -> str:
     # Запит для completed записів (для розрахунку сум)
     completed_query = Appointment.query.filter(Appointment.date == filter_date, Appointment.status == "completed")
 
+    # Запит для продажів товарів за день
+    from app.models import Sale
+    from sqlalchemy import func
+
+    sales_query = Sale.query.filter(func.date(Sale.sale_date) == filter_date)
+
     # Фільтрація за майстром
     if filter_master_id:
         all_appointments_query = all_appointments_query.filter(Appointment.master_id == filter_master_id)
         completed_query = completed_query.filter(Appointment.master_id == filter_master_id)
+        sales_query = sales_query.filter(Sale.user_id == filter_master_id)
         appointments = all_appointments_query.order_by(Appointment.start_time).all()
         completed_appointments = completed_query.order_by(Appointment.start_time).all()
+        sales = sales_query.order_by(Sale.sale_date).all()
         master_stats = None
     else:
         appointments = all_appointments_query.order_by(Appointment.start_time).all()
         completed_appointments = completed_query.order_by(Appointment.start_time).all()
+        sales = sales_query.order_by(Sale.sale_date).all()
 
         # Статистика по майстрах (тільки для адміністраторів)
         if current_user.is_admin:
@@ -743,8 +759,13 @@ def daily_summary() -> str:
             for master_id, name, appointments_count in masters_with_appointments:
                 # Розрахунок суми для майстра (тільки completed записи)
                 master_completed_appointments = [a for a in completed_appointments if a.master_id == master_id]
+
+                # Розрахунок суми з продажів для майстра
+                master_sales = [s for s in sales if s.user_id == master_id]
+
                 total_sum = 0.0
 
+                # Сума з послуг appointments
                 for appointment in master_completed_appointments:
                     if appointment.amount_paid is not None and float(appointment.amount_paid) > 0:
                         total_sum += float(appointment.amount_paid)
@@ -756,14 +777,20 @@ def daily_summary() -> str:
                             discounted_amount = services_amount
                         total_sum += discounted_amount
 
+                # Додаємо суму з продажів товарів
+                for sale in master_sales:
+                    total_sum += float(sale.total_amount)
+
                 master_stats.append(
                     {"id": master_id, "name": name, "appointments_count": appointments_count, "total_sum": total_sum}
                 )
         else:
             master_stats = None
 
-    # Розрахунок загальної суми (тільки completed записи)
+    # Розрахунок загальної суми (тільки completed записи + всі продажі)
     total_sum = 0.0
+
+    # Сума з appointments
     for appointment in completed_appointments:
         if appointment.amount_paid is not None and float(appointment.amount_paid) > 0:
             total_sum += float(appointment.amount_paid)
@@ -775,6 +802,10 @@ def daily_summary() -> str:
                 discounted_amount = services_amount
             total_sum += discounted_amount
 
+    # Додаємо суму з продажів товарів
+    for sale in sales:
+        total_sum += float(sale.total_amount)
+
     return render_template(
         "appointments/daily_summary.html",
         title="Щоденний підсумок",
@@ -782,6 +813,7 @@ def daily_summary() -> str:
         filter_master=filter_master_id,
         masters=masters,
         appointments=appointments,
+        sales=sales,
         master_stats=master_stats,
         total_sum=total_sum,
     )
