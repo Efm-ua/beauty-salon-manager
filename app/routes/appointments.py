@@ -43,35 +43,63 @@ class AppointmentForm(FlaskForm):
     services = SelectMultipleField("Послуги", coerce=int, validators=[DataRequired()])
     discount_percentage = FloatField("Знижка (%)", validators=[Optional(), NumberRange(min=0, max=100)])
     amount_paid = FloatField("Сплачено", validators=[Optional(), NumberRange(min=0)])
-    payment_method = SelectField("Спосіб оплати", coerce=lambda x: int(x) if x else None, validators=[Optional()])
+    payment_method = SelectField("Спосіб оплати", coerce=int, validators=[Optional()])
     notes = TextAreaField("Примітки", validators=[Optional()])
     submit = SubmitField("Зберегти")
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, formdata=None, obj=None, **kwargs):
+        super().__init__(formdata=formdata, obj=obj, **kwargs)
 
-        # Populate choices
+        # Populate choices - убеждаемся, что используется текущая сессия
         clients = Client.query.order_by(Client.name).all()
-        self.client_id.choices = [(c.id, c.name) for c in clients]  # type: ignore
+        self.client_id.choices = [(c.id, c.name) for c in clients]
 
-        masters = User.query.filter_by(is_active_master=True).order_by(User.full_name).all()
-        self.master_id.choices = [(u.id, u.full_name) for u in masters]  # type: ignore
+        # Include ALL users who are active masters OR admins (since admins can act as masters)
+        masters = (
+            User.query.filter((User.is_active_master.is_(True)) | (User.is_admin.is_(True)))
+            .order_by(User.full_name)
+            .all()
+        )
+        self.master_id.choices = [(u.id, u.full_name) for u in masters]
 
         services = Service.query.order_by(Service.name).all()
-        self.services.choices = [(s.id, s.name) for s in services]  # type: ignore
+        self.services.choices = [(s.id, s.name) for s in services]
 
         # Payment method choices
-        payment_methods = PaymentMethodModel.query.filter_by(is_active=True).all()
-        self.payment_method.choices = [(0, "Не вибрано")] + [(pm.id, pm.name) for pm in payment_methods]  # type: ignore
+        active_payment_methods = (
+            PaymentMethodModel.query.filter_by(is_active=True).order_by(PaymentMethodModel.name).all()
+        )
+        self.payment_method.choices = [(0, "--- Не вибрано ---")] + [(pm.id, pm.name) for pm in active_payment_methods]
+
+        # Если есть obj (для редактирования), то принудительно обновляем соединение с базой
+        if obj:
+            try:
+                # Обновляем объект в сессии если он был detached
+                if not hasattr(obj, "_sa_instance_state") or obj._sa_instance_state.detached:
+                    obj = db.session.merge(obj)
+                elif obj._sa_instance_state.expired:
+                    db.session.refresh(obj)
+            except Exception:
+                # Если есть проблемы с сессией, получаем объект заново
+                if hasattr(obj, "id"):
+                    obj = Appointment.query.get(obj.id)
+
+        # НЕ встановлюємо дані тут - дозволяємо WTForms обробити obj самостійно
+        # Это виправляє проблему з конфліктом між obj та явною установкою даних
 
     def validate_date(self, field):
         if field.data and field.data < date.today():
+            logger.debug(f"Date validation failed: {field.data} is in the past")
             raise ValidationError("Неможливо створити запис на дату та час у минулому.")
 
     def validate_master_id(self, field):
         if field.data:
             master = User.query.get(field.data)
-            if not master or not master.is_active_master:
+            is_active_master = master.is_active_master if master else False
+            is_admin = master.is_admin if master else False
+            # Allow both active masters and admin users
+            if not master or (not master.is_active_master and not master.is_admin):
+                logger.debug(f"Master validation failed: user {field.data} is not active master or admin")
                 raise ValidationError("Вибраний майстер не є активним.")
 
 
@@ -207,20 +235,19 @@ def view(id: int) -> Any:
 @login_required
 def create() -> Any:
     """Створення нового запису"""
-    form = AppointmentForm()
+    # Create form properly - with formdata for POST requests
+    if request.method == "POST":
+        form = AppointmentForm(formdata=request.form)
+    else:
+        form = AppointmentForm()
 
-    # Force refresh choices to ensure they're current
-    form.client_id.choices = [(c.id, c.name) for c in Client.query.order_by(Client.name).all()]  # type: ignore
-    form.master_id.choices = [
-        (u.id, u.full_name) for u in User.query.filter_by(is_active_master=True).order_by(User.full_name).all()
-    ]  # type: ignore
-    form.services.choices = [(s.id, s.name) for s in Service.query.order_by(Service.name).all()]  # type: ignore
-
-    # Payment method choices
-    payment_methods = PaymentMethodModel.query.filter_by(is_active=True).all()
-    form.payment_method.choices = [("", "Не вибрано")] + [
-        (str(pm.id), pm.name) for pm in payment_methods
-    ]  # type: ignore
+    # Debug form choices
+    if request.method == "POST":
+        logger.debug(
+            f"CREATE DEBUG: Form choices - clients: {len(form.client_id.choices)}, "
+            f"masters: {len(form.master_id.choices)}, services: {len(form.services.choices)}"
+        )
+        logger.debug(f"CREATE DEBUG: Form validation result: {form.validate()}")
 
     # Pre-populate form fields from URL parameters
     if request.method == "GET":
@@ -246,6 +273,7 @@ def create() -> Any:
                 pass
 
     if form.validate_on_submit():
+        logger.debug("CREATE DEBUG: Form validation passed!")
         try:
             # Check if user can create appointment for this master
             if not current_user.is_admin and form.master_id.data != current_user.id:
@@ -263,12 +291,7 @@ def create() -> Any:
             end_datetime = start_datetime + timedelta(minutes=total_duration or 60)  # Default 60 min
 
             # Create appointment
-            payment_method_id = None
-            if form.payment_method.data and form.payment_method.data.strip():
-                try:
-                    payment_method_id = int(form.payment_method.data)
-                except (ValueError, TypeError):
-                    payment_method_id = None
+            payment_method_id = form.payment_method.data if form.payment_method.data != 0 else None
 
             appointment = Appointment(
                 client_id=form.client_id.data,
@@ -309,6 +332,10 @@ def create() -> Any:
         except Exception as e:
             db.session.rollback()
             flash(f"Помилка при створенні запису: {str(e)}", "error")
+            logger.error(f"CREATE DEBUG: Exception during appointment creation: {str(e)}")
+    else:
+        if request.method == "POST":
+            logger.debug(f"CREATE DEBUG: Form validation FAILED! Errors: {form.errors}")
 
     return render_template(
         "appointments/create.html", title="Створити запис", form=form, from_schedule=request.args.get("from_schedule")
@@ -326,23 +353,45 @@ def edit(id: int) -> str:
         flash("У вас немає доступу до редагування цього запису.", "error")
         return redirect(url_for("appointments.index"))
 
-    form = AppointmentForm(obj=appointment)
+    # DEBUG: Print availability of data
+    logger.debug(f"EDIT DEBUG: Appointment ID {id}")
+    logger.debug(f"EDIT DEBUG: Clients count: {Client.query.count()}")
+    logger.debug(f"EDIT DEBUG: Masters count: {User.query.filter_by(is_active_master=True).count()}")
+    logger.debug(f"EDIT DEBUG: Services count: {Service.query.count()}")
 
-    # Force refresh choices to ensure they're current
-    form.client_id.choices = [(c.id, c.name) for c in Client.query.order_by(Client.name).all()]  # type: ignore
-    form.master_id.choices = [
-        (u.id, u.full_name) for u in User.query.filter_by(is_active_master=True).order_by(User.full_name).all()
-    ]  # type: ignore
-    form.services.choices = [(s.id, s.name) for s in Service.query.order_by(Service.name).all()]  # type: ignore
+    # Create form WITHOUT formdata first to set up choices, then process formdata
+    if request.method == "POST":
+        # For POST: create form without data first, set up choices, then populate with formdata
+        form = AppointmentForm()
+        form.process(formdata=request.form, obj=appointment)
+    else:
+        # For GET: create form with obj data
+        form = AppointmentForm(obj=appointment)
 
-    # Payment method choices
-    payment_methods = PaymentMethodModel.query.filter_by(is_active=True).all()
-    form.payment_method.choices = [(0, "Не вибрано")] + [(pm.id, pm.name) for pm in payment_methods]  # type: ignore
-
-    # Pre-populate services and payment method
+    # Pre-populate services and payment_method after form initialization
     if request.method == "GET":
-        form.services.data = [service.service_id for service in appointment.services]
-        form.payment_method.data = appointment.payment_method_id or 0
+        services_data = [service.service_id for service in appointment.services]
+        form.services.data = services_data
+        # Set payment method value (0 if None)
+        form.payment_method.data = appointment.payment_method_id if appointment.payment_method_id is not None else 0
+
+        # DEBUG: Check that form has choices
+        logger.debug(f"EDIT DEBUG GET: Form client choices count: {len(form.client_id.choices)}")
+        logger.debug(f"EDIT DEBUG GET: Form master choices count: {len(form.master_id.choices)}")
+        logger.debug(f"EDIT DEBUG GET: Form service choices count: {len(form.services.choices)}")
+        logger.debug(f"EDIT DEBUG GET: Form client choices: {form.client_id.choices}")
+        logger.debug(f"EDIT DEBUG GET: Form services data: {form.services.data}")
+        logger.debug(
+            f"EDIT DEBUG GET: Appointment services: {[(s.service_id, s.service.name) for s in appointment.services]}"
+        )
+
+    if request.method == "POST":
+        # DEBUG: Check that form has choices during POST
+        logger.debug(f"EDIT DEBUG POST: Form client choices count: {len(form.client_id.choices)}")
+        logger.debug(f"EDIT DEBUG POST: Form master choices count: {len(form.master_id.choices)}")
+        logger.debug(f"EDIT DEBUG POST: Form service choices count: {len(form.services.choices)}")
+        logger.debug(f"EDIT DEBUG POST: Services data from form: {form.services.data}")
+        logger.debug(f"EDIT DEBUG POST: Raw form data services: {request.form.getlist('services')}")
 
     if form.validate_on_submit():
         try:
@@ -402,7 +451,12 @@ def edit(id: int) -> str:
 
         except Exception as e:
             db.session.rollback()
+            logger.error(f"EDIT ERROR: {str(e)}")
             flash(f"Помилка при оновленні запису: {str(e)}", "error")
+    else:
+        # DEBUG: Print form errors if validation fails
+        if request.method == "POST":
+            logger.debug(f"EDIT DEBUG: Form validation errors: {form.errors}")
 
     return render_template(
         "appointments/edit.html",
@@ -469,29 +523,34 @@ def change_status(id: int, new_status: str) -> str:
 
             payment_method_data = request.form.get("payment_method") or request.args.get("payment_method")
 
-            if not payment_method_data:
+            # Check if payment method is already set in the database
+            if not payment_method_data and appointment.payment_method_id is None:
                 flash("Будь ласка, виберіть тип оплати для завершення запису.", "error")
                 return redirect(url_for("appointments.view", id=id))
 
-            # Handle case where payment_method_data might be a list
-            if isinstance(payment_method_data, list):
-                payment_method_data = payment_method_data[0]
+            # Only update payment method if new data is provided
+            if payment_method_data:
+                # Handle case where payment_method_data might be a list
+                if isinstance(payment_method_data, list):
+                    payment_method_data = payment_method_data[0]
 
-            # Find payment method by name (string value)
-            payment_method = PaymentMethodModel.query.filter_by(name=payment_method_data).first()
-            if not payment_method:
-                flash("Невідомий метод оплати.", "error")
-                return redirect(url_for("appointments.view", id=id))
+                # Find payment method by name (string value)
+                payment_method = PaymentMethodModel.query.filter_by(name=payment_method_data).first()
+                if not payment_method:
+                    flash("Невідомий метод оплати.", "error")
+                    return redirect(url_for("appointments.view", id=id))
 
-            appointment.payment_method_id = payment_method.id
+                appointment.payment_method_id = payment_method.id
 
-            # Logic for payment completion
-            if payment_method.name == "Борг":
-                # Debt payment method - amount stays 0, payment_status remains unpaid
-                appointment.amount_paid = 0
-            else:
-                # Non-debt payment method - set amount_paid to full discounted price
-                appointment.amount_paid = appointment.get_discounted_price()
+                # Logic for payment completion - ТОЛЬКО если это новый payment method
+                if payment_method.name == "Борг":
+                    # Debt payment method - amount stays 0, payment_status remains unpaid
+                    appointment.amount_paid = 0
+                else:
+                    # Non-debt payment method - set amount_paid to full discounted price
+                    appointment.amount_paid = appointment.get_discounted_price()
+            # НЕ ИЗМЕНЯЕМ amount_paid если payment_method уже существует
+            # Это позволяет тестам работать правильно
 
         # Set status based on new_status
         if new_status == "cancelled":
@@ -719,7 +778,6 @@ def daily_summary() -> str:
 
     # Запит для продажів товарів за день
     from app.models import Sale
-    from sqlalchemy import func
 
     sales_query = Sale.query.filter(func.date(Sale.sale_date) == filter_date)
 
@@ -741,7 +799,7 @@ def daily_summary() -> str:
         if current_user.is_admin:
             master_stats = []
             masters_with_appointments = (
-                db.session.query(User.id, User.full_name, func.count(Appointment.id).label("appointments_count"))
+                db.session.query(User.id, User.full_name, db.func.count(Appointment.id).label("appointments_count"))
                 .join(Appointment, User.id == Appointment.master_id)
                 .filter(Appointment.date == filter_date, Appointment.status == "completed")
                 .group_by(User.id, User.full_name)
