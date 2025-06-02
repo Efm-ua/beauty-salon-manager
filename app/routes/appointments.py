@@ -43,7 +43,7 @@ class AppointmentForm(FlaskForm):
     services = SelectMultipleField("Послуги", coerce=int, validators=[DataRequired()])
     discount_percentage = FloatField("Знижка (%)", validators=[Optional(), NumberRange(min=0, max=100)])
     amount_paid = FloatField("Сплачено", validators=[Optional(), NumberRange(min=0)])
-    payment_method = SelectField("Спосіб оплати", validators=[Optional()])
+    payment_method = SelectField("Спосіб оплати", coerce=lambda x: int(x) if x else None, validators=[Optional()])
     notes = TextAreaField("Примітки", validators=[Optional()])
     submit = SubmitField("Зберегти")
 
@@ -62,9 +62,7 @@ class AppointmentForm(FlaskForm):
 
         # Payment method choices
         payment_methods = PaymentMethodModel.query.filter_by(is_active=True).all()
-        self.payment_method.choices = [("", "Не вибрано")] + [
-            (str(pm.id), pm.name) for pm in payment_methods
-        ]  # type: ignore
+        self.payment_method.choices = [(0, "Не вибрано")] + [(pm.id, pm.name) for pm in payment_methods]  # type: ignore
 
     def validate_date(self, field):
         if field.data and field.data < date.today():
@@ -339,13 +337,12 @@ def edit(id: int) -> str:
 
     # Payment method choices
     payment_methods = PaymentMethodModel.query.filter_by(is_active=True).all()
-    form.payment_method.choices = [("", "Не вибрано")] + [
-        (str(pm.id), pm.name) for pm in payment_methods
-    ]  # type: ignore
+    form.payment_method.choices = [(0, "Не вибрано")] + [(pm.id, pm.name) for pm in payment_methods]  # type: ignore
 
-    # Pre-populate services
+    # Pre-populate services and payment method
     if request.method == "GET":
         form.services.data = [service.service_id for service in appointment.services]
+        form.payment_method.data = appointment.payment_method_id or 0
 
     if form.validate_on_submit():
         try:
@@ -367,12 +364,7 @@ def edit(id: int) -> str:
             end_datetime = start_datetime + timedelta(minutes=total_duration or 60)
 
             # Update appointment
-            payment_method_id = None
-            if form.payment_method.data and form.payment_method.data.strip():
-                try:
-                    payment_method_id = int(form.payment_method.data)
-                except (ValueError, TypeError):
-                    payment_method_id = None
+            payment_method_id = form.payment_method.data if form.payment_method.data != 0 else None
 
             appointment.client_id = form.client_id.data
             appointment.master_id = form.master_id.data
