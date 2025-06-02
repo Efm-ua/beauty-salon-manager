@@ -296,7 +296,9 @@ class Appointment(db.Model):  # type: ignore[name-defined]
         """Повертає вартість з урахуванням знижки"""
         total = Decimal(str(self.get_total_price()))
         if self.discount_percentage:
-            discount_amount = total * (self.discount_percentage / Decimal("100"))
+            # Забезпечуємо узгодженість типів - конвертуємо discount_percentage в Decimal
+            discount_percentage_decimal = Decimal(str(self.discount_percentage))
+            discount_amount = total * (discount_percentage_decimal / Decimal("100"))
             return total - discount_amount
         return total
 

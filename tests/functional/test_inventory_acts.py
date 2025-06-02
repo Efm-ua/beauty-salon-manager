@@ -3,12 +3,12 @@
 """
 
 from datetime import date
+from datetime import datetime, timezone
 
 import pytest
 from flask import url_for
 
-from app.models import (Brand, InventoryAct, InventoryActItem, Product,
-                        StockLevel, User, db)
+from app.models import Brand, InventoryAct, InventoryActItem, Product, StockLevel, User, db
 
 
 class TestInventoryActsBasic:
@@ -75,7 +75,7 @@ class TestInventoryActCreation:
         act = InventoryAct.query.first()
         assert act.user_id == admin_user.id
         assert act.status == "new"
-        assert act.act_date == date.today()
+        assert act.act_date == datetime.now(timezone.utc).date()
 
         # Проверяем, что созданы позиции для всех товаров
         products_count = Product.query.count()

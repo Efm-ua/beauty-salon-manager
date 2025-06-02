@@ -293,13 +293,16 @@ def create() -> Any:
             # Create appointment
             payment_method_id = form.payment_method.data if form.payment_method.data != 0 else None
 
+            # Забезпечуємо правильну конвертацію discount_percentage з float в Decimal
+            discount_value = form.discount_percentage.data or 0
+
             appointment = Appointment(
                 client_id=form.client_id.data,
                 master_id=form.master_id.data,
                 date=form.date.data,
                 start_time=form.start_time.data,
                 end_time=end_datetime.time(),
-                discount_percentage=form.discount_percentage.data or 0,
+                discount_percentage=Decimal(str(discount_value)),
                 amount_paid=Decimal(str(form.amount_paid.data or 0)),
                 payment_method_id=payment_method_id,
                 notes=form.notes.data or "",
@@ -420,7 +423,9 @@ def edit(id: int) -> str:
             appointment.date = form.date.data
             appointment.start_time = form.start_time.data
             appointment.end_time = end_datetime.time()
-            appointment.discount_percentage = form.discount_percentage.data or 0
+            # Забезпечуємо правильну конвертацію discount_percentage з float в Decimal
+            discount_value = form.discount_percentage.data or 0
+            appointment.discount_percentage = Decimal(str(discount_value))
             appointment.amount_paid = Decimal(str(form.amount_paid.data or 0))
             appointment.payment_method_id = payment_method_id
             appointment.notes = form.notes.data or ""

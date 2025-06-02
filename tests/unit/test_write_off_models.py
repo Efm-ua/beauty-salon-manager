@@ -105,7 +105,7 @@ class TestProductWriteOff:
             test_db.add(write_off)
             test_db.commit()
 
-            assert write_off.write_off_date == date.today()
+            assert write_off.write_off_date == datetime.now(timezone.utc).date()
 
     def test_product_write_off_repr(self, app, test_db, regular_user):
         """Test ProductWriteOff string representation."""
