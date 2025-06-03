@@ -203,8 +203,7 @@ def test_appointment_filter_by_master(appointments_auth_client, appointment_test
     """
     from datetime import date, time
 
-    from app.models import (Appointment, AppointmentService, Client, Service,
-                            User, db)
+    from app.models import Appointment, AppointmentService, Client, Service, User, db
 
     # Створюємо другого майстра для тестування фільтрації
     master2 = User(
@@ -1626,3 +1625,73 @@ def test_edit_service_price_handles_zero_price(appointments_auth_client, session
     appointment.update_payment_status()
     session.commit()
     assert appointment.payment_status == "paid"
+
+
+def test_edit_service_price_json_api_success(appointments_auth_client, appointment_test_data):
+    """
+    Тест JSON API для редагування ціни послуги.
+    Перевіряє успішну відповідь у форматі JSON з маршруту edit-service-price.
+    """
+    appointment_id = appointment_test_data["appointment_id"]
+    service_id = appointment_test_data["appointment_service_id"]
+    new_price = 300.0
+
+    # Отримуємо поточну ціну для порівняння
+    appointment_service = db.session.get(AppointmentService, service_id)
+    old_price = appointment_service.price
+
+    # Запит на оновлення ціни через JSON API
+    response = appointments_auth_client.post(
+        f"/appointments/edit-service-price/{appointment_id}/{service_id}", data={"price": new_price}
+    )
+
+    # Перевіряємо успішну JSON відповідь
+    assert response.status_code == 200
+    json_data = response.get_json()
+    assert json_data["success"] is True
+    assert json_data["new_price"] == new_price
+
+    # Оновлюємо об'єкт з бази даних
+    db.session.refresh(appointment_service)
+
+    # Перевіряємо, що ціна оновилася
+    assert appointment_service.price == new_price
+    assert appointment_service.price != old_price
+
+
+def test_edit_service_price_json_api_not_found(appointments_auth_client, appointment_test_data):
+    """
+    Тест JSON API для редагування ціни неіснуючої послуги.
+    Перевіряє правильну обробку помилки "Послугу не знайдено".
+    """
+    appointment_id = appointment_test_data["appointment_id"]
+    non_existent_service_id = 99999  # ID, який точно не існує
+
+    # Запит на оновлення ціни неіснуючої послуги
+    response = appointments_auth_client.post(
+        f"/appointments/edit-service-price/{appointment_id}/{non_existent_service_id}", data={"price": 200.0}
+    )
+
+    # Перевіряємо помилку 404
+    assert response.status_code == 404
+    json_data = response.get_json()
+    assert json_data["error"] == "Послугу не знайдено"
+
+
+def test_edit_service_price_json_api_invalid_price(appointments_auth_client, appointment_test_data):
+    """
+    Тест JSON API для редагування ціни з невалідним значенням.
+    Перевіряє правильну обробку помилки валідації.
+    """
+    appointment_id = appointment_test_data["appointment_id"]
+    service_id = appointment_test_data["appointment_service_id"]
+
+    # Запит з невалідним значенням ціни
+    response = appointments_auth_client.post(
+        f"/appointments/edit-service-price/{appointment_id}/{service_id}", data={"price": "не число"}
+    )
+
+    # Перевіряємо помилку 500 (внутрішня помилка сервера)
+    assert response.status_code == 500
+    json_data = response.get_json()
+    assert "error" in json_data

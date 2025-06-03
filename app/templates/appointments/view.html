@@ -193,7 +193,8 @@
               <div class="text-muted small">
                 DEBUG: is_admin={{ is_admin }}, master_id={{
                 appointment.master_id }}, current_user.id={{ current_user.id }},
-                status={{ appointment.status }}
+                status={{ appointment.status }}, AppointmentService.id={{
+                service.id }}, Service.id={{ service.service.id }}
               </div>
               {% if (is_admin or appointment.master_id == current_user.id) and
               appointment.status == 'scheduled' %}
@@ -205,6 +206,7 @@
                 data-current-price="{{ service.price }}"
                 data-bs-toggle="modal"
                 data-bs-target="#editPriceModal"
+                title="AppointmentService.id={{ service.id }}"
               >
                 <i class="fas fa-pencil-alt"></i>
               </button>
@@ -336,28 +338,100 @@
     const priceInput = document.getElementById("priceInput");
     const editPriceForm = document.getElementById("editPriceForm");
     const saveButton = document.getElementById("savePrice");
+    let currentServiceId = null;
 
     editButtons.forEach((button) => {
       button.addEventListener("click", function () {
-        const serviceId = this.getAttribute("data-service-id");
+        currentServiceId = this.getAttribute("data-service-id");
         const serviceName = this.getAttribute("data-service-name");
         const currentPrice = this.getAttribute("data-current-price");
 
+        console.log(
+          "DEBUG: Button clicked, serviceId =",
+          currentServiceId,
+          "serviceName =",
+          serviceName,
+          "currentPrice =",
+          currentPrice
+        );
+
         serviceNameDisplay.textContent = serviceName;
         priceInput.value = currentPrice;
-
-        // Оновлюємо форму з правильним URL
-        editPriceForm.action =
-          `{{ url_for('appointments.edit_service_price', appointment_id=appointment.id, service_id=0) }}`.replace(
-            "/0",
-            `/${serviceId}`
-          );
-
-        // Обробка кнопки збереження
-        saveButton.onclick = function () {
-          editPriceForm.submit();
-        };
       });
+    });
+
+    // Обробка кнопки збереження
+    saveButton.addEventListener("click", function () {
+      if (!currentServiceId) {
+        alert("Помилка: не вибрано послугу");
+        return;
+      }
+
+      const newPrice = priceInput.value;
+      if (!newPrice || parseFloat(newPrice) < 0) {
+        alert("Введіть коректну ціну");
+        return;
+      }
+
+      const url =
+        `{{ url_for('appointments.edit_service_price', appointment_id=appointment.id, appointment_service_id=0) }}`.replace(
+          "/0",
+          "/" + currentServiceId
+        );
+
+      console.log(
+        "DEBUG: Making AJAX request to:",
+        url,
+        "with price:",
+        newPrice
+      );
+
+      // AJAX запит
+      fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: new URLSearchParams({
+          csrf_token: document.querySelector('input[name="csrf_token"]').value,
+          price: newPrice,
+        }),
+      })
+        .then((response) => {
+          console.log("DEBUG: Response status:", response.status);
+          return response.json();
+        })
+        .then((data) => {
+          console.log("DEBUG: Response data:", data);
+          if (data.success) {
+            // Оновлюємо ціну на сторінці
+            const priceElement = document
+              .querySelector(`button[data-service-id="${currentServiceId}"]`)
+              .parentElement.querySelector(".badge");
+            if (priceElement) {
+              priceElement.textContent = `${data.new_price} грн`;
+            }
+
+            // Закриваємо модальне вікно
+            const modal = bootstrap.Modal.getInstance(
+              document.getElementById("editPriceModal")
+            );
+            modal.hide();
+
+            // Показуємо повідомлення успіху
+            alert("Ціну послуги успішно оновлено!");
+
+            // Перезавантажуємо сторінку для оновлення загальної суми
+            window.location.reload();
+          } else {
+            alert("Помилка: " + (data.error || "Невідома помилка"));
+          }
+        })
+        .catch((error) => {
+          console.error("DEBUG: Error:", error);
+          alert("Помилка при виконанні запиту: " + error.message);
+        });
     });
   });
 </script>

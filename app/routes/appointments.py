@@ -4,7 +4,7 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, Union
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for, current_app
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from sqlalchemy import func
@@ -72,7 +72,14 @@ class AppointmentForm(FlaskForm):
         active_payment_methods = (
             PaymentMethodModel.query.filter_by(is_active=True).order_by(PaymentMethodModel.name).all()
         )
+        # DEBUG: Log payment methods
+        logger.debug(f"FORM INIT DEBUG: Found {len(active_payment_methods)} active payment methods")
+        for pm in active_payment_methods:
+            logger.debug(f"FORM INIT DEBUG: Payment method - ID: {pm.id}, Name: '{pm.name}', Active: {pm.is_active}")
+
         self.payment_method.choices = [(0, "--- Не вибрано ---")] + [(pm.id, pm.name) for pm in active_payment_methods]
+        logger.debug(f"FORM INIT DEBUG: Final payment_method.choices count: {len(self.payment_method.choices)}")
+        logger.debug(f"FORM INIT DEBUG: payment_method.choices: {self.payment_method.choices}")
 
         # Если есть obj (для редактирования), то принудительно обновляем соединение с базой
         if obj:
@@ -400,6 +407,8 @@ def edit(id: int) -> str:
         logger.debug(f"EDIT DEBUG GET: Form client choices count: {len(form.client_id.choices)}")
         logger.debug(f"EDIT DEBUG GET: Form master choices count: {len(form.master_id.choices)}")
         logger.debug(f"EDIT DEBUG GET: Form service choices count: {len(form.services.choices)}")
+        logger.debug(f"EDIT DEBUG GET: Form payment_method choices count: {len(form.payment_method.choices)}")
+        logger.debug(f"EDIT DEBUG GET: Form payment_method choices: {form.payment_method.choices}")
         logger.debug(f"EDIT DEBUG GET: Form client choices: {form.client_id.choices}")
         logger.debug(f"EDIT DEBUG GET: Form services data: {form.services.data}")
         logger.debug(
@@ -411,8 +420,12 @@ def edit(id: int) -> str:
         logger.debug(f"EDIT DEBUG POST: Form client choices count: {len(form.client_id.choices)}")
         logger.debug(f"EDIT DEBUG POST: Form master choices count: {len(form.master_id.choices)}")
         logger.debug(f"EDIT DEBUG POST: Form service choices count: {len(form.services.choices)}")
+        logger.debug(f"EDIT DEBUG POST: Form payment_method choices count: {len(form.payment_method.choices)}")
+        logger.debug(f"EDIT DEBUG POST: Form payment_method choices: {form.payment_method.choices}")
         logger.debug(f"EDIT DEBUG POST: Services data from form: {form.services.data}")
         logger.debug(f"EDIT DEBUG POST: Raw form data services: {request.form.getlist('services')}")
+        logger.debug(f"EDIT DEBUG POST: Payment method data from form: {form.payment_method.data}")
+        logger.debug(f"EDIT DEBUG POST: Raw form data payment_method: {request.form.get('payment_method')}")
 
     if form.validate_on_submit():
         try:
@@ -698,32 +711,92 @@ def remove_service(appointment_id: int, service_id: int) -> str:
     return redirect(url_for("appointments.view", id=appointment_id))
 
 
-@bp.route("/edit-service-price/<int:appointment_id>/<int:service_id>", methods=["POST"])
+@bp.route("/edit-service-price/<int:appointment_id>/<int:appointment_service_id>", methods=["POST"])
 @login_required
-def edit_service_price(appointment_id: int, service_id: int) -> str:
+def edit_service_price(appointment_id: int, appointment_service_id: int) -> str:
     """Редагування ціни послуги"""
+    # Логування вхідних параметрів
+    current_app.logger.info(
+        f"EDIT_SERVICE_PRICE: Received appointment_id={appointment_id}, appointment_service_id={appointment_service_id}"
+    )
+    current_app.logger.info(f"EDIT_SERVICE_PRICE: Request method: {request.method}")
+    current_app.logger.info(f"EDIT_SERVICE_PRICE: Request form data: {dict(request.form)}")
+    current_app.logger.info(f"EDIT_SERVICE_PRICE: Request headers: {dict(request.headers)}")
+
     appointment = Appointment.query.get_or_404(appointment_id)
 
     # Check permissions
     if not current_user.is_admin and appointment.master_id != current_user.id:
+        current_app.logger.warning(
+            f"EDIT_SERVICE_PRICE: Access denied for user {current_user.id} to appointment {appointment_id}"
+        )
         return jsonify({"error": "Доступ заборонено"}), 403
 
     try:
         new_price = float(request.form.get("price", 0))
+        current_app.logger.info(f"EDIT_SERVICE_PRICE: New price: {new_price}")
 
+        # Логування перед запитом до БД
+        current_app.logger.info(
+            f"EDIT_SERVICE_PRICE: Querying AppointmentService with id={appointment_service_id} AND appointment_id={appointment_id}"
+        )
+
+        # Виправлення: appointment_service_id це AppointmentService.id
         appointment_service = AppointmentService.query.filter_by(
-            appointment_id=appointment_id, service_id=service_id
+            id=appointment_service_id, appointment_id=appointment_id
         ).first()
 
+        # Логування результату запиту
         if appointment_service:
+            current_app.logger.info(
+                f"EDIT_SERVICE_PRICE: Found AppointmentService: id={appointment_service.id}, service_id={appointment_service.service_id}, current_price={appointment_service.price}"
+            )
+        else:
+            current_app.logger.error(
+                f"EDIT_SERVICE_PRICE: AppointmentService NOT FOUND for id={appointment_service_id}, appointment_id={appointment_id}"
+            )
+            # Додаткове логування для діагностики
+            all_services = AppointmentService.query.filter_by(appointment_id=appointment_id).all()
+            current_app.logger.error(
+                f"EDIT_SERVICE_PRICE: Available AppointmentService records for appointment {appointment_id}: {[(s.id, s.service_id) for s in all_services]}"
+            )
+
+        if appointment_service:
+            old_price = appointment_service.price
             appointment_service.price = new_price
             db.session.commit()
-            return jsonify({"success": True, "new_price": new_price})
+            current_app.logger.info(f"EDIT_SERVICE_PRICE: Successfully updated price from {old_price} to {new_price}")
+
+            # Перевіряємо, чи це AJAX запит
+            if (
+                request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.headers.get("Content-Type") == "application/json"
+            ):
+                return jsonify({"success": True, "new_price": new_price})
+            else:
+                flash("Ціну послуги успішно оновлено.", "success")
+                return redirect(url_for("appointments.view", id=appointment_id))
         else:
-            return jsonify({"error": "Послугу не знайдено"}), 404
+            current_app.logger.error(f"EDIT_SERVICE_PRICE: Returning 'Послугу не знайдено' error")
+            if (
+                request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.headers.get("Content-Type") == "application/json"
+            ):
+                return jsonify({"error": "Послугу не знайдено"}), 404
+            else:
+                flash("Послугу не знайдено.", "error")
+                return redirect(url_for("appointments.view", id=appointment_id))
     except Exception as e:
+        current_app.logger.error(f"EDIT_SERVICE_PRICE: Exception occurred: {str(e)}")
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        if (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.headers.get("Content-Type") == "application/json"
+        ):
+            return jsonify({"error": str(e)}), 500
+        else:
+            flash(f"Помилка при оновленні ціни: {str(e)}", "error")
+            return redirect(url_for("appointments.view", id=appointment_id))
 
 
 @bp.route("/api/by-date")
