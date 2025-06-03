@@ -46,7 +46,7 @@ def login_as_admin(session):
         return False
 
 
-def test_admin_access(session):
+def check_admin_access(session):
     """Test admin-only endpoints access."""
     print("\n📋 Testing Admin Access...")
 
@@ -175,7 +175,7 @@ def run_backend_tests():
 
             # Test admin login and access
             if login_as_admin(session):
-                test_admin_access(session)
+                check_admin_access(session)
             else:
                 print("⚠️  Could not test admin endpoints due to login failure")
                 print("   Please verify admin credentials")

@@ -1642,7 +1642,9 @@ def test_edit_service_price_json_api_success(appointments_auth_client, appointme
 
     # Запит на оновлення ціни через JSON API
     response = appointments_auth_client.post(
-        f"/appointments/edit-service-price/{appointment_id}/{service_id}", data={"price": new_price}
+        f"/appointments/edit-service-price/{appointment_id}/{service_id}",
+        data={"price": new_price},
+        headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     # Перевіряємо успішну JSON відповідь
@@ -1669,7 +1671,9 @@ def test_edit_service_price_json_api_not_found(appointments_auth_client, appoint
 
     # Запит на оновлення ціни неіснуючої послуги
     response = appointments_auth_client.post(
-        f"/appointments/edit-service-price/{appointment_id}/{non_existent_service_id}", data={"price": 200.0}
+        f"/appointments/edit-service-price/{appointment_id}/{non_existent_service_id}",
+        data={"price": 200.0},
+        headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     # Перевіряємо помилку 404
@@ -1688,7 +1692,9 @@ def test_edit_service_price_json_api_invalid_price(appointments_auth_client, app
 
     # Запит з невалідним значенням ціни
     response = appointments_auth_client.post(
-        f"/appointments/edit-service-price/{appointment_id}/{service_id}", data={"price": "не число"}
+        f"/appointments/edit-service-price/{appointment_id}/{service_id}",
+        data={"price": "не число"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     # Перевіряємо помилку 500 (внутрішня помилка сервера)
