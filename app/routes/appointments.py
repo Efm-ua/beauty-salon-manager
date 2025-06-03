@@ -50,6 +50,9 @@ class AppointmentForm(FlaskForm):
     def __init__(self, formdata=None, obj=None, **kwargs):
         super().__init__(formdata=formdata, obj=obj, **kwargs)
 
+        # Зберігаємо об'єкт для валідації
+        self._editing_obj = obj
+
         # Populate choices - убеждаемся, что используется текущая сессия
         clients = Client.query.order_by(Client.name).all()
         self.client_id.choices = [(c.id, c.name) for c in clients]
@@ -90,6 +93,21 @@ class AppointmentForm(FlaskForm):
     def validate_date(self, field):
         if field.data and field.data < date.today():
             logger.debug(f"Date validation failed: {field.data} is in the past")
+
+            # Перевіряємо, чи це редагування існуючого запису
+            is_editing = (
+                hasattr(self, "_editing_obj")
+                and self._editing_obj
+                and hasattr(self._editing_obj, "id")
+                and self._editing_obj.id is not None
+            )
+
+            # Дозволяємо адміністраторам редагувати існуючі записи з минулою датою
+            if is_editing and current_user.is_authenticated and current_user.is_admin:
+                logger.debug(f"Admin {current_user.id} editing existing appointment with past date - allowing")
+                return  # Пропускаємо валідацію для адміна при редагуванні
+
+            # Для всіх інших випадків (створення нових записів або редагування не-адміном)
             raise ValidationError("Неможливо створити запис на дату та час у минулому.")
 
     def validate_master_id(self, field):
@@ -364,9 +382,9 @@ def edit(id: int) -> str:
 
     # Create form WITHOUT formdata first to set up choices, then process formdata
     if request.method == "POST":
-        # For POST: create form without data first, set up choices, then populate with formdata
-        form = AppointmentForm()
-        form.process(formdata=request.form, obj=appointment)
+        # For POST: create form with obj data, then process formdata
+        form = AppointmentForm(obj=appointment)
+        form.process(formdata=request.form)
     else:
         # For GET: create form with obj data
         form = AppointmentForm(obj=appointment)
