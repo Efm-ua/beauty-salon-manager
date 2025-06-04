@@ -282,12 +282,13 @@ class Appointment(db.Model):  # type: ignore[name-defined]
         """Повертає загальну вартість всіх послуг та пов'язаних продажів"""
         from app.models import AppointmentService, Sale
 
-        # Сума послуг
-        services = AppointmentService.query.filter_by(appointment_id=self.id).all()
+        # Сума послуг - використовуємо новий запит до БД для гарантії актуальності
+        # без впливу на інші об'єкти в сесії
+        services = db.session.query(AppointmentService).filter_by(appointment_id=self.id).all()
         services_total = sum(service.price for service in services)
 
         # Сума пов'язаних продажів
-        sales = Sale.query.filter_by(appointment_id=self.id).all()
+        sales = db.session.query(Sale).filter_by(appointment_id=self.id).all()
         sales_total = sum(float(sale.total_amount) for sale in sales)
 
         return services_total + sales_total

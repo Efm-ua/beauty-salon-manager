@@ -8,6 +8,7 @@ from flask import Blueprint, flash, jsonify, redirect, render_template, request,
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from sqlalchemy import func
+from sqlalchemy.orm import attributes
 from wtforms import (
     DateField,
     FloatField,
@@ -229,6 +230,8 @@ def index() -> Any:
 @login_required
 def view(id: int) -> Any:
     """Перегляд конкретного запису"""
+    print(f"🔍 VIEW ROUTE CALLED: Appointment ID {id}")  # Заметное логирование
+
     appointment = Appointment.query.get_or_404(id)
 
     # Check access permissions
@@ -236,18 +239,66 @@ def view(id: int) -> Any:
         flash("У вас немає доступу до цього запису.", "error")
         return redirect(url_for("appointments.index"))
 
+    # Детальне логування ДО оновлення
+    print(f"🔍 VIEW ROUTE - Before refresh: Appointment ID {appointment.id}")
+    current_app.logger.info(f"VIEW ROUTE - Before refresh: Appointment ID {appointment.id}")
+
+    # Логування цін послуг ДО оновлення (якщо колекція вже завантажена)
+    if hasattr(appointment, "services") and "services" in appointment.__dict__:
+        print("🔍 VIEW ROUTE - Services collection already loaded, checking prices:")
+        current_app.logger.info("VIEW ROUTE - Services collection already loaded, checking prices:")
+        for service_link in appointment.services:
+            print(f"  🔍 Before refresh - ServiceLink ID: {service_link.id}, Price: {service_link.price}")
+            current_app.logger.info(
+                f"  Before refresh - ServiceLink ID: {service_link.id}, Price: {service_link.price}"
+            )
+    else:
+        print("🔍 VIEW ROUTE - 'services' collection not loaded in appointment.__dict__ yet.")
+        current_app.logger.info("VIEW ROUTE - 'services' collection not loaded in appointment.__dict__ yet.")
+
+    # Примусове оновлення об'єкта appointment та анулювання застарілих зв'язків
+    print("🔍 VIEW ROUTE - Performing refresh and expire...")
+    db.session.refresh(appointment)  # Оновлюємо сам appointment
+    db.session.expire(appointment, ["services"])  # Позначаємо пов'язані services як застарілі
+
+    print(f"🔍 VIEW ROUTE - After refresh/expire: Appointment ID {appointment.id}")
+    current_app.logger.info(f"VIEW ROUTE - After refresh/expire: Appointment ID {appointment.id}")
+
     # Check if we came from schedule
     from_schedule = request.args.get("from_schedule")
     formatted_date = appointment.date.strftime("%Y-%m-%d")
 
-    # Calculate totals
-    total_price = appointment.get_total_price()
+    # Примусове завантаження/перезавантаження послуг та логування ПІСЛЯ оновлення
+    print("🔍 VIEW ROUTE - Loading services after refresh/expire...")
+    actual_services_for_template = list(appointment.services)  # Примусове завантаження/перезавантаження
+    print(f"🔍 VIEW ROUTE - Services to be used in template for Appointment ID {appointment.id}:")
+    current_app.logger.info(f"VIEW ROUTE - Services to be used in template for Appointment ID {appointment.id}:")
+    for service_link in actual_services_for_template:
+        service_name = service_link.service.name if service_link.service else "N/A"
+        print(
+            f"  🔍 For template - ServiceLink ID: {service_link.id} "
+            f"(Service: {service_name}), Price: {service_link.price}"
+        )
+        current_app.logger.info(
+            f"  For template - ServiceLink ID: {service_link.id} "
+            f"(Service: {service_name}), Price: {service_link.price}"
+        )
+
+    # Розрахунок вартості після оновлення
+    total_price = appointment.get_total_price()  # Викликаємо після оновлення
     total_discounted = appointment.get_discounted_price()
+
+    print(f"🔍 VIEW ROUTE - Calculated total_price: {total_price} for Appointment ID {appointment.id}")
+    print(f"🔍 VIEW ROUTE - Calculated total_discounted: {total_discounted} for Appointment ID {appointment.id}")
+    current_app.logger.info(f"VIEW ROUTE - Calculated total_price: {total_price} for Appointment ID {appointment.id}")
+    current_app.logger.info(
+        f"VIEW ROUTE - Calculated total_discounted: {total_discounted} for Appointment ID {appointment.id}"
+    )
 
     return render_template(
         "appointments/view.html",
         title="Перегляд запису",
-        appointment=appointment,
+        appointment=appointment,  # Передаємо оновлений appointment
         is_admin=current_user.is_admin,
         from_schedule=from_schedule,
         formatted_date=formatted_date,
@@ -428,6 +479,7 @@ def edit(id: int) -> str:
         logger.debug(f"EDIT DEBUG POST: Raw form data payment_method: {request.form.get('payment_method')}")
 
     if form.validate_on_submit():
+        print(f"🔧 EDIT ROUTE: Form validated for Appointment ID {appointment.id}")
         try:
             # Check if user can edit appointment for this master
             if not current_user.is_admin and form.master_id.data != current_user.id:
@@ -461,15 +513,39 @@ def edit(id: int) -> str:
             appointment.payment_method_id = payment_method_id
             appointment.notes = form.notes.data or ""
 
+            print("🔧 EDIT ROUTE: About to update services. Current services before update:")
+            current_services = AppointmentService.query.filter_by(appointment_id=appointment.id).all()
+            for svc in current_services:
+                service_name = svc.service.name if svc.service else "N/A"
+                print(f"  🔧 Current Service ID: {svc.id}, Service: {service_name}, Price: {svc.price}")
+
+            # ВАЖЛИВО: Зберігаємо поточні ціни послуг перед їх видаленням
+            current_service_prices = {}
+            for existing_service in AppointmentService.query.filter_by(appointment_id=appointment.id).all():
+                current_service_prices[existing_service.service_id] = existing_service.price
+                print(
+                    f"  🔧 Saving current price for service_id {existing_service.service_id}: {existing_service.price}"
+                )
+
             # Remove existing services
             AppointmentService.query.filter_by(appointment_id=appointment.id).delete()
 
-            # Add new services
+            # Add new services - використовуємо збережені ціни або базову ціну
+            print("🔧 EDIT ROUTE: Adding services with preserved prices:")
             for service_id in form.services.data:
                 service = Service.query.get(service_id)
                 if service:
+                    # Використовуємо збережену ціну, якщо є, або базову ціну послуги
+                    preserved_price = current_service_prices.get(service_id, service.base_price or 0)
+                    current_price = current_service_prices.get(service_id, "N/A")
+                    print(f"  🔧 Adding service_id {service_id} with price {preserved_price}")
+                    print(f"       (current: {current_price}, base: {service.base_price})")
+
                     appointment_service = AppointmentService(
-                        appointment_id=appointment.id, service_id=service_id, price=service.base_price or 0, notes=""
+                        appointment_id=appointment.id,
+                        service_id=service_id,
+                        price=preserved_price,  # Використовуємо збережену ціну!
+                        notes="",
                     )
                     db.session.add(appointment_service)
 
@@ -477,6 +553,7 @@ def edit(id: int) -> str:
             appointment.update_payment_status()
 
             db.session.commit()
+            print(f"🔧 EDIT ROUTE: Successfully updated appointment {appointment.id}, redirecting to view")
             flash("Запис успішно оновлено!", "success")
 
             # Redirect based on from_schedule parameter
@@ -487,6 +564,7 @@ def edit(id: int) -> str:
 
         except Exception as e:
             db.session.rollback()
+            print(f"🔧 EDIT ERROR: {str(e)}")
             logger.error(f"EDIT ERROR: {str(e)}")
             flash(f"Помилка при оновленні запису: {str(e)}", "error")
     else:
@@ -738,7 +816,8 @@ def edit_service_price(appointment_id: int, appointment_service_id: int) -> str:
 
         # Логування перед запитом до БД
         current_app.logger.info(
-            f"EDIT_SERVICE_PRICE: Querying AppointmentService with id={appointment_service_id} AND appointment_id={appointment_id}"
+            f"EDIT_SERVICE_PRICE: Querying AppointmentService with "
+            f"id={appointment_service_id} AND appointment_id={appointment_id}"
         )
 
         # Виправлення: appointment_service_id це AppointmentService.id
@@ -749,16 +828,20 @@ def edit_service_price(appointment_id: int, appointment_service_id: int) -> str:
         # Логування результату запиту
         if appointment_service:
             current_app.logger.info(
-                f"EDIT_SERVICE_PRICE: Found AppointmentService: id={appointment_service.id}, service_id={appointment_service.service_id}, current_price={appointment_service.price}"
+                f"EDIT_SERVICE_PRICE: Found AppointmentService: id={appointment_service.id}, "
+                f"service_id={appointment_service.service_id}, current_price={appointment_service.price}"
             )
         else:
             current_app.logger.error(
-                f"EDIT_SERVICE_PRICE: AppointmentService NOT FOUND for id={appointment_service_id}, appointment_id={appointment_id}"
+                f"EDIT_SERVICE_PRICE: AppointmentService NOT FOUND for "
+                f"id={appointment_service_id}, appointment_id={appointment_id}"
             )
             # Додаткове логування для діагностики
             all_services = AppointmentService.query.filter_by(appointment_id=appointment_id).all()
+            services_info = [(s.id, s.service_id) for s in all_services]
             current_app.logger.error(
-                f"EDIT_SERVICE_PRICE: Available AppointmentService records for appointment {appointment_id}: {[(s.id, s.service_id) for s in all_services]}"
+                f"EDIT_SERVICE_PRICE: Available AppointmentService records for "
+                f"appointment {appointment_id}: {services_info}"
             )
 
         if appointment_service:
@@ -777,7 +860,7 @@ def edit_service_price(appointment_id: int, appointment_service_id: int) -> str:
                 flash("Ціну послуги успішно оновлено.", "success")
                 return redirect(url_for("appointments.view", id=appointment_id))
         else:
-            current_app.logger.error(f"EDIT_SERVICE_PRICE: Returning 'Послугу не знайдено' error")
+            current_app.logger.error("EDIT_SERVICE_PRICE: Returning 'Послугу не знайдено' error")
             if (
                 request.headers.get("X-Requested-With") == "XMLHttpRequest"
                 or request.headers.get("Content-Type") == "application/json"
